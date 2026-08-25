@@ -1,0 +1,573 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Gift, MessageCircle, CheckCircle2, Users2, Wallet, Settings2, Pencil, RotateCcw, ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { useApp } from "@/lib/app-context";
+import { accesoA, puedeVerMontos, puedeAutorizar } from "@/lib/permissions";
+import { Topbar } from "@/components/layout/Topbar";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { StatTile } from "@/components/ui/StatTile";
+import { Badge } from "@/components/ui/Badge";
+import { Table, Thead, Th, Tr, Td } from "@/components/ui/Table";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { seguimientosPorNegocio } from "@/lib/mock/seguimiento";
+import { clientesIndividualesPorNegocio } from "@/lib/mock/clientes";
+import { BASE_DATE } from "@/lib/mock/seed";
+import { resumenCumpleanosMes } from "@/lib/metrics";
+import {
+  useSeguimientoOverrides, useAprobacionCumpleanos, useConfigSaludoCumpleanos, useClientesCreados,
+  agregarMensajeChatDirecto, SeguimientoOverride,
+} from "@/lib/store";
+import { interpolarPlantilla } from "@/lib/mensajes";
+import {
+  seguimientosConNuevos, proximosCumpleanosDe, clientesPorDia, esHoy,
+} from "@/lib/seguimiento-helpers";
+import { ClienteIndividual } from "@/lib/types";
+import { ExportarPDFBoton } from "@/components/ui/ExportarPDFBoton";
+import dynamic from "next/dynamic";
+const DonutChart = dynamic(() => import("@/components/charts/DonutChart").then((m) => m.DonutChart), { ssr: false, loading: () => <div className="h-[220px]" /> });
+
+const MESES_LABEL = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+export default function CumpleanosPage() {
+  const { usuario, negocio } = useApp();
+  const { items: creados } = useClientesCreados();
+  const overridesStore = useSeguimientoOverrides();
+  const configStore = useConfigSaludoCumpleanos(negocio.id);
+
+  if (!usuario) return null;
+  const nivel = accesoA(usuario.rolTipo, "cumpleanos");
+  const verMontos = puedeVerMontos(usuario.rolTipo);
+  const esAdmin = puedeAutorizar(usuario.rolTipo);
+  const editable = usuario.rolTipo === "ventas";
+
+  if (!negocio.operando) {
+    return (
+      <>
+        <Topbar titulo="Cumpleaños" descripcion={negocio.nombre} />
+        <main className="flex-1 p-8">
+          <Card><EmptyState icon={<Gift size={22} />} title="Este negocio aún no opera" description="Mamina Restobar todavía no tiene clientes registrados." /></Card>
+        </main>
+      </>
+    );
+  }
+
+  const clientesCreadosNegocio = creados.filter((c) => c.negocioId === negocio.id);
+  const todosLosClientes = [...clientesIndividualesPorNegocio(negocio.id), ...clientesCreadosNegocio];
+  const hoy = proximosCumpleanosDe(todosLosClientes, BASE_DATE, 0);
+  const proximos = proximosCumpleanosDe(todosLosClientes, BASE_DATE, 10).filter((p) => p.diffDias > 0);
+  const seguimientos = seguimientosConNuevos(seguimientosPorNegocio(negocio.id), clientesCreadosNegocio, negocio.id);
+  const resumenMes = resumenCumpleanosMes(negocio.id);
+
+  if (nivel === "resumen") {
+    const respondieron = seguimientos.filter((s) => s.respuesta === "si").length;
+    const noRespondieron = seguimientos.filter((s) => s.respuesta !== "si" && s.saludoEnviado).length;
+    const sinEnviar = seguimientos.filter((s) => !s.saludoEnviado).length;
+    const embudo = [
+      { nombre: "Reservaron", valor: resumenMes.personasQueReservaron },
+      { nombre: "Respondieron sin reservar", valor: Math.max(respondieron - resumenMes.personasQueReservaron, 0) },
+      { nombre: "Enviado, sin respuesta", valor: noRespondieron },
+      { nombre: "Sin enviar todavía", valor: sinEnviar },
+    ];
+    return (
+      <>
+        <Topbar titulo="Cumpleaños" descripcion={`Resumen ejecutivo · ${negocio.nombre}`} />
+        <main className="flex-1 p-8 animate-fade-in space-y-6" id="reporte">
+          <div className="flex items-center justify-end">
+            <ExportarPDFBoton />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StatTile label="Saludos enviados este mes" value={resumenMes.enviados} icon={<Gift size={18} />} tono="terracota" />
+            <StatTile label="Personas que reservaron" value={resumenMes.personasQueReservaron} icon={<Users2 size={18} />} tono="naranja" />
+            <StatTile label="Monto generado este mes" value={`S/ ${resumenMes.montoTotal.toLocaleString("es-PE")}`} icon={<Wallet size={18} />} tono="verde" />
+          </div>
+          <Card className="romper-pagina">
+            <CardHeader title="Embudo de cumpleaños del mes" subtitle={`${resumenMes.totalDelMes} clientes cumplen años este mes`} />
+            <DonutChart data={embudo} />
+          </Card>
+          <Card>
+            <CardHeader title="Vista de Dirección" subtitle="Solo el número — el seguimiento día a día lo lleva Ventas y lo supervisa Administración" />
+          </Card>
+        </main>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Topbar titulo="Cumpleaños" descripcion={`${negocio.nombre} · seguimiento y chat con clientes`} />
+      <main className="flex-1 p-8 animate-fade-in space-y-6">
+        <AutoEnvioCumpleanos
+          negocioNombre={negocio.nombre}
+          seguimientos={seguimientos}
+          config={configStore.config}
+          listoConfig={configStore.listo}
+          overrides={overridesStore.overrides}
+          setOverride={overridesStore.set}
+          listoOverrides={overridesStore.listo}
+        />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <StatTile label="Cumplen hoy" value={hoy.length} icon={<Gift size={18} />} tono="terracota" />
+          <StatTile label="Próximos 10 días" value={proximos.length} icon={<Gift size={18} />} tono="naranja" />
+        </div>
+
+        {esAdmin && <AprobacionMes negocioId={negocio.id} totalDelMes={resumenMes.totalDelMes} />}
+
+        <ConfiguracionSaludoGeneral
+          negocioNombre={negocio.nombre}
+          editable={editable}
+          config={configStore.config}
+          guardarConfig={configStore.guardar}
+          listo={configStore.listo}
+        />
+
+        <CalendarioCumpleanos
+          clientes={todosLosClientes}
+          seguimientos={seguimientos}
+          negocioNombre={negocio.nombre}
+          editable={editable}
+          config={configStore.config}
+          listoConfig={configStore.listo}
+          overrides={overridesStore.overrides}
+          setOverride={overridesStore.set}
+          listoOverrides={overridesStore.listo}
+        />
+
+        <Card>
+          <CardHeader title="Próximos cumpleaños" subtitle="Abre el chat para saludar sin salir del sistema — mismo lugar donde queda registrada la conversación" />
+          {proximos.length === 0 && hoy.length === 0 ? (
+            <p className="text-sm text-[var(--color-gris-medio)] py-6 text-center">Nadie cumple años en los próximos 10 días.</p>
+          ) : (
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {[...hoy, ...proximos].map(({ cliente, diffDias }) => (
+                <div key={cliente.id} className="rounded-xl border border-[var(--color-gris-claro)]/40 p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <p className="font-medium text-sm text-[var(--color-gris)]">{cliente.nombres} {cliente.apellidos}</p>
+                    <Badge tono={diffDias === 0 ? "terracota" : "gris"}>{diffDias === 0 ? "Hoy" : `En ${diffDias} días`}</Badge>
+                  </div>
+                  <p className="text-xs text-[var(--color-gris-medio)] mb-3">{cliente.celular}</p>
+                  <Link
+                    href={`/mensajeria?cliente=${cliente.id}`}
+                    className="flex items-center justify-center gap-1.5 text-xs font-semibold bg-[var(--color-verde)] text-white rounded-lg py-2 hover:opacity-90 transition-opacity"
+                  >
+                    <MessageCircle size={13} /> Abrir chat
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card padding="p-0 pt-5">
+          <div className="px-5">
+            <CardHeader title="Seguimiento" subtitle="Réplica del control que ya usa Meliza en Excel, ahora editable desde aquí" />
+          </div>
+          <SeguimientoTabla
+            seguimientos={seguimientos} verMontos={verMontos} editable={editable}
+            overrides={overridesStore.overrides} setOverride={overridesStore.set} listo={overridesStore.listo}
+          />
+        </Card>
+      </main>
+    </>
+  );
+}
+
+// --- Envío automático: al montar, revisa quién cumple hoy, todavía no tiene
+// el saludo marcado como enviado, y ya pasó su hora programada (general o
+// personalizada) — si es así, lo "envía" (queda escrito en su chat real) y
+// marca saludoEnviado, exactamente como se vería con la API de WhatsApp ya
+// conectada. Se re-evalúa cada minuto mientras la página esté abierta.
+function AutoEnvioCumpleanos({
+  negocioNombre, seguimientos, config, listoConfig, overrides, setOverride, listoOverrides,
+}: {
+  negocioNombre: string; seguimientos: ReturnType<typeof seguimientosConNuevos>;
+  config: { mensaje: string; hora: string }; listoConfig: boolean;
+  overrides: Record<string, SeguimientoOverride>; setOverride: (id: string, patch: SeguimientoOverride) => void; listoOverrides: boolean;
+}) {
+  const set = setOverride;
+  const [, forceTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => forceTick((n) => n + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!listoConfig || !listoOverrides) return;
+    const ahora = new Date();
+    const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+    seguimientos.forEach((s) => {
+      if (!esHoy(s.fechaCumple)) return;
+      const o = overrides[s.id] ?? {};
+      const yaEnviado = o.saludoEnviado ?? s.saludoEnviado;
+      if (yaEnviado) return;
+      const horaProgramada = o.hora || config.hora;
+      const [h, m] = horaProgramada.split(":").map(Number);
+      if (h * 60 + (m || 0) > minutosAhora) return;
+      const plantilla = o.mensaje || config.mensaje;
+      const texto = interpolarPlantilla(plantilla, s.nombre.split(" ")[0], negocioNombre);
+      agregarMensajeChatDirecto(s.clienteId, texto, "negocio");
+      set(s.id, { saludoEnviado: true });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listoConfig, listoOverrides, seguimientos.length, config.hora, config.mensaje]);
+
+  return null;
+}
+
+function ConfiguracionSaludoGeneral({
+  negocioNombre, editable, config, guardarConfig, listo,
+}: {
+  negocioNombre: string; editable: boolean;
+  config: { mensaje: string; hora: string }; guardarConfig: (c: { mensaje: string; hora: string }) => void; listo: boolean;
+}) {
+  const guardar = guardarConfig;
+  const [abierto, setAbierto] = useState(false);
+  const [mensaje, setMensaje] = useState(config.mensaje);
+  const [hora, setHora] = useState(config.hora);
+
+  if (!listo) return null;
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <CardHeader
+          title="Saludo automático — general"
+          subtitle={`Se aplica a todos, salvo que personalices uno individual · hoy se envía a las ${config.hora}`}
+        />
+        {editable && (
+          <button
+            onClick={() => {
+              if (!abierto) { setMensaje(config.mensaje); setHora(config.hora); }
+              setAbierto((v) => !v);
+            }}
+            className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-terracota)] hover:underline"
+          >
+            <Settings2 size={13} /> {abierto ? "Cerrar" : "Editar"}
+          </button>
+        )}
+      </div>
+
+      {!abierto && (
+        <p className="text-sm text-[var(--color-gris-medio)] bg-[var(--color-crema)] rounded-xl p-3 whitespace-pre-line">
+          {interpolarPlantilla(config.mensaje, "{nombre}", negocioNombre)}
+        </p>
+      )}
+
+      {abierto && editable && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-[var(--color-gris-medio)] mb-1">
+              Mensaje (usa {"{nombre}"} para el nombre del cliente)
+            </label>
+            <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} rows={3} className="input" />
+          </div>
+          <div className="flex items-end gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-[var(--color-gris-medio)] mb-1">Hora de envío</label>
+              <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="input w-32" />
+            </div>
+            <button
+              onClick={() => { guardar({ mensaje, hora }); setAbierto(false); }}
+              className="bg-[var(--color-terracota)] text-white text-xs font-semibold rounded-lg px-4 py-2.5 hover:opacity-90 transition-opacity"
+            >
+              Guardar cambios
+            </button>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function CalendarioCumpleanos({
+  clientes, seguimientos, negocioNombre, editable, config, listoConfig, overrides, setOverride, listoOverrides,
+}: {
+  clientes: ClienteIndividual[]; seguimientos: ReturnType<typeof seguimientosConNuevos>;
+  negocioNombre: string; editable: boolean;
+  config: { mensaje: string; hora: string }; listoConfig: boolean;
+  overrides: Record<string, SeguimientoOverride>; setOverride: (id: string, patch: SeguimientoOverride) => void; listoOverrides: boolean;
+}) {
+  const [mes, setMes] = useState(BASE_DATE.getMonth() + 1);
+  const [diaSeleccionado, setDiaSeleccionado] = useState<number | null>(BASE_DATE.getDate());
+  const set = setOverride;
+
+  const anioRef = mes >= BASE_DATE.getMonth() + 1 ? BASE_DATE.getFullYear() : BASE_DATE.getFullYear() + 1;
+  const diasEnMes = new Date(anioRef, mes, 0).getDate();
+  const primerDiaSemana = new Date(anioRef, mes - 1, 1).getDay();
+
+  // Solo el mes actual tiene seguimiento armado (es el único en automatización
+  // activa) — por eso el mapa clienteId → seguimiento solo tiene sentido ahí.
+  const seguimientoPorCliente = useMemo(() => new Map(seguimientos.map((s) => [s.clienteId, s])), [seguimientos]);
+
+  const porDia = useMemo(() => {
+    const mapa = new Map<number, ClienteIndividual[]>();
+    clientes.forEach((c) => {
+      const [, m, d] = c.fechaNacimiento.split("-").map(Number);
+      if (m !== mes) return;
+      mapa.set(d, [...(mapa.get(d) ?? []), c]);
+    });
+    return mapa;
+  }, [clientes, mes]);
+
+  const clientesDelDia = diaSeleccionado ? clientesPorDia(clientes, mes, diaSeleccionado) : [];
+
+  if (!listoConfig || !listoOverrides) return null;
+
+  return (
+    <Card>
+      <CardHeader title="Calendario de cumpleaños" subtitle="Elige un día para ver quién cumple años y a qué hora se le envía el saludo" />
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,320px)_1fr] gap-5">
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => setMes((m) => (m === 1 ? 12 : m - 1))} className="p-1.5 rounded-lg hover:bg-[var(--color-crema)] text-[var(--color-gris-medio)]">
+              <ChevronLeft size={16} />
+            </button>
+            <p className="text-sm font-semibold text-[var(--color-gris)]">{MESES_LABEL[mes - 1]}</p>
+            <button onClick={() => setMes((m) => (m === 12 ? 1 : m + 1))} className="p-1.5 rounded-lg hover:bg-[var(--color-crema)] text-[var(--color-gris-medio)]">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-[var(--color-gris-medio)] mb-1">
+            {["D", "L", "M", "M", "J", "V", "S"].map((d, i) => <span key={i}>{d}</span>)}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {Array.from({ length: primerDiaSemana }).map((_, i) => <span key={`vacio-${i}`} />)}
+            {Array.from({ length: diasEnMes }, (_, i) => i + 1).map((dia) => {
+              const cantidad = porDia.get(dia)?.length ?? 0;
+              const esHoyCelda = mes === BASE_DATE.getMonth() + 1 && dia === BASE_DATE.getDate();
+              return (
+                <button
+                  key={dia}
+                  onClick={() => setDiaSeleccionado(dia)}
+                  className={`relative aspect-square rounded-lg text-xs font-medium flex items-center justify-center transition-colors ${
+                    diaSeleccionado === dia
+                      ? "bg-[var(--color-terracota)] text-white"
+                      : esHoyCelda
+                        ? "bg-[var(--color-naranja-claro)]/50 text-[var(--color-gris)]"
+                        : "hover:bg-[var(--color-crema)] text-[var(--color-gris)]"
+                  }`}
+                >
+                  {dia}
+                  {cantidad > 0 && (
+                    <span className={`absolute bottom-0.5 w-1.5 h-1.5 rounded-full ${diaSeleccionado === dia ? "bg-white" : "bg-[var(--color-terracota)]"}`} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          {diaSeleccionado === null ? (
+            <p className="text-sm text-[var(--color-gris-medio)] py-6 text-center">Elige un día del calendario.</p>
+          ) : clientesDelDia.length === 0 ? (
+            <p className="text-sm text-[var(--color-gris-medio)] py-6 text-center">
+              Nadie cumple años el {diaSeleccionado} de {MESES_LABEL[mes - 1].toLowerCase()}.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {clientesDelDia.map((c) => {
+                const seguimiento = seguimientoPorCliente.get(c.id);
+                return (
+                  <ClienteDelDia
+                    key={c.id}
+                    cliente={c}
+                    negocioNombre={negocioNombre}
+                    configGeneral={config}
+                    override={seguimiento ? overrides[seguimiento.id] : undefined}
+                    onGuardar={seguimiento ? (patch) => set(seguimiento.id, patch) : undefined}
+                    editable={editable}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function ClienteDelDia({
+  cliente, negocioNombre, configGeneral, override, onGuardar, editable,
+}: {
+  cliente: ClienteIndividual; negocioNombre: string;
+  configGeneral: { mensaje: string; hora: string }; override?: SeguimientoOverride;
+  onGuardar?: (patch: SeguimientoOverride) => void; editable: boolean;
+}) {
+  const [editando, setEditando] = useState(false);
+  const mensajeEfectivo = override?.mensaje || configGeneral.mensaje;
+  const horaEfectiva = override?.hora || configGeneral.hora;
+  const [mensaje, setMensaje] = useState(mensajeEfectivo);
+  const [hora, setHora] = useState(horaEfectiva);
+  const personalizado = Boolean(override?.mensaje || override?.hora);
+
+  return (
+    <div className="rounded-xl border border-[var(--color-gris-claro)]/40 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-[var(--color-gris)] truncate">{cliente.nombres} {cliente.apellidos}</p>
+          <p className="text-xs text-[var(--color-gris-medio)]">{cliente.celular}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Badge tono={personalizado ? "naranja" : "gris"}>
+            <Clock size={11} /> {horaEfectiva}
+          </Badge>
+          {personalizado && <Badge tono="azul">Personalizado</Badge>}
+          {editable && onGuardar && (
+            <button onClick={() => setEditando((v) => !v)} className="p-1.5 rounded-lg hover:bg-[var(--color-crema)] text-[var(--color-gris-medio)]">
+              <Pencil size={13} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!editando && (
+        <p className="text-xs text-[var(--color-gris-medio)] mt-2 line-clamp-2">
+          {interpolarPlantilla(mensajeEfectivo, cliente.nombres.split(" ")[0], negocioNombre)}
+        </p>
+      )}
+
+      {editando && editable && onGuardar && (
+        <div className="mt-2 space-y-2">
+          <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} rows={2} className="input text-xs" />
+          <div className="flex items-center gap-2">
+            <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="input w-28 text-xs" />
+            <button
+              onClick={() => { onGuardar({ mensaje, hora }); setEditando(false); }}
+              className="text-xs font-semibold bg-[var(--color-terracota)] text-white rounded-lg px-3 py-1.5 hover:opacity-90 transition-opacity"
+            >
+              Guardar
+            </button>
+            {personalizado && (
+              <button
+                onClick={() => { onGuardar({ mensaje: undefined, hora: undefined }); setMensaje(configGeneral.mensaje); setHora(configGeneral.hora); setEditando(false); }}
+                className="flex items-center gap-1 text-xs font-medium text-[var(--color-gris-medio)] hover:text-[var(--color-gris)]"
+              >
+                <RotateCcw size={12} /> Usar el general
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AprobacionMes({ negocioId, totalDelMes }: { negocioId: string; totalDelMes: number }) {
+  const { aprobado, aprobar, listo } = useAprobacionCumpleanos(negocioId);
+  if (!listo) return null;
+  return (
+    <Card>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[var(--color-gris)]">Aprobación del seguimiento del mes</p>
+          <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">
+            {totalDelMes} clientes cumplen años este mes. Revisa el detalle abajo y aprueba cuando esté conforme.
+          </p>
+        </div>
+        {aprobado ? (
+          <Badge tono="verde"><CheckCircle2 size={12} /> Aprobado por Administración</Badge>
+        ) : (
+          <button
+            onClick={aprobar}
+            className="flex items-center gap-1.5 bg-[var(--color-terracota)] text-white text-xs font-semibold rounded-lg px-3.5 py-2 hover:opacity-90 transition-opacity"
+          >
+            <CheckCircle2 size={14} /> Aprobar mes
+          </button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function SeguimientoTabla({
+  seguimientos, verMontos, editable, overrides, setOverride, listo,
+}: {
+  seguimientos: ReturnType<typeof seguimientosConNuevos>; verMontos: boolean; editable: boolean;
+  overrides: Record<string, SeguimientoOverride>; setOverride: (id: string, patch: SeguimientoOverride) => void; listo: boolean;
+}) {
+  const set = setOverride;
+  if (!listo) return null;
+
+  return (
+    <Table>
+      <Thead>
+        <Th>Nombre</Th><Th>Celular</Th><Th>Saludo</Th><Th>Visto</Th><Th>Respuesta</Th><Th>Reservación</Th>
+        {verMontos && <Th>Adelanto</Th>}
+        {verMontos && <Th>Consumo</Th>}
+      </Thead>
+      <tbody>
+        {seguimientos.map((s) => {
+          const o = overrides[s.id] ?? {};
+          const saludoEnviado = o.saludoEnviado ?? s.saludoEnviado;
+          const visto = o.visto ?? s.visto;
+          const respuesta = o.respuesta ?? s.respuesta;
+          const reservacion = o.reservacion ?? s.reservacion;
+          return (
+            <Tr key={s.id}>
+              <Td className="font-medium">{s.nombre}</Td>
+              <Td>{s.celular}</Td>
+              <Td>
+                {editable ? (
+                  <button onClick={() => set(s.id, { saludoEnviado: !saludoEnviado })}>
+                    <Badge tono={saludoEnviado ? "verde" : "gris"}>{saludoEnviado ? "Sí" : "No"}</Badge>
+                  </button>
+                ) : (
+                  <Badge tono={saludoEnviado ? "verde" : "gris"}>{saludoEnviado ? "Sí" : "No"}</Badge>
+                )}
+              </Td>
+              <Td><Badge tono={visto ? "verde" : "gris"}>{visto ? "Sí" : "—"}</Badge></Td>
+              <Td>
+                {editable ? (
+                  <select
+                    value={respuesta}
+                    onChange={(e) => set(s.id, { respuesta: e.target.value as "si" | "no" | "pendiente" })}
+                    className="text-xs border border-[var(--color-gris-claro)]/50 rounded-lg px-2 py-1 bg-white"
+                  >
+                    <option value="pendiente">Pendiente</option>
+                    <option value="si">Sí</option>
+                    <option value="no">No</option>
+                  </select>
+                ) : (
+                  <>
+                    {respuesta === "si" && <Badge tono="verde">Sí</Badge>}
+                    {respuesta === "no" && <Badge tono="rojo">No</Badge>}
+                    {respuesta === "pendiente" && <Badge tono="gris">Pendiente</Badge>}
+                  </>
+                )}
+              </Td>
+              <Td>
+                {editable ? (
+                  <select
+                    value={reservacion}
+                    onChange={(e) => set(s.id, { reservacion: e.target.value as "si" | "no" | "pendiente" })}
+                    className="text-xs border border-[var(--color-gris-claro)]/50 rounded-lg px-2 py-1 bg-white"
+                  >
+                    <option value="pendiente">—</option>
+                    <option value="si">Sí</option>
+                    <option value="no">No</option>
+                  </select>
+                ) : (
+                  <>
+                    {reservacion === "si" && <Badge tono="verde">Sí</Badge>}
+                    {reservacion === "no" && <Badge tono="rojo">No</Badge>}
+                    {reservacion === "pendiente" && <Badge tono="gris">—</Badge>}
+                  </>
+                )}
+              </Td>
+              {verMontos && <Td>{s.adelantoReserva ? `S/ ${s.adelantoReserva}` : "—"}</Td>}
+              {verMontos && <Td>{s.montoConsumo ? `S/ ${s.montoConsumo}` : "—"}</Td>}
+            </Tr>
+          );
+        })}
+      </tbody>
+    </Table>
+  );
+}

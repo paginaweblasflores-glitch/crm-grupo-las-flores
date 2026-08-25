@@ -1,0 +1,78 @@
+"use client";
+
+import Link from "next/link";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
+import clsx from "clsx";
+import { LogOut, Settings2 } from "lucide-react";
+import { useApp } from "@/lib/app-context";
+import { puedeVer, accesoA } from "@/lib/permissions";
+import { NAV_ITEMS } from "./nav-items";
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const { usuario, negocio, cerrarSesion } = useApp();
+
+  if (!usuario) return null;
+
+  const items = NAV_ITEMS.filter((item) => {
+    if (!puedeVer(usuario.rolTipo, item.modulo)) return false;
+    if (item.soloUmaru && negocio.id !== "umaru") return false;
+    if (item.soloLasFlores && negocio.id !== "las-flores") return false;
+    return true;
+  });
+
+  return (
+    <aside className="no-imprimir w-64 shrink-0 bg-[var(--color-sidebar)] text-white flex flex-col h-screen sticky top-0">
+      <div className="flex items-center gap-3 px-5 h-20 border-b border-[var(--color-sidebar-border)]">
+        <Image src="/logo.png" alt="Grupo Las Flores" width={36} height={36} className="w-9 h-9 shrink-0" priority />
+        <div>
+          <p className="font-semibold text-sm leading-tight">CRM Grupo Las Flores</p>
+          <p className="text-[11px] text-white/50">Prototipo interno</p>
+        </div>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+        {items.map((item) => {
+          const activo = pathname === item.href || pathname.startsWith(item.href + "/");
+          const nivel = accesoA(usuario.rolTipo, item.modulo);
+          const Icon = item.icon;
+          const label = item.labelConNegocio
+            ? `Tablero — ${negocio.nombre}`
+            : nivel === "resumen" && item.labelResumen
+              ? item.labelResumen
+              : item.label;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={clsx(
+                "flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors min-w-0",
+                activo
+                  ? "bg-[var(--color-terracota)] text-white"
+                  : "text-white/70 hover:bg-[var(--color-sidebar-hover)] hover:text-white"
+              )}
+            >
+              <Icon size={17} strokeWidth={2} className="shrink-0" />
+              <span className="truncate">{label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="px-3 pb-4 space-y-1 border-t border-[var(--color-sidebar-border)] pt-3">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-white/50 text-xs">
+          <Settings2 size={15} />
+          Supabase: no conectado (prototipo)
+        </div>
+        <button
+          onClick={cerrarSesion}
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-white/70 hover:bg-[var(--color-sidebar-hover)] hover:text-white transition-colors"
+        >
+          <LogOut size={17} />
+          Cerrar sesión
+        </button>
+      </div>
+    </aside>
+  );
+}

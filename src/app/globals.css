@@ -1,26 +1,107 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f3ec;
+  --foreground: #2b2420;
+
+  --color-terracota: #8c3a25;
+  --color-terracota-oscuro: #5e2617;
+  --color-naranja: #e08a3e;
+  --color-naranja-claro: #f0b87a;
+  --color-verde: #3e6b4f;
+  --color-verde-claro: #e4efe6;
+  --color-rojo: #b44b3c;
+  --color-rojo-claro: #f7e4e0;
+  --color-crema: #f7efe3;
+  --color-crema-oscuro: #efe2cc;
+  --color-gris: #3a332e;
+  --color-gris-medio: #6b6259;
+  --color-gris-claro: #b8afa6;
+  --color-azul: #5c7c8c;
+  --color-azul-claro: #eaf0f3;
+
+  --color-sidebar: #211712;
+  --color-sidebar-hover: #362619;
+  --color-sidebar-border: #3c2c1f;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --font-sans: var(--font-sans);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-terracota: var(--color-terracota);
+  --color-terracota-oscuro: var(--color-terracota-oscuro);
+  --color-naranja: var(--color-naranja);
+  --color-naranja-claro: var(--color-naranja-claro);
+  --color-verde: var(--color-verde);
+  --color-verde-claro: var(--color-verde-claro);
+  --color-rojo: var(--color-rojo);
+  --color-rojo-claro: var(--color-rojo-claro);
+  --color-crema: var(--color-crema);
+  --color-crema-oscuro: var(--color-crema-oscuro);
+  --color-gris: var(--color-gris);
+  --color-gris-medio: var(--color-gris-medio);
+  --color-gris-claro: var(--color-gris-claro);
+  --color-azul: var(--color-azul);
+  --color-azul-claro: var(--color-azul-claro);
+
+  --color-sidebar: var(--color-sidebar);
+  --color-sidebar-hover: var(--color-sidebar-hover);
+  --color-sidebar-border: var(--color-sidebar-border);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-gris-claro);
+  border-radius: 999px;
+}
+
+.input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(184 175 166 / 0.5);
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.input:focus {
+  border-color: var(--color-terracota);
+}
+
+/* --- Exportar reporte a PDF (Ctrl+P del navegador) -------------------- */
+@media print {
+  .no-imprimir {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  .romper-pagina {
+    page-break-inside: avoid;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out;
 }
