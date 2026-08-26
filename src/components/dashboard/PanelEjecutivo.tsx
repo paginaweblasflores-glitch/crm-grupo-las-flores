@@ -145,7 +145,7 @@ export function PanelEjecutivo() {
       </Card>
 
       {/* Estadísticas de Rendimiento Comercial para Directorio */}
-      <EstadisticasVendedores mostrarFiltroNegocio={true} />
+      <EstadisticasVendedores mostrarFiltroNegocio={false} />
     </div>
   );
 }

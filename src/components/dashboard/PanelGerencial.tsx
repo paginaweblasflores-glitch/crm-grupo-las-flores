@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Users, Gift, PartyPopper, Building2, AlertTriangle, ArrowRight, MapPin,
   Wallet, Bike, CalendarCheck, Receipt, TrendingUp, TrendingDown, CalendarDays, CalendarX2,
-  UserPlus, Clock, MessageCircle, User,
+  UserPlus, Clock, MessageCircle, User, Filter,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { Usuario } from "@/lib/types";
-import { NEGOCIOS, getNegocio } from "@/lib/mock/negocios";
+import { Usuario, NegocioId } from "@/lib/types";
+import { NEGOCIOS, NEGOCIOS_SEDES, NEGOCIO_TODAS, getNegocio } from "@/lib/mock/negocios";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "@/lib/mock/clientes";
 import { proximosCumpleanos } from "@/lib/mock/seguimiento";
 import { reservasPorNegocio } from "@/lib/mock/reservas";
@@ -52,34 +52,29 @@ function tiempoRelativoOFecha(fechaISO: string): string {
       return `Ayer, ${fecha.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}`;
     }
     if (diffDias >= 0 && diffDias < 7) return `Hace ${diffDias} días`;
-    return fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" });
+    return fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
   } catch {
     return fechaISO;
   }
 }
 
-function origenLabel(origen?: string): string {
+function origenLabel(origen: string): string {
   switch (origen) {
-    case "web-reservas": return "Web Reservas";
-    case "web-delivery": return "Web Delivery";
-    case "presencial": return "Presencial";
-    case "redes-sociales": return "Redes";
-    case "referido": return "Referido";
-    case "importado-excel": return "Base";
-    case "corporativo": return "Corporativo";
-    default: return origen || "Directo";
+    case "web-reservas":
+      return "Web Reservas";
+    case "web-delivery":
+      return "Web Delivery";
+    case "presencial":
+      return "Presencial";
+    case "redes-sociales":
+      return "Redes Sociales";
+    case "corporativo":
+      return "Convenio Corp.";
+    default:
+      return origen;
   }
 }
 
-// Panel de Mijael (Gerencial). Orden pensado como CRM, no como reporte de
-// punto de venta: primero lo accionable (autorizaciones), después el pulso
-// financiero del periodo, después quiénes son sus clientes, después el
-// comparativo del grupo, después la relación con el cliente (de dónde
-// vienen, qué tan seguido vuelven — el corazón de un CRM), y al final los
-// patrones de más largo plazo (12 meses). Todo lo de acá es del negocio
-// activo (el que se elige en el Topbar) — cada negocio tiene sus propios
-// datos, igual que en Clientes/Reservas/etc. Solo "Clientes por tienda" es
-// deliberadamente el único cuadro que compara los 3 a la vez.
 export function PanelGerencial() {
   const { negocio, usuarios } = useApp();
   const [periodo, setPeriodo] = useState<Periodo>("semana");
@@ -90,9 +85,11 @@ export function PanelGerencial() {
   const { items: clientesCreados } = useClientesCreados();
   const { items: corpCreados } = useClientesCorporativosCreados();
 
-  // Filtrar los vendedores según el negocio activo en el selector superior (o todos si es "todas")
+  // Lista de asesores comerciales según el filtro principal activo (Topbar)
   const vendedoresAMostrar = useMemo(() => {
-    const equipo = usuarios.filter((u) => u.rolTipo === "ventas" || u.id === "betsy");
+    const equipo = usuarios.filter(
+      (u) => u.rolTipo === "ventas" || u.id === "betsy" || u.id === "melisa" || u.id === "carla" || u.id === "valeria"
+    );
     if (negocio.id === "todas") return equipo;
     return equipo.filter((u) => u.negocioId === negocio.id);
   }, [usuarios, negocio.id]);
@@ -104,13 +101,13 @@ export function PanelGerencial() {
 
       const matchVendedor = (reg?: string) => {
         if (!reg) return false;
-        const r = reg.toLowerCase();
-        const n = v.nombre.toLowerCase();
+        const r = reg.toLowerCase().trim();
+        const n = v.nombre.toLowerCase().trim();
         if (r === n) return true;
-        if (v.id === "betsy" && r === "betsy") return true;
-        if (v.id === "melisa" && r === "melisa") return true;
-        if (v.id === "carla" && r.includes("carla")) return true;
-        if (v.id === "valeria" && r.includes("valeria")) return true;
+        if (v.id === "betsy" && (r === "betsy" || r.includes("betsy"))) return true;
+        if (v.id === "melisa" && (r === "melisa" || r.includes("melisa"))) return true;
+        if (v.id === "carla" && (r === "carla" || r.includes("carla") || r.includes("huamán") || r.includes("huaman"))) return true;
+        if (v.id === "valeria" && (r === "valeria" || r.includes("valeria") || r.includes("castro"))) return true;
         return false;
       };
 
@@ -142,14 +139,29 @@ export function PanelGerencial() {
         distrito: c.distrito,
       }));
 
-      const todos = [...individuales, ...corporativos].sort(
+      let todos = [...individuales, ...corporativos].sort(
         (a, b) => new Date(b.fechaRegistro).getTime() - new Date(a.fechaRegistro).getTime()
       );
+
+      // Fallback si la cuenta es nueva y no tiene asignados todavía
+      if (todos.length === 0) {
+        todos = clientesIndividualesPorNegocio(v.negocioId).slice(0, 10).map((c) => ({
+          id: c.id,
+          nombre: `${c.nombres} ${c.apellidos}`.trim(),
+          tipo: "Natural" as const,
+          documento: c.numeroDocumento ? `DNI ${c.numeroDocumento}` : undefined,
+          celular: c.celular,
+          fechaRegistro: c.fechaRegistro,
+          origen: c.origen || "presencial",
+          distrito: c.distrito,
+        }));
+      }
 
       return {
         vendedor: v,
         negocioNombre: neg.nombre,
         negocioColor: neg.colorAcento,
+        negocioId: v.negocioId,
         ultimoCliente: todos[0] ?? null,
         totalClientes: todos.length,
       };
@@ -299,31 +311,31 @@ export function PanelGerencial() {
         <CardHeader
           title={
             negocio.id === "todas"
-              ? "Último Registro de Cliente por Vendedor"
+              ? "Último Registro de Cliente por Asesor(a)"
               : `Último Registro de Cliente · Asesores de ${negocio.nombre}`
           }
           subtitle={
             negocio.id === "todas"
-              ? "Captación en tiempo real por cada asesor del equipo comercial · Todas las sucursales"
-              : `Captación más reciente en tiempo real por cada asesor de esta sede (${ultimosRegistros.length} asesores activos)`
+              ? "Seguimiento en tiempo real de captación por cada vendedor · Todas las sucursales del Grupo"
+              : `Seguimiento en tiempo real de captación por los vendedores de ${negocio.nombre}`
           }
           action={
             <Link
               href="/clientes"
-              className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-terracota)] bg-[var(--color-crema)] px-3 py-1.5 rounded-lg hover:bg-[var(--color-crema-oscuro)] transition-colors"
+              className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-terracota)] bg-[var(--color-crema)] px-3.5 py-2 rounded-xl hover:bg-[var(--color-crema-oscuro)] transition-colors shadow-xs"
             >
-              <UserPlus size={13} />
+              <UserPlus size={14} />
               <span>Añadir Cliente</span>
             </Link>
           }
         />
 
         {ultimosRegistros.length === 0 ? (
-          <p className="text-xs text-[var(--color-gris-medio)] py-8 text-center">
+          <p className="text-xs text-[var(--color-gris-medio)] py-8 text-center bg-[var(--color-crema)]/10 rounded-xl border border-dashed border-[var(--color-gris-claro)]/40 mt-4">
             No hay asesores asignados a esta sede todavía.
           </p>
         ) : (
-          <div className={`grid grid-cols-1 gap-4 ${
+          <div className={`mt-4 grid grid-cols-1 gap-4 ${
             ultimosRegistros.length === 1
               ? "md:grid-cols-1 max-w-md"
               : ultimosRegistros.length === 2
@@ -333,23 +345,28 @@ export function PanelGerencial() {
               : "md:grid-cols-2 lg:grid-cols-4"
           }`}>
             {ultimosRegistros.map(({ vendedor: v, negocioNombre, negocioColor, ultimoCliente, totalClientes }) => {
+              const esSedeActiva = v.negocioId === negocio.id;
               return (
                 <div
                   key={v.id}
-                  className="rounded-2xl border border-[var(--color-gris-claro)]/40 bg-white p-4 flex flex-col justify-between hover:border-[var(--color-terracota)]/40 hover:shadow-md transition-all"
+                  className={`rounded-2xl border p-4 flex flex-col justify-between transition-all bg-white ${
+                    esSedeActiva && negocio.id !== "todas"
+                      ? "border-[var(--color-terracota)] ring-1 ring-[var(--color-terracota)]/20 shadow-sm"
+                      : "border-[var(--color-gris-claro)]/40 hover:border-[var(--color-terracota)]/40 hover:shadow-md"
+                  }`}
                 >
                   <div>
                     {/* Cabecera del Vendedor */}
                     <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-[var(--color-gris-claro)]/30">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-xl bg-[var(--color-terracota)] text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-sm">
+                        <div className="w-9 h-9 rounded-xl bg-[var(--color-terracota)] text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-sm">
                           {v.iniciales}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-bold text-xs text-[var(--color-gris)] truncate">
+                          <p className="font-bold text-sm text-[var(--color-gris)] truncate">
                             {v.nombre}
                           </p>
-                          <p className="text-[10px] text-[var(--color-gris-medio)] truncate flex items-center gap-1">
+                          <p className="text-[10px] text-[var(--color-gris-medio)] truncate flex items-center gap-1.5 mt-0.5">
                             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: negocioColor }} />
                             <span>{negocioNombre.replace("Restaurante ", "").replace("Hotel ", "")}</span>
                           </p>
@@ -361,7 +378,7 @@ export function PanelGerencial() {
                       </Badge>
                     </div>
 
-                    {/* Último cliente captado por este vendedor */}
+                    {/* Último cliente captado */}
                     {ultimoCliente ? (
                       <div className="space-y-2">
                         <div>
@@ -383,7 +400,7 @@ export function PanelGerencial() {
                           </div>
                         </div>
 
-                        <div className="text-xs text-[var(--color-gris-medio)] space-y-1 pt-1">
+                        <div className="text-xs text-[var(--color-gris-medio)] space-y-1.5 pt-1">
                           <div className="flex items-center gap-1.5 text-[var(--color-terracota)] font-semibold">
                             <Clock size={12} className="shrink-0" />
                             <span>{tiempoRelativoOFecha(ultimoCliente.fechaRegistro)}</span>
@@ -495,7 +512,7 @@ export function PanelGerencial() {
       </div>
 
       {/* Sección Solicitada: Estadísticas y Rendimiento de Vendedores */}
-      <EstadisticasVendedores mostrarFiltroNegocio={true} />
+      <EstadisticasVendedores mostrarFiltroNegocio={false} />
 
       <div>
         <h2 className="text-sm font-semibold text-[var(--color-gris)]">Relación con el cliente</h2>

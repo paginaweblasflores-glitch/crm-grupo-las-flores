@@ -41,7 +41,10 @@ export default function ReservasPage() {
   const { items: creadas, add: agregarReserva } = useReservasCreadas();
 
   const todas = useMemo(
-    () => [...creadas.filter((r) => r.negocioId === negocio.id), ...reservasPorNegocio(negocio.id)],
+    () => [
+      ...creadas.filter((r) => negocio.id === "todas" || r.negocioId === negocio.id),
+      ...reservasPorNegocio(negocio.id),
+    ],
     [creadas, negocio.id]
   );
   const filtradas = useMemo(() => {

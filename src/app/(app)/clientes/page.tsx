@@ -44,11 +44,17 @@ export default function ClientesPage() {
   const { items: corpCreados, add: agregarCorporativo } = useClientesCorporativosCreados();
 
   const individuales = useMemo(
-    () => [...creados.filter((c) => c.negocioId === negocio.id), ...clientesIndividualesPorNegocio(negocio.id)],
+    () => [
+      ...creados.filter((c) => negocio.id === "todas" || c.negocioId === negocio.id),
+      ...clientesIndividualesPorNegocio(negocio.id),
+    ],
     [creados, negocio.id]
   );
   const corporativos = useMemo(
-    () => [...corpCreados.filter((c) => c.negocioId === negocio.id), ...corporativosPorNegocio(negocio.id)],
+    () => [
+      ...corpCreados.filter((c) => negocio.id === "todas" || c.negocioId === negocio.id),
+      ...corporativosPorNegocio(negocio.id),
+    ],
     [corpCreados, negocio.id]
   );
 
@@ -56,7 +62,7 @@ export default function ClientesPage() {
     const q = busqueda.trim().toLowerCase();
     if (!q) return individuales;
     return individuales.filter((c) =>
-      `${c.nombres} ${c.apellidos} ${c.celular} ${c.distrito}`.toLowerCase().includes(q)
+      `${c.nombres} ${c.apellidos} ${c.celular} ${c.distrito} ${c.registradoPor ?? ""}`.toLowerCase().includes(q)
     );
   }, [individuales, busqueda]);
 
@@ -64,7 +70,7 @@ export default function ClientesPage() {
     const q = busqueda.trim().toLowerCase();
     if (!q) return corporativos;
     return corporativos.filter((c) =>
-      `${c.razonSocial} ${c.ruc} ${c.celular} ${c.distrito}`.toLowerCase().includes(q)
+      `${c.razonSocial} ${c.ruc} ${c.celular} ${c.distrito} ${c.registradoPor ?? ""}`.toLowerCase().includes(q)
     );
   }, [corporativos, busqueda]);
 

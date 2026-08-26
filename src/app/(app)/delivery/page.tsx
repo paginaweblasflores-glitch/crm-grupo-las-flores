@@ -45,7 +45,7 @@ export default function DeliveryPage() {
     return todos.filter((p) => p.clienteNombre.toLowerCase().includes(q));
   }, [todos, busqueda]);
 
-  const fueraDeAlcance = negocio.id !== "las-flores";
+  const fueraDeAlcance = negocio.id !== "las-flores" && negocio.id !== "todas";
 
   useEffect(() => {
     if (fueraDeAlcance) router.replace("/dashboard");

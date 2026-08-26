@@ -22,7 +22,7 @@ export default function HospedajePage() {
     return HOSPEDAJES.filter((h) => h.clienteNombre.toLowerCase().includes(q));
   }, [busqueda]);
 
-  const fueraDeAlcance = negocio.id !== "umaru";
+  const fueraDeAlcance = negocio.id !== "umaru" && negocio.id !== "todas";
 
   useEffect(() => {
     if (fueraDeAlcance) router.replace("/dashboard");

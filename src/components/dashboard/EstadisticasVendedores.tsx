@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Trophy, Users, TrendingUp, CalendarCheck, Clock, ArrowRight,
@@ -70,15 +70,21 @@ function tiempoRelativoOFecha(fechaISO: string): string {
 
 export function EstadisticasVendedores({
   negocioIdFijo,
-  mostrarFiltroNegocio = true,
+  mostrarFiltroNegocio = false,
 }: {
   negocioIdFijo?: NegocioId;
   mostrarFiltroNegocio?: boolean;
 }) {
-  const { usuarios, negocios } = useApp();
-  const [filtroSede, setFiltroSede] = useState<string>(negocioIdFijo ?? "todos");
+  const { usuarios, negocios, negocio } = useApp();
+  const sedeActiva = negocioIdFijo ?? negocio.id;
+  const [filtroSede, setFiltroSede] = useState<string>(sedeActiva === "todas" ? "todos" : sedeActiva);
   const [filtroPeriodo, setFiltroPeriodo] = useState<PeriodoFiltro>("mes");
   const [ordenPor, setOrdenPor] = useState<"ventas" | "clientes" | "conversion">("ventas");
+
+  useEffect(() => {
+    const s = negocioIdFijo ?? negocio.id;
+    setFiltroSede(s === "todas" ? "todos" : s);
+  }, [negocioIdFijo, negocio.id]);
 
   const { items: clientesCreados } = useClientesCreados();
   const { items: corpCreados } = useClientesCorporativosCreados();
