@@ -7,11 +7,11 @@ import { Usuario } from "@/lib/types";
 export const USUARIOS: Usuario[] = [
   {
     id: "socios",
-    nombre: "Directorio · Lima",
+    nombre: "Directorio",
     cargo: "Dirección — Grupo Las Flores",
     rolTipo: "direccion",
     rolLabel: "Dirección",
-    iniciales: "DL",
+    iniciales: "D",
     usuario: "socios",
     contrasena: "direccion2026",
     negocioId: "las-flores",
@@ -30,7 +30,7 @@ export const USUARIOS: Usuario[] = [
   {
     id: "betsy",
     nombre: "Betsy",
-    cargo: "Vendedora Senior — Restaurante Las Flores",
+    cargo: "Administración y Ventas — Restaurante Las Flores",
     rolTipo: "ventas",
     rolLabel: "Ventas",
     iniciales: "BT",

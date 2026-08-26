@@ -21,9 +21,9 @@ export const NEGOCIOS: Negocio[] = [
     id: "mamina",
     nombre: "Mamina Restobar",
     tipo: "restobar",
-    operando: false,
-    colorAcento: "#6b6259",
-    descripcionEstado: "Aún no opera — fecha de apertura sin definir",
+    operando: true,
+    colorAcento: "#a0522d",
+    descripcionEstado: "Restobar, coctelería y gastronomía nocturna",
   },
 ];
 

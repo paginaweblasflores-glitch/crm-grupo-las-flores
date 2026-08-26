@@ -22,6 +22,7 @@ function generarCampanas(negocioId: NegocioId): Campana[] {
 export const CAMPANAS: Campana[] = [
   ...generarCampanas("las-flores"),
   ...generarCampanas("umaru"),
+  ...generarCampanas("mamina"),
 ];
 
 export function campanasPorNegocio(negocioId: NegocioId): Campana[] {

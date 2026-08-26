@@ -20,7 +20,7 @@ function generarClientesIndividuales(negocioId: NegocioId, cantidad: number, off
   for (let i = 0; i < cantidad; i++) {
     const nombres = pick(NOMBRES);
     const apellidos = `${pick(APELLIDOS)} ${pick(APELLIDOS)}`;
-    const registrado = randInt(1, 400);
+    const registrado = i === 0 ? 0 : i === 1 ? 1 : randInt(2, 400);
     out.push({
       id: `${negocioId}-cli-${offset + i + 1}`,
       negocioId,
@@ -30,6 +30,8 @@ function generarClientesIndividuales(negocioId: NegocioId, cantidad: number, off
       apellidos,
       fechaNacimiento: randFechaNacimiento(),
       celular: randPhone(),
+      tipoDocumento: "DNI",
+      numeroDocumento: String(randInt(40000000, 79999999)),
       departamento: "Ayacucho",
       provincia: "Huamanga",
       distrito: pick(DISTRITOS_AYACUCHO),
@@ -105,6 +107,7 @@ function atribuirA(clientes: ClienteIndividual[], nombre: string): ClienteIndivi
 
 const LAS_FLORES_INDIVIDUALES = generarClientesIndividuales("las-flores", 52, 0);
 const UMARU_INDIVIDUALES = generarClientesIndividuales("umaru", 38, 0);
+const MAMINA_INDIVIDUALES = generarClientesIndividuales("mamina", 30, 0);
 
 export const CLIENTES_INDIVIDUALES: ClienteIndividual[] = [
   ...atribuirA(LAS_FLORES_INDIVIDUALES.slice(0, 18), "Betsy"),
@@ -114,11 +117,14 @@ export const CLIENTES_INDIVIDUALES: ClienteIndividual[] = [
   ...atribuirA(UMARU_INDIVIDUALES.slice(0, 15), "Carla Huamán"),
   ...UMARU_INDIVIDUALES.slice(15),
   ...clientesConCumpleFijo("umaru", 38),
+  ...MAMINA_INDIVIDUALES,
+  ...clientesConCumpleFijo("mamina", 30),
 ];
 
 export const CLIENTES_CORPORATIVOS: ClienteCorporativo[] = [
   ...generarCorporativos("las-flores", 14, 0),
   ...generarCorporativos("umaru", 9, 0),
+  ...generarCorporativos("mamina", 6, 0),
 ];
 
 export function clientesIndividualesPorNegocio(negocioId: NegocioId): ClienteIndividual[] {

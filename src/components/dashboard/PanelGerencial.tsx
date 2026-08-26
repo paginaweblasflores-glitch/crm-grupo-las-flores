@@ -5,6 +5,7 @@ import { useState } from "react";
 import {
   Users, Gift, PartyPopper, Building2, AlertTriangle, ArrowRight, MapPin,
   Wallet, Bike, CalendarCheck, Receipt, TrendingUp, TrendingDown, CalendarDays, CalendarX2,
+  UserPlus, Clock, MessageCircle, User,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { NEGOCIOS } from "@/lib/mock/negocios";
@@ -20,16 +21,54 @@ import {
   METRICAS_ESTADISTICA, MetricaEstadistica,
 } from "@/lib/metrics";
 import { distribucionFrecuencia, clientesQueVolvieronEsteMes } from "@/lib/frecuencia";
-import { useFestividades, useAutorizaciones } from "@/lib/store";
+import { useFestividades, useAutorizaciones, useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Badge } from "@/components/ui/Badge";
 import { BarChartMensual } from "@/components/charts/BarChartMensual";
 import { BarChartSerie } from "@/components/charts/BarChartSerie";
 import { DonutChart } from "@/components/charts/DonutChart";
+import { EstadisticasVendedores } from "@/components/dashboard/EstadisticasVendedores";
 
 const TIPO_LABEL: Record<string, string> = { religioso: "Religioso", civico: "Cívico", comercial: "Comercial" };
 const MESES_CORTO = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"];
+
+function tiempoRelativoOFecha(fechaISO: string): string {
+  try {
+    const fecha = new Date(fechaISO);
+    const ahora = new Date();
+    const diffMs = ahora.getTime() - fecha.getTime();
+    const diffMin = Math.floor(diffMs / (1000 * 60));
+    const diffHoras = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMin >= 0 && diffMin < 1) return "Hace un momento";
+    if (diffMin >= 1 && diffMin < 60) return `Hace ${diffMin} min`;
+    if (diffHoras >= 0 && diffHoras < 24 && fecha.getDate() === ahora.getDate()) {
+      return `Hoy, ${fecha.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}`;
+    }
+    if (diffDias === 1 || (diffHoras < 48 && fecha.getDate() === ahora.getDate() - 1)) {
+      return `Ayer, ${fecha.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}`;
+    }
+    if (diffDias >= 0 && diffDias < 7) return `Hace ${diffDias} días`;
+    return fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" });
+  } catch {
+    return fechaISO;
+  }
+}
+
+function origenLabel(origen?: string): string {
+  switch (origen) {
+    case "web-reservas": return "Web Reservas";
+    case "web-delivery": return "Web Delivery";
+    case "presencial": return "Presencial";
+    case "redes-sociales": return "Redes";
+    case "referido": return "Referido";
+    case "importado-excel": return "Base";
+    case "corporativo": return "Corporativo";
+    default: return origen || "Directo";
+  }
+}
 
 // Panel de Mijael (Gerencial). Orden pensado como CRM, no como reporte de
 // punto de venta: primero lo accionable (autorizaciones), después el pulso
@@ -47,6 +86,51 @@ export function PanelGerencial() {
   const [vistaGrafico, setVistaGrafico] = useState<"semana" | "anual">("semana");
   const { festividades, listo: listoFestividades } = useFestividades();
   const { autorizadas, listo: listoAutorizaciones } = useAutorizaciones();
+  const { items: clientesCreados } = useClientesCreados();
+  const { items: corpCreados } = useClientesCorporativosCreados();
+
+  // Cálculo del último registro de cliente para Flores, Umaru y Mamina
+  const ultimosRegistros = NEGOCIOS.map((n) => {
+    const individuales = [
+      ...clientesCreados.filter((c) => c.negocioId === n.id),
+      ...clientesIndividualesPorNegocio(n.id),
+    ].map((c) => ({
+      id: c.id,
+      nombre: `${c.nombres} ${c.apellidos}`.trim(),
+      tipo: "Natural" as const,
+      documento: c.numeroDocumento ? `DNI ${c.numeroDocumento}` : undefined,
+      celular: c.celular,
+      fechaRegistro: c.fechaRegistro,
+      origen: c.origen || "presencial",
+      registradoPor: c.registradoPor || "Ventas",
+      distrito: c.distrito,
+    }));
+
+    const corporativos = [
+      ...corpCreados.filter((c) => c.negocioId === n.id),
+      ...corporativosPorNegocio(n.id),
+    ].map((c) => ({
+      id: c.id,
+      nombre: c.razonSocial,
+      tipo: "Corporativo" as const,
+      documento: `RUC ${c.ruc}`,
+      celular: c.celular,
+      fechaRegistro: c.fechaRegistro,
+      origen: "corporativo",
+      registradoPor: c.registradoPor || "Ventas",
+      distrito: c.distrito,
+    }));
+
+    const todos = [...individuales, ...corporativos].sort(
+      (a, b) => new Date(b.fechaRegistro).getTime() - new Date(a.fechaRegistro).getTime()
+    );
+
+    return {
+      negocio: n,
+      ultimoCliente: todos[0] ?? null,
+      totalClientes: todos.length,
+    };
+  });
 
   const resumen = resumenPeriodo(negocio.id, periodo);
   const ingresosTotales = ingresosTotalesPeriodo(negocio.id, periodo);
@@ -186,6 +270,121 @@ export function PanelGerencial() {
         <StatTile label="Días festivos" value={festividadesDelNegocio.length} icon={<PartyPopper size={18} />} tono="naranja" trend="aplican a este negocio" />
       </div>
 
+      {/* Sección: Último Registro de Cliente (Flores - Umaru - Mamina) */}
+      <Card>
+        <CardHeader
+          title="Último Registro de Cliente"
+          subtitle="Seguimiento en tiempo real de captación por marca · Flores, Umaru y Mamina"
+          action={
+            <Link
+              href="/clientes"
+              className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-terracota)] bg-[var(--color-crema)] px-3 py-1.5 rounded-lg hover:bg-[var(--color-crema-oscuro)] transition-colors"
+            >
+              <UserPlus size={13} />
+              <span>Añadir Cliente</span>
+            </Link>
+          }
+        />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {ultimosRegistros.map(({ negocio: n, ultimoCliente, totalClientes }) => {
+            const esActivo = n.id === negocio.id;
+            return (
+              <div
+                key={n.id}
+                className={`rounded-xl border p-4 flex flex-col justify-between transition-all ${
+                  esActivo
+                    ? "border-[var(--color-terracota)] bg-[var(--color-crema)]/25 ring-1 ring-[var(--color-terracota)]/20 shadow-sm"
+                    : "border-[var(--color-gris-claro)]/40 bg-white"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <span className="flex items-center gap-2 font-bold text-xs text-[var(--color-gris)] truncate">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: n.colorAcento }} />
+                      {n.nombre}
+                    </span>
+                    {esActivo ? (
+                      <Badge tono="terracota">Sede activa</Badge>
+                    ) : (
+                      <span className="text-[11px] text-[var(--color-gris-medio)]">{totalClientes} clientes</span>
+                    )}
+                  </div>
+
+                  {ultimoCliente ? (
+                    <div className="space-y-2">
+                      <div>
+                        <Link
+                          href={`/clientes/${ultimoCliente.id}`}
+                          className="font-bold text-sm text-[var(--color-gris)] hover:text-[var(--color-terracota)] transition-colors line-clamp-1"
+                        >
+                          {ultimoCliente.nombre}
+                        </Link>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <Badge tono={ultimoCliente.tipo === "Natural" ? "gris" : "azul"}>
+                            {ultimoCliente.tipo}
+                          </Badge>
+                          {ultimoCliente.documento && (
+                            <span className="text-[11px] font-mono text-[var(--color-gris-medio)] font-semibold">
+                              {ultimoCliente.documento}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-xs text-[var(--color-gris-medio)] space-y-1 pt-1">
+                        <div className="flex items-center gap-1.5 text-[var(--color-terracota)] font-medium">
+                          <Clock size={12} className="shrink-0" />
+                          <span>{tiempoRelativoOFecha(ultimoCliente.fechaRegistro)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 truncate">
+                          <User size={12} className="shrink-0" />
+                          <span className="truncate">
+                            {ultimoCliente.registradoPor} · {origenLabel(ultimoCliente.origen)}
+                          </span>
+                        </div>
+                        {ultimoCliente.distrito && (
+                          <div className="flex items-center gap-1.5 truncate text-[11px]">
+                            <MapPin size={11} className="shrink-0" />
+                            <span className="truncate">{ultimoCliente.distrito}, Ayacucho</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[var(--color-gris-medio)] py-4 text-center">
+                      Sin clientes registrados aún
+                    </p>
+                  )}
+                </div>
+
+                {ultimoCliente && (
+                  <div className="mt-3 pt-3 border-t border-[var(--color-gris-claro)]/30 space-y-2">
+                    <a
+                      href={`https://wa.me/51${ultimoCliente.celular.replace(/\D/g, "")}?text=${encodeURIComponent(
+                        `Hola ${ultimoCliente.nombre}, te saludamos de ${n.nombre}.`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-1.5 w-full bg-[#25D366]/10 text-[#128C7E] hover:bg-[#25D366]/20 font-semibold text-xs py-1.5 rounded-lg transition-colors"
+                    >
+                      <MessageCircle size={13} />
+                      <span>WhatsApp ({ultimoCliente.celular})</span>
+                    </a>
+                    <Link
+                      href={`/clientes/${ultimoCliente.id}`}
+                      className="flex items-center justify-between text-xs font-semibold text-[var(--color-terracota)] hover:underline pt-0.5"
+                    >
+                      <span>Ver ficha 360°</span>
+                      <ArrowRight size={12} />
+                    </Link>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card>
           <CardHeader title="Clientes por tienda" subtitle="A diferencia de las demás tarjetas de este panel, aquí siempre se ven los 3 negocios juntos" />
@@ -243,6 +442,9 @@ export function PanelGerencial() {
           </div>
         </Card>
       </div>
+
+      {/* Sección Solicitada: Estadísticas y Rendimiento de Vendedores */}
+      <EstadisticasVendedores mostrarFiltroNegocio={true} />
 
       <div>
         <h2 className="text-sm font-semibold text-[var(--color-gris)]">Relación con el cliente</h2>

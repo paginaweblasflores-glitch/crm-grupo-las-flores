@@ -31,6 +31,16 @@ function generarReservas(negocioId: NegocioId, cantidad: number): Reserva[] {
       registradoEn: daysAgoISO(diasAtras + randInt(1, 4)),
       // Los eventos grandes los pide Ventas, pero los autoriza Gerencial.
       requiereAutorizacion: tipo === "evento",
+      registradoPor:
+        negocioId === "las-flores"
+          ? i % 2 === 0
+            ? "Betsy"
+            : "Melisa"
+          : negocioId === "umaru"
+          ? "Carla Huamán"
+          : i % 2 === 0
+          ? "Betsy"
+          : "Melisa",
     });
   }
   return out.sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
@@ -39,6 +49,7 @@ function generarReservas(negocioId: NegocioId, cantidad: number): Reserva[] {
 export const RESERVAS: Reserva[] = [
   ...generarReservas("las-flores", 360), // ~13 meses de historial, densidad similar a la de antes por semana
   ...generarReservas("umaru", 40), // Umaru: solo eventos puntuales del salón, no es su fuerte
+  ...generarReservas("mamina", 140), // Mamina: mesas y eventos lounge/restobar
 ];
 
 export function reservasPorNegocio(negocioId: NegocioId): Reserva[] {

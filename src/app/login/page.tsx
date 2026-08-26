@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/app-context";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, ChevronDown, ArrowRight } from "lucide-react";
 
 export default function LoginPage() {
-  const { iniciarSesion } = useApp();
+  const { iniciarSesion, usuarios } = useApp();
   const router = useRouter();
   const [usuario, setUsuario] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [verContrasena, setVerContrasena] = useState(false);
   const [error, setError] = useState(false);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -24,96 +25,107 @@ export default function LoginPage() {
     }
   }
 
+  function alSeleccionarUsuario(valor: string) {
+    setUsuario(valor);
+    setError(false);
+    if (valor) {
+      setTimeout(() => {
+        passwordInputRef.current?.focus();
+      }, 50);
+    }
+  }
+
   return (
     <div
-      className="h-screen overflow-hidden flex items-center justify-center px-4 py-4"
+      className="min-h-screen flex items-center justify-center px-4 py-8"
       style={{
         background:
           "radial-gradient(ellipse at center, var(--color-terracota) 0%, var(--color-terracota-oscuro) 55%, #200b06 100%)",
       }}
     >
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl px-8 py-7 max-h-full overflow-y-auto">
-        <div className="text-center mb-7">
-          <div className="w-20 h-20 mx-auto mb-4 rounded-xl border border-[var(--color-gris-claro)]/40 p-2 flex items-center justify-center">
-            <Image src="/logo.png" alt="Grupo Las Flores" width={64} height={64} className="w-full h-full object-contain" priority />
+      <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl px-7 py-8 border border-white/20">
+        {/* Cabecera / Logo */}
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-[var(--color-crema)]/60 border border-[var(--color-gris-claro)]/40 p-2 flex items-center justify-center shadow-inner">
+            <Image src="/logo.png" alt="Grupo Las Flores" width={56} height={56} className="w-full h-full object-contain" priority />
           </div>
-          <h1 className="text-2xl font-bold text-[var(--color-terracota)]" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
+          <h1 className="text-2xl font-bold text-[var(--color-terracota)] tracking-tight" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
             CRM Grupo Las Flores
           </h1>
-          <p className="text-sm text-[var(--color-gris-medio)] mt-1">
+          <p className="text-xs text-[var(--color-gris-medio)] mt-1 font-medium">
             Restaurante · Hotel · Restobar
           </p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
+          {/* Lista Desplegable de Usuarios */}
           <div>
-            <label className="block text-sm font-semibold text-[var(--color-gris)] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-[var(--color-gris)] mb-1.5">
               Usuario <span className="text-[var(--color-rojo)]">*</span>
             </label>
-            <input
-              value={usuario}
-              onChange={(e) => { setUsuario(e.target.value); setError(false); }}
-              placeholder="Ej. betsy o melisa"
-              autoFocus
-              className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--color-gris-claro)]/50 text-sm focus:outline-none focus:border-[var(--color-terracota)] transition-colors"
-            />
+            <div className="relative">
+              <select
+                value={usuario}
+                onChange={(e) => alSeleccionarUsuario(e.target.value)}
+                className="w-full px-3.5 py-3 rounded-xl border border-[var(--color-gris-claro)] text-sm font-medium text-[var(--color-gris)] bg-white focus:outline-none focus:border-[var(--color-terracota)] focus:ring-2 focus:ring-[var(--color-terracota)]/20 transition-all appearance-none cursor-pointer pr-10 shadow-sm"
+              >
+                <option value="" disabled>Selecciona tu usuario...</option>
+                {usuarios.map((u) => (
+                  <option key={u.id} value={u.usuario}>
+                    {u.nombre}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--color-gris-medio)]">
+                <ChevronDown size={18} />
+              </div>
+            </div>
           </div>
+
+          {/* Campo Contraseña */}
           <div>
-            <label className="block text-sm font-semibold text-[var(--color-gris)] mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider text-[var(--color-gris)] mb-1.5">
               Contraseña <span className="text-[var(--color-rojo)]">*</span>
             </label>
             <div className="relative">
               <input
+                ref={passwordInputRef}
                 type={verContrasena ? "text" : "password"}
                 value={contrasena}
                 onChange={(e) => { setContrasena(e.target.value); setError(false); }}
-                placeholder="••••••••"
-                className="w-full px-3.5 pr-10 py-2.5 rounded-xl border border-[var(--color-gris-claro)]/50 text-sm focus:outline-none focus:border-[var(--color-terracota)] transition-colors"
+                placeholder="Ingresa tu contraseña"
+                className="w-full px-3.5 pr-10 py-3 rounded-xl border border-[var(--color-gris-claro)] text-sm focus:outline-none focus:border-[var(--color-terracota)] focus:ring-2 focus:ring-[var(--color-terracota)]/20 transition-all"
               />
               <button
                 type="button"
                 onClick={() => setVerContrasena((v) => !v)}
                 tabIndex={-1}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-gris-medio)] hover:text-[var(--color-gris)]"
+                title="Mostrar u ocultar contraseña"
               >
-                {verContrasena ? <EyeOff size={15} /> : <Eye size={15} />}
+                {verContrasena ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
 
           {error && (
-            <p className="text-xs text-[var(--color-rojo)] font-medium">Usuario o contraseña incorrectos.</p>
+            <div className="p-2.5 rounded-xl bg-[var(--color-rojo)]/10 border border-[var(--color-rojo)]/20 text-xs text-[var(--color-rojo)] font-medium text-center animate-shake">
+              Usuario o contraseña incorrectos.
+            </div>
           )}
 
           <button
             type="submit"
-            className="w-full bg-[var(--color-terracota)] text-white text-sm font-bold rounded-xl py-3 hover:opacity-90 transition-opacity"
+            className="w-full bg-[var(--color-terracota)] text-white text-sm font-bold rounded-xl py-3 hover:bg-[var(--color-terracota-oscuro)] transition-colors shadow-md hover:shadow-lg flex items-center justify-center gap-2 mt-2 cursor-pointer"
           >
-            Ingresar al Sistema
+            <span>Ingresar al Sistema</span>
+            <ArrowRight size={16} />
           </button>
         </form>
 
-        <hr className="my-5 border-[var(--color-gris-claro)]/30" />
-
-        <p className="text-center text-xs text-[var(--color-gris-medio)]">
-          Sistema de gestión de clientes, reservas y cumpleaños.
+        <p className="text-center text-[11px] text-[var(--color-gris-medio)] mt-6">
+          CRM Corporativo · Grupo Las Flores © 2026
         </p>
-
-        <details className="mt-4 text-xs text-[var(--color-gris-medio)]">
-          <summary className="cursor-pointer text-center font-medium hover:text-[var(--color-terracota)]">
-            Cuentas de prueba (solo en este prototipo)
-          </summary>
-          <div className="mt-2 bg-[var(--color-crema)] rounded-xl border border-[var(--color-gris-claro)]/40 p-3 space-y-1">
-            <p><b>Dirección (Lima):</b> socios / direccion2026</p>
-            <p><b>Gerencial:</b> mijael / gerencial2026</p>
-            <p><b>Ventas — Las Flores:</b> betsy / ventas2026</p>
-            <p><b>Ventas — Las Flores:</b> melisa / ventas2026</p>
-            <p><b>Ventas — Hotel Umaru:</b> carla / umaru2026</p>
-            <p className="pt-1 text-[var(--color-gris-medio)]">
-              Mijael (Gerencial) puede crear más cuentas de Ventas desde el módulo Usuarios una vez adentro.
-            </p>
-          </div>
-        </details>
       </div>
     </div>
   );

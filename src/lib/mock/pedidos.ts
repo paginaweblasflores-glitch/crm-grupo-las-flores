@@ -26,6 +26,7 @@ function generarPedidos(cantidad: number): Pedido[] {
       canal: pick(CANALES),
       estado: diasAtras === 0 ? pick(["en-camino", "entregado"]) : pick(ESTADOS),
       registradoEn: daysAgoISO(diasAtras),
+      registradoPor: i % 2 === 0 ? "Betsy" : "Melisa",
     });
   }
   return out.sort((a, b) => (a.fecha < b.fecha ? 1 : -1));

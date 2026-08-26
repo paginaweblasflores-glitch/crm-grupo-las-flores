@@ -17,6 +17,8 @@ import {
   useClientesCreados, useClientesCorporativosCreados, useReservasCreadas, usePedidosCreados,
 } from "@/lib/store";
 
+import { EstadisticasVendedores } from "@/components/dashboard/EstadisticasVendedores";
+
 export default function EquipoPage() {
   const { usuario, usuarios, negocios } = useApp();
   const { items: clientesCreados } = useClientesCreados();
@@ -45,14 +47,30 @@ export default function EquipoPage() {
   }
 
   return (
-    <EquipoContenido
-      usuarios={usuarios}
-      negocios={negocios}
-      clientesCreados={clientesCreados}
-      corpCreados={corpCreados}
-      reservasCreadas={reservasCreadas}
-      pedidosCreados={pedidosCreados}
-    />
+    <>
+      <Topbar titulo="Mi Equipo" descripcion="Grupo Las Flores · estadísticas comerciales y comparativo de vendedores" />
+      <main className="flex-1 p-8 animate-fade-in space-y-8">
+        <EstadisticasVendedores mostrarFiltroNegocio={true} />
+
+        <div>
+          <h2 className="text-sm font-bold text-[var(--color-gris)] mb-1">
+            Distribución Operativa por Negocio
+          </h2>
+          <p className="text-xs text-[var(--color-gris-medio)] mb-4">
+            Volumen de clientes y gestiones atendidas por cada sede
+          </p>
+        </div>
+
+        <EquipoContenido
+          usuarios={usuarios}
+          negocios={negocios}
+          clientesCreados={clientesCreados}
+          corpCreados={corpCreados}
+          reservasCreadas={reservasCreadas}
+          pedidosCreados={pedidosCreados}
+        />
+      </main>
+    </>
   );
 }
 
@@ -95,10 +113,8 @@ function EquipoContenido({
   const totalGestionesEquipo = actividad.reduce((acc, a) => acc + a.reservas + a.pedidos, 0);
 
   return (
-    <>
-      <Topbar titulo="Mi Equipo" descripcion="Grupo Las Flores · detalle y comparación de actividad, negocio por negocio" />
-      <main className="flex-1 p-8 animate-fade-in space-y-6">
-        <div className="flex gap-1.5 flex-wrap">
+    <div className="space-y-6">
+      <div className="flex gap-1.5 flex-wrap">
           {negocios.map((n) => (
             <button
               key={n.id}
@@ -182,7 +198,6 @@ function EquipoContenido({
             </Card>
           </div>
         )}
-      </main>
-    </>
+    </div>
   );
 }

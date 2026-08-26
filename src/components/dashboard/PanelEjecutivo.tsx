@@ -11,6 +11,7 @@ import { StatTile } from "@/components/ui/StatTile";
 import { Badge } from "@/components/ui/Badge";
 import { BarChartMensual } from "@/components/charts/BarChartMensual";
 import { ExportarPDFBoton } from "@/components/ui/ExportarPDFBoton";
+import { EstadisticasVendedores } from "@/components/dashboard/EstadisticasVendedores";
 
 function sumarSeries(series: { mes: string; reservas: number; pedidos: number }[][]) {
   const base = series[0].map((p) => ({ ...p }));
@@ -142,6 +143,9 @@ export function PanelEjecutivo() {
           ))}
         </div>
       </Card>
+
+      {/* Estadísticas de Rendimiento Comercial para Directorio */}
+      <EstadisticasVendedores mostrarFiltroNegocio={true} />
     </div>
   );
 }

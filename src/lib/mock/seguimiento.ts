@@ -44,6 +44,7 @@ function generarSeguimiento(negocioId: NegocioId): SeguimientoCumple[] {
 export const SEGUIMIENTOS: SeguimientoCumple[] = [
   ...generarSeguimiento("las-flores"),
   ...generarSeguimiento("umaru"),
+  ...generarSeguimiento("mamina"),
 ];
 
 export function seguimientosPorNegocio(negocioId: NegocioId): SeguimientoCumple[] {
