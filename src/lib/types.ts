@@ -1,7 +1,7 @@
 // Tipos centrales del CRM — reflejan los campos reales del Excel de clientes
 // (Meliza, Ventas) y los módulos definidos en el Plan de CRM del Grupo Las Flores.
 
-export type NegocioId = "las-flores" | "umaru" | "mamina";
+export type NegocioId = "las-flores" | "umaru" | "mamina" | "todas";
 
 export interface Negocio {
   id: NegocioId;

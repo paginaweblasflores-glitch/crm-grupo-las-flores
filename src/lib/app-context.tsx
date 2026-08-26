@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useMemo } from "react";
 import { NegocioId, Usuario } from "./types";
 import { USUARIOS } from "./mock/usuarios";
-import { NEGOCIOS, getNegocio } from "./mock/negocios";
+import { NEGOCIOS, NEGOCIO_TODAS, getNegocio } from "./mock/negocios";
 import { negociosPermitidos } from "./permissions";
 import { useUsuariosCreados } from "./store";
 
@@ -86,9 +86,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const negociosDisponibles = usuario
     ? (() => {
         const alcance = negociosPermitidos(usuario.rolTipo, usuario.negocioId);
-        return alcance === "todos" ? NEGOCIOS : NEGOCIOS.filter((n) => alcance.includes(n.id));
+        return alcance === "todos" ? [NEGOCIO_TODAS, ...NEGOCIOS] : NEGOCIOS.filter((n) => alcance.includes(n.id));
       })()
-    : NEGOCIOS;
+    : [NEGOCIO_TODAS, ...NEGOCIOS];
 
   const value: AppContextValue = {
     usuario,

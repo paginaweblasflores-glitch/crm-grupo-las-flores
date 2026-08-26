@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Users, Gift, PartyPopper, Building2, AlertTriangle, ArrowRight, MapPin,
   Wallet, Bike, CalendarCheck, Receipt, TrendingUp, TrendingDown, CalendarDays, CalendarX2,
   UserPlus, Clock, MessageCircle, User,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { NEGOCIOS } from "@/lib/mock/negocios";
+import { Usuario } from "@/lib/types";
+import { NEGOCIOS, getNegocio } from "@/lib/mock/negocios";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "@/lib/mock/clientes";
 import { proximosCumpleanos } from "@/lib/mock/seguimiento";
 import { reservasPorNegocio } from "@/lib/mock/reservas";
@@ -80,7 +81,7 @@ function origenLabel(origen?: string): string {
 // datos, igual que en Clientes/Reservas/etc. Solo "Clientes por tienda" es
 // deliberadamente el único cuadro que compara los 3 a la vez.
 export function PanelGerencial() {
-  const { negocio } = useApp();
+  const { negocio, usuarios } = useApp();
   const [periodo, setPeriodo] = useState<Periodo>("semana");
   const [metrica, setMetrica] = useState<MetricaEstadistica>("ingresos");
   const [vistaGrafico, setVistaGrafico] = useState<"semana" | "anual">("semana");
@@ -89,48 +90,71 @@ export function PanelGerencial() {
   const { items: clientesCreados } = useClientesCreados();
   const { items: corpCreados } = useClientesCorporativosCreados();
 
-  // Cálculo del último registro de cliente para Flores, Umaru y Mamina
-  const ultimosRegistros = NEGOCIOS.map((n) => {
-    const individuales = [
-      ...clientesCreados.filter((c) => c.negocioId === n.id),
-      ...clientesIndividualesPorNegocio(n.id),
-    ].map((c) => ({
-      id: c.id,
-      nombre: `${c.nombres} ${c.apellidos}`.trim(),
-      tipo: "Natural" as const,
-      documento: c.numeroDocumento ? `DNI ${c.numeroDocumento}` : undefined,
-      celular: c.celular,
-      fechaRegistro: c.fechaRegistro,
-      origen: c.origen || "presencial",
-      registradoPor: c.registradoPor || "Ventas",
-      distrito: c.distrito,
-    }));
+  // Filtrar los vendedores según el negocio activo en el selector superior (o todos si es "todas")
+  const vendedoresAMostrar = useMemo(() => {
+    const equipo = usuarios.filter((u) => u.rolTipo === "ventas" || u.id === "betsy");
+    if (negocio.id === "todas") return equipo;
+    return equipo.filter((u) => u.negocioId === negocio.id);
+  }, [usuarios, negocio.id]);
 
-    const corporativos = [
-      ...corpCreados.filter((c) => c.negocioId === n.id),
-      ...corporativosPorNegocio(n.id),
-    ].map((c) => ({
-      id: c.id,
-      nombre: c.razonSocial,
-      tipo: "Corporativo" as const,
-      documento: `RUC ${c.ruc}`,
-      celular: c.celular,
-      fechaRegistro: c.fechaRegistro,
-      origen: "corporativo",
-      registradoPor: c.registradoPor || "Ventas",
-      distrito: c.distrito,
-    }));
+  // Cálculo del último registro de cliente para CADA VENDEDOR de la sede activa
+  const ultimosRegistros = useMemo(() => {
+    return vendedoresAMostrar.map((v) => {
+      const neg = getNegocio(v.negocioId) ?? NEGOCIOS[0];
 
-    const todos = [...individuales, ...corporativos].sort(
-      (a, b) => new Date(b.fechaRegistro).getTime() - new Date(a.fechaRegistro).getTime()
-    );
+      const matchVendedor = (reg?: string) => {
+        if (!reg) return false;
+        const r = reg.toLowerCase();
+        const n = v.nombre.toLowerCase();
+        if (r === n) return true;
+        if (v.id === "betsy" && r === "betsy") return true;
+        if (v.id === "melisa" && r === "melisa") return true;
+        if (v.id === "carla" && r.includes("carla")) return true;
+        if (v.id === "valeria" && r.includes("valeria")) return true;
+        return false;
+      };
 
-    return {
-      negocio: n,
-      ultimoCliente: todos[0] ?? null,
-      totalClientes: todos.length,
-    };
-  });
+      const individuales = [
+        ...clientesCreados.filter((c) => matchVendedor(c.registradoPor)),
+        ...clientesIndividualesPorNegocio(v.negocioId).filter((c) => matchVendedor(c.registradoPor)),
+      ].map((c) => ({
+        id: c.id,
+        nombre: `${c.nombres} ${c.apellidos}`.trim(),
+        tipo: "Natural" as const,
+        documento: c.numeroDocumento ? `DNI ${c.numeroDocumento}` : undefined,
+        celular: c.celular,
+        fechaRegistro: c.fechaRegistro,
+        origen: c.origen || "presencial",
+        distrito: c.distrito,
+      }));
+
+      const corporativos = [
+        ...corpCreados.filter((c) => matchVendedor(c.registradoPor)),
+        ...corporativosPorNegocio(v.negocioId).filter((c) => matchVendedor(c.registradoPor)),
+      ].map((c) => ({
+        id: c.id,
+        nombre: c.razonSocial,
+        tipo: "Corporativo" as const,
+        documento: `RUC ${c.ruc}`,
+        celular: c.celular,
+        fechaRegistro: c.fechaRegistro,
+        origen: "corporativo",
+        distrito: c.distrito,
+      }));
+
+      const todos = [...individuales, ...corporativos].sort(
+        (a, b) => new Date(b.fechaRegistro).getTime() - new Date(a.fechaRegistro).getTime()
+      );
+
+      return {
+        vendedor: v,
+        negocioNombre: neg.nombre,
+        negocioColor: neg.colorAcento,
+        ultimoCliente: todos[0] ?? null,
+        totalClientes: todos.length,
+      };
+    });
+  }, [vendedoresAMostrar, clientesCreados, corpCreados]);
 
   const resumen = resumenPeriodo(negocio.id, periodo);
   const ingresosTotales = ingresosTotalesPeriodo(negocio.id, periodo);
@@ -270,11 +294,19 @@ export function PanelGerencial() {
         <StatTile label="Días festivos" value={festividadesDelNegocio.length} icon={<PartyPopper size={18} />} tono="naranja" trend="aplican a este negocio" />
       </div>
 
-      {/* Sección: Último Registro de Cliente (Flores - Umaru - Mamina) */}
+      {/* Sección: Último Registro de Cliente POR VENDEDOR */}
       <Card>
         <CardHeader
-          title="Último Registro de Cliente"
-          subtitle="Seguimiento en tiempo real de captación por marca · Flores, Umaru y Mamina"
+          title={
+            negocio.id === "todas"
+              ? "Último Registro de Cliente por Vendedor"
+              : `Último Registro de Cliente · Asesores de ${negocio.nombre}`
+          }
+          subtitle={
+            negocio.id === "todas"
+              ? "Captación en tiempo real por cada asesor del equipo comercial · Todas las sucursales"
+              : `Captación más reciente en tiempo real por cada asesor de esta sede (${ultimosRegistros.length} asesores activos)`
+          }
           action={
             <Link
               href="/clientes"
@@ -285,104 +317,123 @@ export function PanelGerencial() {
             </Link>
           }
         />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {ultimosRegistros.map(({ negocio: n, ultimoCliente, totalClientes }) => {
-            const esActivo = n.id === negocio.id;
-            return (
-              <div
-                key={n.id}
-                className={`rounded-xl border p-4 flex flex-col justify-between transition-all ${
-                  esActivo
-                    ? "border-[var(--color-terracota)] bg-[var(--color-crema)]/25 ring-1 ring-[var(--color-terracota)]/20 shadow-sm"
-                    : "border-[var(--color-gris-claro)]/40 bg-white"
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className="flex items-center gap-2 font-bold text-xs text-[var(--color-gris)] truncate">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: n.colorAcento }} />
-                      {n.nombre}
-                    </span>
-                    {esActivo ? (
-                      <Badge tono="terracota">Sede activa</Badge>
-                    ) : (
-                      <span className="text-[11px] text-[var(--color-gris-medio)]">{totalClientes} clientes</span>
-                    )}
-                  </div>
 
-                  {ultimoCliente ? (
-                    <div className="space-y-2">
-                      <div>
-                        <Link
-                          href={`/clientes/${ultimoCliente.id}`}
-                          className="font-bold text-sm text-[var(--color-gris)] hover:text-[var(--color-terracota)] transition-colors line-clamp-1"
-                        >
-                          {ultimoCliente.nombre}
-                        </Link>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <Badge tono={ultimoCliente.tipo === "Natural" ? "gris" : "azul"}>
-                            {ultimoCliente.tipo}
-                          </Badge>
-                          {ultimoCliente.documento && (
-                            <span className="text-[11px] font-mono text-[var(--color-gris-medio)] font-semibold">
-                              {ultimoCliente.documento}
-                            </span>
+        {ultimosRegistros.length === 0 ? (
+          <p className="text-xs text-[var(--color-gris-medio)] py-8 text-center">
+            No hay asesores asignados a esta sede todavía.
+          </p>
+        ) : (
+          <div className={`grid grid-cols-1 gap-4 ${
+            ultimosRegistros.length === 1
+              ? "md:grid-cols-1 max-w-md"
+              : ultimosRegistros.length === 2
+              ? "md:grid-cols-2"
+              : ultimosRegistros.length === 3
+              ? "md:grid-cols-3"
+              : "md:grid-cols-2 lg:grid-cols-4"
+          }`}>
+            {ultimosRegistros.map(({ vendedor: v, negocioNombre, negocioColor, ultimoCliente, totalClientes }) => {
+              return (
+                <div
+                  key={v.id}
+                  className="rounded-2xl border border-[var(--color-gris-claro)]/40 bg-white p-4 flex flex-col justify-between hover:border-[var(--color-terracota)]/40 hover:shadow-md transition-all"
+                >
+                  <div>
+                    {/* Cabecera del Vendedor */}
+                    <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-[var(--color-gris-claro)]/30">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-[var(--color-terracota)] text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-sm">
+                          {v.iniciales}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-xs text-[var(--color-gris)] truncate">
+                            {v.nombre}
+                          </p>
+                          <p className="text-[10px] text-[var(--color-gris-medio)] truncate flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: negocioColor }} />
+                            <span>{negocioNombre.replace("Restaurante ", "").replace("Hotel ", "")}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <Badge tono="gris">
+                        {totalClientes} clientes
+                      </Badge>
+                    </div>
+
+                    {/* Último cliente captado por este vendedor */}
+                    {ultimoCliente ? (
+                      <div className="space-y-2">
+                        <div>
+                          <Link
+                            href={`/clientes/${ultimoCliente.id}`}
+                            className="font-bold text-sm text-[var(--color-gris)] hover:text-[var(--color-terracota)] transition-colors line-clamp-1"
+                          >
+                            {ultimoCliente.nombre}
+                          </Link>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <Badge tono={ultimoCliente.tipo === "Natural" ? "gris" : "azul"}>
+                              {ultimoCliente.tipo}
+                            </Badge>
+                            {ultimoCliente.documento && (
+                              <span className="text-[11px] font-mono text-[var(--color-gris-medio)] font-semibold">
+                                {ultimoCliente.documento}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-[var(--color-gris-medio)] space-y-1 pt-1">
+                          <div className="flex items-center gap-1.5 text-[var(--color-terracota)] font-semibold">
+                            <Clock size={12} className="shrink-0" />
+                            <span>{tiempoRelativoOFecha(ultimoCliente.fechaRegistro)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[var(--color-gris-medio)] truncate">
+                            <User size={12} className="shrink-0" />
+                            <span className="truncate">Canal: {origenLabel(ultimoCliente.origen)}</span>
+                          </div>
+                          {ultimoCliente.distrito && (
+                            <div className="flex items-center gap-1.5 truncate text-[11px] text-[var(--color-gris-medio)]">
+                              <MapPin size={11} className="shrink-0" />
+                              <span className="truncate">{ultimoCliente.distrito}, Ayacucho</span>
+                            </div>
                           )}
                         </div>
                       </div>
+                    ) : (
+                      <p className="text-xs text-[var(--color-gris-medio)] py-4 text-center italic">
+                        Sin clientes registrados aún
+                      </p>
+                    )}
+                  </div>
 
-                      <div className="text-xs text-[var(--color-gris-medio)] space-y-1 pt-1">
-                        <div className="flex items-center gap-1.5 text-[var(--color-terracota)] font-medium">
-                          <Clock size={12} className="shrink-0" />
-                          <span>{tiempoRelativoOFecha(ultimoCliente.fechaRegistro)}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 truncate">
-                          <User size={12} className="shrink-0" />
-                          <span className="truncate">
-                            {ultimoCliente.registradoPor} · {origenLabel(ultimoCliente.origen)}
-                          </span>
-                        </div>
-                        {ultimoCliente.distrito && (
-                          <div className="flex items-center gap-1.5 truncate text-[11px]">
-                            <MapPin size={11} className="shrink-0" />
-                            <span className="truncate">{ultimoCliente.distrito}, Ayacucho</span>
-                          </div>
-                        )}
-                      </div>
+                  {ultimoCliente && (
+                    <div className="mt-3 pt-3 border-t border-[var(--color-gris-claro)]/30 space-y-2">
+                      <a
+                        href={`https://wa.me/51${ultimoCliente.celular.replace(/\D/g, "")}?text=${encodeURIComponent(
+                          `Hola ${ultimoCliente.nombre}, te saluda ${v.nombre} de ${negocioNombre}.`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-1.5 w-full bg-[#25D366]/10 text-[#128C7E] hover:bg-[#25D366]/20 font-semibold text-xs py-1.5 rounded-lg transition-colors"
+                      >
+                        <MessageCircle size={13} />
+                        <span>WhatsApp ({ultimoCliente.celular})</span>
+                      </a>
+                      <Link
+                        href={`/clientes/${ultimoCliente.id}`}
+                        className="flex items-center justify-between text-xs font-semibold text-[var(--color-terracota)] hover:underline pt-0.5"
+                      >
+                        <span>Ver ficha 360°</span>
+                        <ArrowRight size={12} />
+                      </Link>
                     </div>
-                  ) : (
-                    <p className="text-xs text-[var(--color-gris-medio)] py-4 text-center">
-                      Sin clientes registrados aún
-                    </p>
                   )}
                 </div>
-
-                {ultimoCliente && (
-                  <div className="mt-3 pt-3 border-t border-[var(--color-gris-claro)]/30 space-y-2">
-                    <a
-                      href={`https://wa.me/51${ultimoCliente.celular.replace(/\D/g, "")}?text=${encodeURIComponent(
-                        `Hola ${ultimoCliente.nombre}, te saludamos de ${n.nombre}.`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-1.5 w-full bg-[#25D366]/10 text-[#128C7E] hover:bg-[#25D366]/20 font-semibold text-xs py-1.5 rounded-lg transition-colors"
-                    >
-                      <MessageCircle size={13} />
-                      <span>WhatsApp ({ultimoCliente.celular})</span>
-                    </a>
-                    <Link
-                      href={`/clientes/${ultimoCliente.id}`}
-                      className="flex items-center justify-between text-xs font-semibold text-[var(--color-terracota)] hover:underline pt-0.5"
-                    >
-                      <span>Ver ficha 360°</span>
-                      <ArrowRight size={12} />
-                    </Link>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

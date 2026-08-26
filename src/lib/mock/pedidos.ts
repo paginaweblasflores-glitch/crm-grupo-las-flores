@@ -39,5 +39,6 @@ export function pedidosDeCliente(clienteId: string): Pedido[] {
 }
 
 export function pedidosPorNegocio(negocioId: NegocioId): Pedido[] {
+  if (negocioId === "todas") return PEDIDOS;
   return PEDIDOS.filter((p) => p.negocioId === negocioId);
 }

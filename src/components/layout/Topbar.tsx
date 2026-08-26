@@ -49,33 +49,39 @@ export function Topbar({ titulo, descripcion, accion }: { titulo: string; descri
           {abierto && puedeElegir && (
             <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl border border-[var(--color-gris-claro)]/40 shadow-lg py-1.5 z-20 animate-fade-in">
               {negociosDisponibles.map((n) => (
-                <button
-                  key={n.id}
-                  onClick={() => {
-                    cambiarNegocio(n.id as NegocioId);
-                    setAbierto(false);
-                  }}
-                  className="w-full flex items-start gap-2.5 px-3.5 py-2.5 text-left hover:bg-[var(--color-crema)] transition-colors"
-                >
-                  <span
-                    className="w-2 h-2 rounded-full mt-1.5 shrink-0"
-                    style={{ backgroundColor: n.colorAcento }}
-                  />
-                  <span className="flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium text-[var(--color-gris)]">{n.nombre}</span>
-                      {!n.operando && (
-                        <span className="text-[9px] uppercase font-bold text-[var(--color-gris-medio)] bg-[var(--color-crema-oscuro)] rounded px-1.5 py-0.5">
-                          próximamente
-                        </span>
-                      )}
+                <div key={n.id}>
+                  <button
+                    onClick={() => {
+                      cambiarNegocio(n.id as NegocioId);
+                      setAbierto(false);
+                    }}
+                    className="w-full flex items-start gap-2.5 px-3.5 py-2.5 text-left hover:bg-[var(--color-crema)] transition-colors cursor-pointer"
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full mt-1.5 shrink-0"
+                      style={{ backgroundColor: n.colorAcento }}
+                    />
+                    <span className="flex-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-sm font-semibold text-[var(--color-gris)]">{n.nombre}</span>
+                        {n.id === "todas" ? (
+                          <span className="text-[9px] uppercase font-bold text-[var(--color-terracota)] bg-[var(--color-crema)] border border-[var(--color-terracota)]/30 rounded px-1.5 py-0.5">
+                            Consolidado
+                          </span>
+                        ) : !n.operando ? (
+                          <span className="text-[9px] uppercase font-bold text-[var(--color-gris-medio)] bg-[var(--color-crema-oscuro)] rounded px-1.5 py-0.5">
+                            próximamente
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="block text-[11px] text-[var(--color-gris-medio)] mt-0.5">
+                        {n.descripcionEstado}
+                      </span>
                     </span>
-                    <span className="block text-[11px] text-[var(--color-gris-medio)] mt-0.5">
-                      {n.descripcionEstado}
-                    </span>
-                  </span>
-                  {n.id === negocio.id && <Check size={15} className="text-[var(--color-terracota)] mt-1" />}
-                </button>
+                    {n.id === negocio.id && <Check size={15} className="text-[var(--color-terracota)] mt-1" />}
+                  </button>
+                  {n.id === "todas" && <div className="my-1 border-b border-[var(--color-gris-claro)]/40" />}
+                </div>
               ))}
             </div>
           )}

@@ -106,6 +106,11 @@ function atribuirA(clientes: ClienteIndividual[], nombre: string): ClienteIndivi
 }
 
 const LAS_FLORES_INDIVIDUALES = generarClientesIndividuales("las-flores", 52, 0);
+// Asegurar que el primer cliente de Melisa (índice 18) tenga fecha de hoy reciente
+if (LAS_FLORES_INDIVIDUALES[18]) {
+  LAS_FLORES_INDIVIDUALES[18].fechaRegistro = daysAgoISO(0);
+}
+
 const UMARU_INDIVIDUALES = generarClientesIndividuales("umaru", 38, 0);
 const MAMINA_INDIVIDUALES = generarClientesIndividuales("mamina", 30, 0);
 
@@ -117,7 +122,8 @@ export const CLIENTES_INDIVIDUALES: ClienteIndividual[] = [
   ...atribuirA(UMARU_INDIVIDUALES.slice(0, 15), "Carla Huamán"),
   ...UMARU_INDIVIDUALES.slice(15),
   ...clientesConCumpleFijo("umaru", 38),
-  ...MAMINA_INDIVIDUALES,
+  ...atribuirA(MAMINA_INDIVIDUALES.slice(0, 14), "Valeria Castro"),
+  ...MAMINA_INDIVIDUALES.slice(14),
   ...clientesConCumpleFijo("mamina", 30),
 ];
 
@@ -128,10 +134,12 @@ export const CLIENTES_CORPORATIVOS: ClienteCorporativo[] = [
 ];
 
 export function clientesIndividualesPorNegocio(negocioId: NegocioId): ClienteIndividual[] {
+  if (negocioId === "todas") return CLIENTES_INDIVIDUALES;
   return CLIENTES_INDIVIDUALES.filter((c) => c.negocioId === negocioId);
 }
 
 export function corporativosPorNegocio(negocioId: NegocioId): ClienteCorporativo[] {
+  if (negocioId === "todas") return CLIENTES_CORPORATIVOS;
   return CLIENTES_CORPORATIVOS.filter((c) => c.negocioId === negocioId);
 }
 

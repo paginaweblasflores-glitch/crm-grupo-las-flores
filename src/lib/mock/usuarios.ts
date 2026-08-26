@@ -60,6 +60,17 @@ export const USUARIOS: Usuario[] = [
     contrasena: "umaru2026",
     negocioId: "umaru",
   },
+  {
+    id: "valeria",
+    nombre: "Valeria Castro",
+    cargo: "Ventas y Atención — Mamina Restobar",
+    rolTipo: "ventas",
+    rolLabel: "Ventas",
+    iniciales: "VC",
+    usuario: "valeria",
+    contrasena: "mamina2026",
+    negocioId: "mamina",
+  },
 ];
 
 export function getUsuario(id: string): Usuario | undefined {

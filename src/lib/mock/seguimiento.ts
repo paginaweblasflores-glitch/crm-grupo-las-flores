@@ -48,12 +48,13 @@ export const SEGUIMIENTOS: SeguimientoCumple[] = [
 ];
 
 export function seguimientosPorNegocio(negocioId: NegocioId): SeguimientoCumple[] {
+  if (negocioId === "todas") return SEGUIMIENTOS;
   return SEGUIMIENTOS.filter((s) => s.negocioId === negocioId);
 }
 
 // Próximos cumpleaños (de toda la base, no solo los que ya tienen seguimiento armado)
 export function proximosCumpleanos(negocioId: NegocioId, hoy: Date, rangoDias = 10) {
-  const clientes = CLIENTES_INDIVIDUALES.filter((c) => c.negocioId === negocioId);
+  const clientes = negocioId === "todas" ? CLIENTES_INDIVIDUALES : CLIENTES_INDIVIDUALES.filter((c) => c.negocioId === negocioId);
   const anio = hoy.getFullYear();
   return clientes
     .map((c) => {

@@ -104,13 +104,20 @@ export function EstadisticasVendedores({
         const neg = getNegocio(u.negocioId) ?? NEGOCIOS[0];
 
         // 1. Clientes registrados por este asesor
-        const clientesInd = todosClientesInd.filter(
-          (c) => c.registradoPor?.toLowerCase() === u.nombre.toLowerCase() || (u.id === "betsy" && c.registradoPor === "Betsy") || (u.id === "melisa" && c.registradoPor === "Melisa") || (u.id === "carla" && c.registradoPor === "Carla Huamán")
-        );
+        const matchVendedor = (reg?: string) => {
+          if (!reg) return false;
+          const r = reg.toLowerCase();
+          const n = u.nombre.toLowerCase();
+          if (r === n) return true;
+          if (u.id === "betsy" && r === "betsy") return true;
+          if (u.id === "melisa" && r === "melisa") return true;
+          if (u.id === "carla" && r.includes("carla")) return true;
+          if (u.id === "valeria" && r.includes("valeria")) return true;
+          return false;
+        };
 
-        const clientesCorp = todosClientesCorp.filter(
-          (c) => c.registradoPor?.toLowerCase() === u.nombre.toLowerCase()
-        );
+        const clientesInd = todosClientesInd.filter((c) => matchVendedor(c.registradoPor));
+        const clientesCorp = todosClientesCorp.filter((c) => matchVendedor(c.registradoPor));
 
         const todosMisClientes = [
           ...clientesInd.map((c) => ({
@@ -134,17 +141,13 @@ export function EstadisticasVendedores({
         const ultimoCliente = todosMisClientes[0] ?? null;
 
         // 2. Reservas gestionadas por este asesor
-        const misReservas = todasReservas.filter(
-          (r) => r.registradoPor?.toLowerCase() === u.nombre.toLowerCase() || (u.id === "betsy" && r.registradoPor === "Betsy") || (u.id === "melisa" && r.registradoPor === "Melisa") || (u.id === "carla" && r.registradoPor === "Carla Huamán")
-        );
+        const misReservas = todasReservas.filter((r) => matchVendedor(r.registradoPor));
 
         const reservasAtendidas = misReservas.filter((r) => r.estado === "atendida");
         const montoReservas = reservasAtendidas.reduce((sum, r) => sum + (r.monto ?? 0), 0);
 
         // 3. Pedidos delivery gestionados
-        const misPedidos = todosPedidos.filter(
-          (p) => p.registradoPor?.toLowerCase() === u.nombre.toLowerCase() || (u.id === "betsy" && p.registradoPor === "Betsy") || (u.id === "melisa" && p.registradoPor === "Melisa")
-        );
+        const misPedidos = todosPedidos.filter((p) => matchVendedor(p.registradoPor));
         const pedidosEntregados = misPedidos.filter((p) => p.estado === "entregado");
         const montoPedidos = pedidosEntregados.reduce((sum, p) => sum + (p.monto ?? 0), 0);
 
@@ -230,9 +233,9 @@ export function EstadisticasVendedores({
                   filtroSede === "todos" ? "bg-white text-[var(--color-terracota)] shadow-sm" : "text-[var(--color-gris-medio)]"
                 }`}
               >
-                Todas las sedes
+                Todas las sucursales
               </button>
-              {negocios.map((n) => (
+              {negocios.filter((n) => n.id !== "todas").map((n) => (
                 <button
                   key={n.id}
                   onClick={() => setFiltroSede(n.id)}

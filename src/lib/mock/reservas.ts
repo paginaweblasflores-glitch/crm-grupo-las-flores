@@ -38,9 +38,7 @@ function generarReservas(negocioId: NegocioId, cantidad: number): Reserva[] {
             : "Melisa"
           : negocioId === "umaru"
           ? "Carla Huamán"
-          : i % 2 === 0
-          ? "Betsy"
-          : "Melisa",
+          : "Valeria Castro",
     });
   }
   return out.sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
@@ -53,6 +51,7 @@ export const RESERVAS: Reserva[] = [
 ];
 
 export function reservasPorNegocio(negocioId: NegocioId): Reserva[] {
+  if (negocioId === "todas") return RESERVAS;
   return RESERVAS.filter((r) => r.negocioId === negocioId);
 }
 

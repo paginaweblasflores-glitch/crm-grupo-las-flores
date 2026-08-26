@@ -26,5 +26,6 @@ export const CAMPANAS: Campana[] = [
 ];
 
 export function campanasPorNegocio(negocioId: NegocioId): Campana[] {
+  if (negocioId === "todas") return CAMPANAS;
   return CAMPANAS.filter((c) => c.negocioId === negocioId);
 }

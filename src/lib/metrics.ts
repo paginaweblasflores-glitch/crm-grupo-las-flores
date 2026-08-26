@@ -2,7 +2,7 @@ import { NegocioId } from "./types";
 import { BASE_DATE } from "./mock/seed";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "./mock/clientes";
 import { reservasPorNegocio } from "./mock/reservas";
-import { PEDIDOS } from "./mock/pedidos";
+import { PEDIDOS, pedidosPorNegocio } from "./mock/pedidos";
 import { HOSPEDAJES } from "./mock/hospedaje";
 import { proximosCumpleanos, seguimientosPorNegocio } from "./mock/seguimiento";
 import { NEGOCIOS } from "./mock/negocios";
@@ -28,7 +28,7 @@ export function reservasSemana(negocioId: NegocioId) {
 }
 
 export function pedidosSemana(negocioId: NegocioId) {
-  const items = PEDIDOS.filter((p) => p.negocioId === negocioId).filter((p) => {
+  const items = pedidosPorNegocio(negocioId).filter((p) => {
     const d = diasDesde(p.fecha);
     return d >= 0 && d <= 7;
   });
@@ -38,7 +38,7 @@ export function pedidosSemana(negocioId: NegocioId) {
 
 export function ticketPromedio(negocioId: NegocioId): number {
   const reservasAtendidas = reservasPorNegocio(negocioId).filter((r) => r.estado === "atendida" && r.monto);
-  const pedidos = PEDIDOS.filter((p) => p.negocioId === negocioId && p.estado === "entregado");
+  const pedidos = pedidosPorNegocio(negocioId).filter((p) => p.estado === "entregado");
   const montos = [...reservasAtendidas.map((r) => r.monto ?? 0), ...pedidos.map((p) => p.monto)];
   if (montos.length === 0) return 0;
   return Math.round(montos.reduce((a, b) => a + b, 0) / montos.length);
@@ -160,12 +160,13 @@ export function resumenPeriodo(negocioId: NegocioId, periodo: Periodo): ResumenP
     clientesIndividualesPorNegocio(negocioId).filter((c) => enVentana(c.fechaRegistro, dias, offset)).length;
 
   const reservasEnVentana = (offset: number) => reservasPorNegocio(negocioId).filter((r) => enVentana(r.fecha, dias, offset));
-  const pedidosEnVentana = (offset: number) => PEDIDOS.filter((p) => p.negocioId === negocioId && enVentana(p.fecha, dias, offset));
+  const pedidosEnVentana = (offset: number) => PEDIDOS.filter((p) => (negocioId === "todas" || p.negocioId === negocioId) && enVentana(p.fecha, dias, offset));
 
   const ingresosEnVentana = (offset: number) => {
     const r = reservasEnVentana(offset).filter((x) => x.estado === "atendida").reduce((a, x) => a + (x.monto ?? 0), 0);
     const p = pedidosEnVentana(offset).filter((x) => x.estado === "entregado").reduce((a, x) => a + x.monto, 0);
-    return r + p;
+    const h = HOSPEDAJES.filter((x) => (negocioId === "todas" || x.negocioId === negocioId) && enVentana(x.checkIn, dias, offset)).reduce((a, x) => a + (x.tarifaNoche ?? 0), 0);
+    return r + p + h;
   };
 
   const clientesActual = contarClientes(0);
@@ -244,14 +245,14 @@ const ESTADO_PEDIDO_LABEL: Record<string, string> = {
 
 export function distribucionEstadoPedidos(negocioId: NegocioId) {
   const conteo: Record<string, number> = {};
-  PEDIDOS.filter((p) => p.negocioId === negocioId).forEach((p) => { conteo[p.estado] = (conteo[p.estado] ?? 0) + 1; });
+  pedidosPorNegocio(negocioId).forEach((p) => { conteo[p.estado] = (conteo[p.estado] ?? 0) + 1; });
   return Object.entries(conteo).map(([estado, valor]) => ({ nombre: ESTADO_PEDIDO_LABEL[estado] ?? estado, valor }));
 }
 
 // --- Delivery por periodo ----------------------------------------------------
 export function pedidosPorPeriodo(negocioId: NegocioId, periodo: Periodo) {
   const dias = diasDelPeriodo(periodo);
-  const enVentanaPedidos = (offset: number) => PEDIDOS.filter((p) => p.negocioId === negocioId && enVentana(p.fecha, dias, offset));
+  const enVentanaPedidos = (offset: number) => pedidosPorNegocio(negocioId).filter((p) => enVentana(p.fecha, dias, offset));
   const actual = enVentanaPedidos(0);
   const anterior = enVentanaPedidos(dias);
   const montoActual = actual.filter((p) => p.estado === "entregado").reduce((a, p) => a + p.monto, 0);
@@ -268,7 +269,7 @@ export function seriePedidosPorPeriodo(negocioId: NegocioId, periodo: Periodo) {
     for (let i = 11; i >= 0; i--) {
       const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
       const label = MESES_LABEL[fecha.getMonth()];
-      const pedidos = PEDIDOS.filter((p) => p.negocioId === negocioId).filter((p) => {
+      const pedidos = pedidosPorNegocio(negocioId).filter((p) => {
         const f = new Date(p.fecha);
         return f.getMonth() === fecha.getMonth() && f.getFullYear() === fecha.getFullYear();
       }).length;
@@ -428,9 +429,9 @@ export function ingresosTotalesPeriodo(negocioId: NegocioId, periodo: Periodo) {
       .filter((r) => enVentana(r.fecha, dias, offset) && r.estado === "atendida")
       .reduce((a, r) => a + (r.monto ?? 0), 0);
   const pedidosIngreso = (offset: number) =>
-    PEDIDOS.filter((p) => p.negocioId === negocioId && enVentana(p.fecha, dias, offset) && p.estado === "entregado").reduce((a, p) => a + p.monto, 0);
+    PEDIDOS.filter((p) => (negocioId === "todas" || p.negocioId === negocioId) && enVentana(p.fecha, dias, offset) && p.estado === "entregado").reduce((a, p) => a + p.monto, 0);
   const hospedajeIngreso = (offset: number) =>
-    HOSPEDAJES.filter((h) => h.negocioId === negocioId && enVentana(h.checkIn, dias, offset)).reduce((a, h) => a + nochesDe(h) * h.tarifaNoche, 0);
+    HOSPEDAJES.filter((h) => (negocioId === "todas" || h.negocioId === negocioId) && enVentana(h.checkIn, dias, offset)).reduce((a, h) => a + nochesDe(h) * h.tarifaNoche, 0);
 
   const actual = reservasIngreso(0) + pedidosIngreso(0) + hospedajeIngreso(0);
   const anterior = reservasIngreso(dias) + pedidosIngreso(dias) + hospedajeIngreso(dias);
@@ -448,9 +449,9 @@ export function ticketPromedioPeriodo(negocioId: NegocioId, periodo: Periodo): n
     (r) => enVentana(r.fecha, dias, 0) && r.estado === "atendida"
   );
   const pedidosEntregados = PEDIDOS.filter(
-    (p) => p.negocioId === negocioId && enVentana(p.fecha, dias, 0) && p.estado === "entregado"
+    (p) => (negocioId === "todas" || p.negocioId === negocioId) && enVentana(p.fecha, dias, 0) && p.estado === "entregado"
   );
-  const hospedajesDelPeriodo = HOSPEDAJES.filter((h) => h.negocioId === negocioId && enVentana(h.checkIn, dias, 0));
+  const hospedajesDelPeriodo = HOSPEDAJES.filter((h) => (negocioId === "todas" || h.negocioId === negocioId) && enVentana(h.checkIn, dias, 0));
 
   const montos = [
     ...reservasAtendidas.map((r) => r.monto ?? 0),
