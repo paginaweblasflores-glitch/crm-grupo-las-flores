@@ -4,14 +4,13 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { LogOut, Settings2 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { puedeVer, accesoA } from "@/lib/permissions";
 import { NAV_ITEMS } from "./nav-items";
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { usuario, negocio, cerrarSesion } = useApp();
+  const { usuario, negocio } = useApp();
 
   if (!usuario) return null;
 
@@ -32,47 +31,52 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-        {items.map((item) => {
+      <nav
+        className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5"
+        style={{
+          // Sombra de scroll: avisa que hay más ítems arriba/abajo cuando el
+          // menú no entra completo (ej. rol Gerencial con 12 módulos en una
+          // ventana chica) — sin esto un módulo al final de la lista puede
+          // parecer que no existe, solo porque quedó bajo el borde visible.
+          backgroundImage:
+            "linear-gradient(var(--color-sidebar) 30%, rgba(0,0,0,0)), " +
+            "linear-gradient(rgba(0,0,0,0), var(--color-sidebar) 70%) 0 100%, " +
+            "linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0)), " +
+            "linear-gradient(0deg, rgba(0,0,0,0.35), rgba(0,0,0,0)) 0 100%",
+          backgroundRepeat: "no-repeat",
+          backgroundSize: "100% 28px, 100% 28px, 100% 10px, 100% 10px",
+          backgroundAttachment: "local, local, scroll, scroll",
+        }}
+      >
+        {items.map((item, i) => {
           const activo = pathname === item.href || pathname.startsWith(item.href + "/");
           const nivel = accesoA(usuario.rolTipo, item.modulo);
           const Icon = item.icon;
-          const label = item.labelConNegocio
-            ? `Tablero — ${negocio.nombre}`
-            : nivel === "resumen" && item.labelResumen
-              ? item.labelResumen
-              : item.label;
+          const label = nivel === "resumen" && item.labelResumen ? item.labelResumen : item.label;
+          const nuevoGrupo = i > 0 && item.grupo !== items[i - 1]?.grupo;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={clsx(
-                "flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors min-w-0",
-                activo
-                  ? "bg-[var(--color-terracota)] text-white"
-                  : "text-white/70 hover:bg-[var(--color-sidebar-hover)] hover:text-white"
+            <div key={item.href}>
+              {nuevoGrupo && (
+                <p className="px-3 mt-4 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-white/35">
+                  {item.grupo}
+                </p>
               )}
-            >
-              <Icon size={17} strokeWidth={2} className="shrink-0" />
-              <span className="truncate">{label}</span>
-            </Link>
+              <Link
+                href={item.href}
+                className={clsx(
+                  "flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors min-w-0",
+                  activo
+                    ? "bg-[var(--color-terracota)] text-white"
+                    : "text-white/70 hover:bg-[var(--color-sidebar-hover)] hover:text-white"
+                )}
+              >
+                <Icon size={17} strokeWidth={2} className="shrink-0" />
+                <span className="truncate">{label}</span>
+              </Link>
+            </div>
           );
         })}
       </nav>
-
-      <div className="px-3 pb-4 space-y-1 border-t border-[var(--color-sidebar-border)] pt-3">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-white/50 text-xs">
-          <Settings2 size={15} />
-          Supabase: no conectado (prototipo)
-        </div>
-        <button
-          onClick={cerrarSesion}
-          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-white/70 hover:bg-[var(--color-sidebar-hover)] hover:text-white transition-colors"
-        >
-          <LogOut size={17} />
-          Cerrar sesión
-        </button>
-      </div>
     </aside>
   );
 }

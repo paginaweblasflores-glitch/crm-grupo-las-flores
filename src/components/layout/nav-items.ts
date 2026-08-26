@@ -1,33 +1,42 @@
 import {
-  LayoutDashboard, Store, Users, CalendarCheck, Bike, BedDouble, Gift, Megaphone,
-  MessageCircle, UserCog, Sparkles,
+  LayoutDashboard, Users, CalendarCheck, Bike, BedDouble, Gift, Megaphone,
+  MessageCircle, UserCog, Sparkles, PartyPopper, Users2,
 } from "lucide-react";
 import { ModuloId } from "@/lib/permissions";
+
+// Los módulos se agrupan por prioridad/importancia real de uso — no es una
+// lista plana. "Principal" es el panel de entrada; "Operación diaria" es lo
+// que el equipo usa hora a hora; "Relación con el cliente" es seguimiento y
+// marketing (menos frecuente que la operación, pero recurrente); "Gestión"
+// es lo administrativo, lo que Gerencial revisa cada cierto tiempo, no cada
+// día. El orden dentro de NAV_ITEMS ya refleja esta prioridad de arriba a
+// abajo — Sidebar.tsx solo le pone el rótulo de sección encima.
+export type GrupoNav = "Principal" | "Operación diaria" | "Relación con el cliente" | "Gestión";
 
 export interface NavItem {
   href: string;
   label: string;
   modulo: ModuloId;
   icon: typeof LayoutDashboard;
+  grupo: GrupoNav;
   soloUmaru?: boolean;
   soloLasFlores?: boolean;
   // Para el módulo "dashboard": qué mostrar cuando el rol solo ve resumen
-  // (Dirección) — ahí se separa del tablero de un solo negocio.
+  // (Dirección) — su panel se llama distinto al de Gerencial/Ventas.
   labelResumen?: string;
-  // El label incluye el nombre del negocio activo (se arma en el Sidebar).
-  labelConNegocio?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Tablero", modulo: "dashboard", icon: LayoutDashboard, labelResumen: "Tablero general" },
-  { href: "/tablero-negocio", label: "Tablero del negocio", modulo: "tableroNegocio", icon: Store, labelConNegocio: true },
-  { href: "/clientes", label: "Clientes", modulo: "clientes", icon: Users },
-  { href: "/reservas", label: "Reservas", modulo: "reservas", icon: CalendarCheck },
-  { href: "/delivery", label: "Delivery", modulo: "delivery", icon: Bike, soloLasFlores: true },
-  { href: "/hospedaje", label: "Hospedaje", modulo: "hospedaje", icon: BedDouble, soloUmaru: true },
-  { href: "/cumpleanos", label: "Cumpleaños", modulo: "cumpleanos", icon: Gift },
-  { href: "/mensajeria", label: "Mensajería", modulo: "mensajeria", icon: MessageCircle },
-  { href: "/campanas", label: "Campañas", modulo: "campanas", icon: Megaphone },
-  { href: "/estrategias", label: "Estrategias", modulo: "estrategias", icon: Sparkles },
-  { href: "/usuarios", label: "Usuarios", modulo: "usuarios", icon: UserCog },
+  { href: "/dashboard", label: "Panel Principal", modulo: "dashboard", icon: LayoutDashboard, grupo: "Principal", labelResumen: "Panel Ejecutivo" },
+  { href: "/clientes", label: "Clientes", modulo: "clientes", icon: Users, grupo: "Operación diaria" },
+  { href: "/reservas", label: "Reservas", modulo: "reservas", icon: CalendarCheck, grupo: "Operación diaria" },
+  { href: "/delivery", label: "Delivery", modulo: "delivery", icon: Bike, grupo: "Operación diaria", soloLasFlores: true },
+  { href: "/hospedaje", label: "Hospedaje", modulo: "hospedaje", icon: BedDouble, grupo: "Operación diaria", soloUmaru: true },
+  { href: "/cumpleanos", label: "Cumpleaños", modulo: "cumpleanos", icon: Gift, grupo: "Relación con el cliente" },
+  { href: "/mensajeria", label: "Mensajería", modulo: "mensajeria", icon: MessageCircle, grupo: "Relación con el cliente" },
+  { href: "/campanas", label: "Campañas", modulo: "campanas", icon: Megaphone, grupo: "Relación con el cliente" },
+  { href: "/dias-festivos", label: "Días Festivos", modulo: "diasFestivos", icon: PartyPopper, grupo: "Relación con el cliente" },
+  { href: "/estrategias", label: "Estrategias", modulo: "estrategias", icon: Sparkles, grupo: "Gestión" },
+  { href: "/equipo", label: "Mi Equipo", modulo: "equipo", icon: Users2, grupo: "Gestión" },
+  { href: "/usuarios", label: "Usuarios", modulo: "usuarios", icon: UserCog, grupo: "Gestión" },
 ];

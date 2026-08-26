@@ -2,12 +2,13 @@
 // Capítulo 11 del Plan de CRM: se cuentan las reservas/pedidos/hospedajes
 // que comparten el mismo cliente, no se pregunta ni se estima a mano.
 
-import { ClienteIndividual, FrecuenciaClasificacion, ResumenCliente } from "./types";
+import { ClienteIndividual, FrecuenciaClasificacion, NegocioId, ResumenCliente } from "./types";
 import type { Tono } from "@/components/ui/Badge";
 import { BASE_DATE } from "./mock/seed";
 import { reservasDeCliente } from "./mock/reservas";
 import { pedidosDeCliente } from "./mock/pedidos";
 import { hospedajesDeCliente } from "./mock/hospedaje";
+import { clientesIndividualesPorNegocio } from "./mock/clientes";
 
 function diasDesde(fechaISO: string): number {
   const f = new Date(fechaISO);
@@ -59,3 +60,26 @@ export const COLOR_CLASIFICACION: Record<FrecuenciaClasificacion, Tono> = {
   frecuente: "verde",
   inactivo: "gris",
 };
+
+// Cuántos clientes de un negocio caen en cada clasificación — reusa
+// resumenDeCliente() cliente por cliente en vez de inventar una segunda
+// forma de calcular frecuencia. Formato listo para DonutChart.
+export function distribucionFrecuencia(negocioId: NegocioId): { nombre: string; valor: number }[] {
+  const conteo: Record<FrecuenciaClasificacion, number> = { nuevo: 0, ocasional: 0, frecuente: 0, inactivo: 0 };
+  clientesIndividualesPorNegocio(negocioId).forEach((c) => {
+    conteo[resumenDeCliente(c).clasificacion] += 1;
+  });
+  return (Object.keys(conteo) as FrecuenciaClasificacion[])
+    .filter((k) => conteo[k] > 0)
+    .map((k) => ({ nombre: ETIQUETA_CLASIFICACION[k], valor: conteo[k] }));
+}
+
+// Cuántos clientes "volvieron" este mes: tuvieron al menos una visita en los
+// últimos 30 días Y ya tenían historial antes de eso — así no se cuenta a
+// alguien cuya única visita en la vida cayó, de casualidad, dentro del mes.
+export function clientesQueVolvieronEsteMes(negocioId: NegocioId): number {
+  return clientesIndividualesPorNegocio(negocioId).filter((c) => {
+    const r = resumenDeCliente(c);
+    return r.visitas30Dias > 0 && r.totalVisitas > r.visitas30Dias;
+  }).length;
+}

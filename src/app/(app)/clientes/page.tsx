@@ -2,12 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Users, Building2, UserPlus, MessageCircle } from "lucide-react";
+import { Download, UserPlus, MessageCircle } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { accesoA, puedeRegistrarClientes } from "@/lib/permissions";
+import { puedeRegistrarClientes } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { StatTile } from "@/components/ui/StatTile";
+import { Card } from "@/components/ui/Card";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Badge } from "@/components/ui/Badge";
 import { Table, Thead, Th, Tr, Td } from "@/components/ui/Table";
@@ -17,14 +16,8 @@ import {
 } from "@/lib/mock/clientes";
 import { resumenDeCliente, ETIQUETA_CLASIFICACION, COLOR_CLASIFICACION } from "@/lib/frecuencia";
 import { exportarCSV } from "@/lib/export-csv";
-import { clientesPorTipoPeriodo, serieClientesPorPeriodo, distribucionOrigen, Periodo, PERIODOS } from "@/lib/metrics";
 import { useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
 import { NuevoClienteForm } from "@/components/clientes/NuevoClienteForm";
-import { PeriodoSelector } from "@/components/dashboard/PeriodoSelector";
-import { ExportarPDFBoton } from "@/components/ui/ExportarPDFBoton";
-import dynamic from "next/dynamic";
-const BarChartSerie = dynamic(() => import("@/components/charts/BarChartSerie").then((m) => m.BarChartSerie), { ssr: false, loading: () => <div className="h-[220px]" /> });
-const DonutChart = dynamic(() => import("@/components/charts/DonutChart").then((m) => m.DonutChart), { ssr: false, loading: () => <div className="h-[220px]" /> });
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 
 const POR_PAGINA = 15;
@@ -47,7 +40,6 @@ export default function ClientesPage() {
     setBusquedaState(v);
     setPagina(1);
   }
-  const [periodo, setPeriodo] = useState<Periodo>("semana");
   const { items: creados, add: agregarCliente } = useClientesCreados();
   const { items: corpCreados, add: agregarCorporativo } = useClientesCorporativosCreados();
 
@@ -94,7 +86,6 @@ export default function ClientesPage() {
   const corporativosPagina = useMemo(() => paginar(corporativosFiltrados, pagina, POR_PAGINA), [corporativosFiltrados, pagina]);
 
   if (!usuario) return null;
-  const nivel = accesoA(usuario.rolTipo, "clientes");
 
   function exportar() {
     if (tab === "individual") {
@@ -114,58 +105,6 @@ export default function ClientesPage() {
         ])
       );
     }
-  }
-
-  if (nivel === "resumen") {
-    const porTipo = clientesPorTipoPeriodo(negocio.id, periodo);
-    const serie = serieClientesPorPeriodo(negocio.id, periodo);
-    const distribucion = distribucionOrigen(negocio.id);
-    const periodoLabel = PERIODOS.find((p) => p.value === periodo)!.label;
-    return (
-      <>
-        <Topbar titulo="Clientes" descripcion={`Resumen ejecutivo · ${negocio.nombre}`} />
-        <main className="flex-1 p-8 animate-fade-in space-y-6" id="reporte">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <PeriodoSelector periodo={periodo} onChange={setPeriodo} />
-            <ExportarPDFBoton />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatTile
-              label={`Individuales nuevos (${periodoLabel.toLowerCase()})`} value={porTipo.individuales} icon={<Users size={18} />}
-              tono="terracota" trend={formatearCambio(porTipo.individualesCambio)} trendUp={(porTipo.individualesCambio ?? 0) >= 0}
-            />
-            <StatTile
-              label={`Corporativos nuevos (${periodoLabel.toLowerCase()})`} value={porTipo.corporativos} icon={<Building2 size={18} />}
-              tono="azul" trend={formatearCambio(porTipo.corporativosCambio)} trendUp={(porTipo.corporativosCambio ?? 0) >= 0}
-            />
-            <StatTile
-              label={`Total nuevos (${periodoLabel.toLowerCase()})`} value={porTipo.total} icon={<UserPlus size={18} />}
-              tono="verde" trend={formatearCambio(porTipo.totalCambio)} trendUp={(porTipo.totalCambio ?? 0) >= 0}
-            />
-          </div>
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-            <Card className="xl:col-span-2 romper-pagina">
-              <CardHeader
-                title={`Clientes nuevos — ${periodo === "anio" ? "por mes" : "por día"}`}
-                subtitle={`Vista ${periodoLabel.toLowerCase()} · base total: ${individuales.length} individuales, ${corporativos.length} corporativos`}
-              />
-              <BarChartSerie data={serie} series={[{ key: "clientes", nombre: "Clientes nuevos", color: "#8C3A25" }]} />
-            </Card>
-            <Card className="romper-pagina">
-              <CardHeader title="De dónde vienen" subtitle="Origen del cliente" />
-              <DonutChart data={distribucion} />
-            </Card>
-          </div>
-          <Card>
-            <CardHeader title="Vista de Dirección" subtitle="Este rol ve el número agregado, no la tabla completa de clientes" />
-            <p className="text-sm text-[var(--color-gris-medio)]">
-              Betsy y Melisa trabajan con la ficha completa de cada cliente (búsqueda, historial, exportación).
-              Si necesitas revisar un caso puntual, pídeles el detalle — así lo define el Plan de CRM.
-            </p>
-          </Card>
-        </main>
-      </>
-    );
   }
 
   return (
@@ -290,11 +229,6 @@ export default function ClientesPage() {
       </main>
     </>
   );
-}
-
-function formatearCambio(valor: number | null): string | undefined {
-  if (valor === null) return undefined;
-  return `${valor >= 0 ? "+" : ""}${valor}% vs. periodo anterior`;
 }
 
 function BotonWhatsApp({ celular }: { celular: string }) {

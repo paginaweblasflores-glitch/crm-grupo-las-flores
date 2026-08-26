@@ -1,18 +1,17 @@
-// Matriz de permisos del CRM, ajustada a cómo trabaja realmente el equipo:
+// Matriz de permisos del CRM — modelo definido por Mijael junto a Arturo y
+// Luis (reunión de diseño de su propio CRM), reemplaza el modelo anterior:
 //
-// - Dirección (Mijael): solo números y estadísticas para decidir. No registra,
-//   no responde, no autoriza — eso lo hacen sus trabajadores. La única
-//   excepción es Usuarios: Mijael crea la cuenta de Administración de un
-//   negocio nuevo (Umaru, Mamina) cuando todavía no hay nadie a quien
-//   delegarle esa tarea — de ahí en adelante, ese administrador crea el
-//   resto de su propio equipo.
-// - Administración (Betsy): hace la mayor parte de la gestión y tiene
-//   privilegios de autorización que Ventas no tiene (aprueba eventos grandes,
-//   supervisa el seguimiento de cumpleaños, crea las cuentas del equipo).
-// - Ventas (Melisa): es quien más módulos y acciones usa en el día a día —
-//   registra clientes, gestiona reservas y delivery, y lleva el seguimiento
-//   de cumpleaños con el chat integrado. No ve montos ni cifras críticas de
-//   dinero: esas quedan para Administración y Dirección.
+// - Dirección (socios/directorio en Lima): un solo panel de métricas de
+//   crecimiento del grupo. Cero acciones, cero acceso a módulos operativos.
+// - Gerencial (Mijael): control operativo total de los 3 negocios — hace todo
+//   lo que hace Ventas, además gestiona campañas, usuarios (crear/editar/
+//   eliminar cuentas de Ventas) y días festivos. El módulo "Mi Equipo" es
+//   donde ve el detalle y compara la actividad de su equipo entre los 3
+//   negocios — separado de Usuarios, que es solo gestión de cuentas.
+// - Ventas (el equipo de cada negocio): registra clientes, crea reservas y
+//   delivery, lleva el seguimiento de cumpleaños con el chat integrado, y ve
+//   (sin editar) las campañas de su negocio. No ve montos agregados ni entra
+//   a Usuarios/Estrategias/Días Festivos.
 
 import { RolTipo, NegocioId } from "./types";
 
@@ -20,7 +19,6 @@ export type NivelAcceso = "completo" | "resumen" | "no";
 
 export type ModuloId =
   | "dashboard"
-  | "tableroNegocio"
   | "clientes"
   | "reservas"
   | "delivery"
@@ -29,25 +27,27 @@ export type ModuloId =
   | "campanas"
   | "estrategias"
   | "mensajeria"
-  | "usuarios";
+  | "usuarios"
+  | "diasFestivos"
+  | "equipo";
 
 export const PERMISOS: Record<RolTipo, Record<ModuloId, NivelAcceso>> = {
   direccion: {
     dashboard: "resumen",
-    tableroNegocio: "resumen",
-    clientes: "resumen",
-    reservas: "resumen",
-    delivery: "resumen",
-    hospedaje: "resumen",
-    cumpleanos: "resumen",
-    campanas: "resumen",
-    estrategias: "completo",
+    clientes: "no",
+    reservas: "no",
+    delivery: "no",
+    hospedaje: "no",
+    cumpleanos: "no",
+    campanas: "no",
+    estrategias: "no",
     mensajeria: "no",
-    usuarios: "completo",
+    usuarios: "no",
+    diasFestivos: "no",
+    equipo: "no",
   },
-  administracion: {
+  gerencial: {
     dashboard: "completo",
-    tableroNegocio: "no",
     clientes: "completo",
     reservas: "completo",
     delivery: "completo",
@@ -57,19 +57,22 @@ export const PERMISOS: Record<RolTipo, Record<ModuloId, NivelAcceso>> = {
     estrategias: "completo",
     mensajeria: "completo",
     usuarios: "completo",
+    diasFestivos: "completo",
+    equipo: "completo",
   },
   ventas: {
     dashboard: "completo",
-    tableroNegocio: "no",
     clientes: "completo",
     reservas: "completo",
     delivery: "completo",
     hospedaje: "completo",
     cumpleanos: "completo",
-    campanas: "no",
+    campanas: "resumen",
     estrategias: "no",
     mensajeria: "completo",
     usuarios: "no",
+    diasFestivos: "no",
+    equipo: "no",
   },
 };
 
@@ -81,34 +84,44 @@ export function puedeVer(rol: RolTipo, modulo: ModuloId): boolean {
   return accesoA(rol, modulo) !== "no";
 }
 
-// Dirección ve toda la plata y las estadísticas críticas; Administración
-// también (supervisa resultados); Ventas opera pero no ve montos agregados.
+// Dirección y Gerencial ven toda la plata y las estadísticas críticas; Ventas
+// opera pero no ve montos agregados.
 export function puedeVerMontos(rol: RolTipo): boolean {
   return rol !== "ventas";
 }
 
 // Autorizar reservas grandes, aprobar el mes de cumpleaños, etc.
 export function puedeAutorizar(rol: RolTipo): boolean {
-  return rol === "administracion";
+  return rol === "gerencial";
 }
 
 export function puedeGestionarUsuarios(rol: RolTipo): boolean {
-  return rol === "administracion" || rol === "direccion";
+  return rol === "gerencial";
 }
 
 export function puedeRegistrarClientes(rol: RolTipo): boolean {
-  return rol === "administracion" || rol === "ventas";
+  return rol === "gerencial" || rol === "ventas";
 }
 
-// Cada cuenta de Administración o Ventas pertenece a un solo negocio (Betsy
-// y Melisa a Las Flores; un futuro administrador de Umaru, a Umaru) — cada
-// negocio es grande e independiente, con su propio personal. Solo Dirección
-// ve y compara los tres negocios del grupo.
+export function puedeGestionarCampanas(rol: RolTipo): boolean {
+  return rol === "gerencial";
+}
+
+export function puedeCrearReservasDelivery(rol: RolTipo): boolean {
+  return rol === "gerencial" || rol === "ventas";
+}
+
+// Cada cuenta de Ventas pertenece a un solo negocio — cada negocio es grande
+// e independiente, con su propio equipo. Dirección y Gerencial ven y
+// comparan los tres negocios del grupo (Dirección solo para métricas
+// agregadas; Gerencial además puede operar en cualquiera de los tres).
 export function negociosPermitidos(rol: RolTipo, negocioPropio: NegocioId): NegocioId[] | "todos" {
-  if (rol === "direccion") return "todos";
+  if (rol === "direccion" || rol === "gerencial") return "todos";
   return [negocioPropio];
 }
 
+// Solo Gerencial cambia de negocio activamente para operar en uno u otro —
+// Dirección ve los tres agregados en un solo panel, no navega por negocio.
 export function puedeCambiarNegocio(rol: RolTipo): boolean {
-  return rol === "direccion";
+  return rol === "gerencial";
 }

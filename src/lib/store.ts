@@ -12,9 +12,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Usuario, ClienteIndividual, ClienteCorporativo, Mensaje,
+  Usuario, ClienteIndividual, ClienteCorporativo, Mensaje, Reserva, Pedido, Campana, Festividad,
 } from "./types";
 import { PLANTILLA_CUMPLEANOS_DEFECTO, HORA_ENVIO_DEFECTO } from "./mensajes";
+import { FESTIVIDADES } from "./mock/festividades";
 
 function readLS<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -62,7 +63,18 @@ function useLocalArray<T>(key: string) {
     [key]
   );
 
-  return { items, add, update, listo };
+  const remove = useCallback(
+    (predicate: (item: T) => boolean) => {
+      setItems((prev) => {
+        const next = prev.filter((it) => !predicate(it));
+        writeLS(key, next);
+        return next;
+      });
+    },
+    [key]
+  );
+
+  return { items, add, update, remove, listo };
 }
 
 // --- Cuentas creadas por Betsy ---------------------------------------------
@@ -79,7 +91,71 @@ export function useClientesCorporativosCreados() {
   return useLocalArray<ClienteCorporativo>("crm-clientes-corporativos-creados");
 }
 
-// --- Reservas de evento autorizadas por Administración ----------------------
+// --- Reservas y pedidos creados desde el sistema (Ventas/Gerencial) --------
+// Nacen con enviadoAWeb: true — simula que se sincronizan con el CRM real de
+// la web de Las Flores (no hay integración real, es la simulación acordada).
+export function useReservasCreadas() {
+  return useLocalArray<Reserva>("crm-reservas-creadas");
+}
+
+export function usePedidosCreados() {
+  return useLocalArray<Pedido>("crm-pedidos-creados");
+}
+
+// --- Campañas creadas desde el sistema (Gerencial: crear/editar/eliminar) --
+export function useCampanasCreadas() {
+  return useLocalArray<Campana>("crm-campanas-creadas");
+}
+
+// --- Días festivos y fechas comerciales (Gerencial: crear/editar/eliminar) -
+// Se siembra con FESTIVIDADES la primera vez que se abre el módulo — mismo
+// principio que la conversación "sembrada" de useChat: si nunca se guardó
+// nada, arranca con la semilla; si ya hay datos guardados (porque Gerencial
+// editó/eliminó algo), respeta eso.
+export function useFestividades() {
+  const key = "crm-festividades";
+  const [festividades, setFestividades] = useState<Festividad[]>([]);
+  const [listo, setListo] = useState(false);
+
+  useEffect(() => {
+    const yaExiste = typeof window !== "undefined" && window.localStorage.getItem(key) !== null;
+    if (yaExiste) {
+      setFestividades(readLS<Festividad[]>(key, FESTIVIDADES));
+    } else {
+      setFestividades(FESTIVIDADES);
+      writeLS(key, FESTIVIDADES);
+    }
+    setListo(true);
+  }, []);
+
+  const add = useCallback((f: Festividad) => {
+    setFestividades((prev) => {
+      const next = [f, ...prev];
+      writeLS(key, next);
+      return next;
+    });
+  }, []);
+
+  const update = useCallback((id: string, patch: Partial<Festividad>) => {
+    setFestividades((prev) => {
+      const next = prev.map((f) => (f.id === id ? { ...f, ...patch } : f));
+      writeLS(key, next);
+      return next;
+    });
+  }, []);
+
+  const remove = useCallback((id: string) => {
+    setFestividades((prev) => {
+      const next = prev.filter((f) => f.id !== id);
+      writeLS(key, next);
+      return next;
+    });
+  }, []);
+
+  return { festividades, add, update, remove, listo };
+}
+
+// --- Reservas de evento autorizadas por Gerencial ----------------------------
 export function useAutorizaciones() {
   const [autorizadas, setAutorizadas] = useState<Set<string>>(new Set());
   const [listo, setListo] = useState(false);

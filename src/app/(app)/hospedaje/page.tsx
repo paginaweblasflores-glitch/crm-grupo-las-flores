@@ -2,27 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, BedDouble, TrendingUp, Moon } from "lucide-react";
+import { Download, BedDouble, TrendingUp } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { accesoA } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table, Thead, Th, Tr, Td } from "@/components/ui/Table";
-import { PeriodoSelector } from "@/components/dashboard/PeriodoSelector";
-import { ExportarPDFBoton } from "@/components/ui/ExportarPDFBoton";
-import dynamic from "next/dynamic";
-const BarChartSerie = dynamic(() => import("@/components/charts/BarChartSerie").then((m) => m.BarChartSerie), { ssr: false, loading: () => <div className="h-[220px]" /> });
 import { HOSPEDAJES } from "@/lib/mock/hospedaje";
-import { resumenHospedajePeriodo, serieHospedajePorPeriodo, Periodo, PERIODOS } from "@/lib/metrics";
 import { exportarCSV } from "@/lib/export-csv";
 
 export default function HospedajePage() {
   const { usuario, negocio } = useApp();
   const router = useRouter();
   const [busqueda, setBusqueda] = useState("");
-  const [periodo, setPeriodo] = useState<Periodo>("semana");
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return HOSPEDAJES;
@@ -36,8 +29,6 @@ export default function HospedajePage() {
   }, [fueraDeAlcance, router]);
 
   if (!usuario || fueraDeAlcance) return null;
-  const nivel = accesoA(usuario.rolTipo, "hospedaje");
-  const periodoLabel = PERIODOS.find((p) => p.value === periodo)!.label;
 
   const totalNoches = HOSPEDAJES.reduce((acc, h) => {
     const noches = Math.round((new Date(h.checkOut).getTime() - new Date(h.checkIn).getTime()) / 86400000);
@@ -47,37 +38,6 @@ export default function HospedajePage() {
     const noches = Math.round((new Date(h.checkOut).getTime() - new Date(h.checkIn).getTime()) / 86400000);
     return acc + noches * h.tarifaNoche;
   }, 0);
-
-  if (nivel === "resumen") {
-    const resumen = resumenHospedajePeriodo(periodo);
-    const serie = serieHospedajePorPeriodo(periodo);
-    return (
-      <>
-        <Topbar titulo="Hospedaje" descripcion="Resumen ejecutivo · Hotel Umaru" />
-        <main className="flex-1 p-8 animate-fade-in space-y-6" id="reporte">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <PeriodoSelector periodo={periodo} onChange={setPeriodo} />
-            <ExportarPDFBoton />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatTile
-              label={`Estadías (${periodoLabel.toLowerCase()})`} value={resumen.estadias} icon={<BedDouble size={18} />}
-              tono="terracota" trend={formatearCambio(resumen.estadiasCambio)} trendUp={(resumen.estadiasCambio ?? 0) >= 0}
-            />
-            <StatTile label={`Noches ocupadas (${periodoLabel.toLowerCase()})`} value={resumen.noches} icon={<Moon size={18} />} tono="azul" />
-            <StatTile
-              label={`Ingreso por habitaciones (${periodoLabel.toLowerCase()})`} value={`S/ ${resumen.ingreso.toLocaleString("es-PE")}`} icon={<TrendingUp size={18} />}
-              tono="verde" trend={formatearCambio(resumen.ingresoCambio)} trendUp={(resumen.ingresoCambio ?? 0) >= 0}
-            />
-          </div>
-          <Card className="romper-pagina">
-            <CardHeader title={`Estadías — ${periodo === "anio" ? "por mes" : "por día"}`} subtitle={`Vista ${periodoLabel.toLowerCase()}`} />
-            <BarChartSerie data={serie} series={[{ key: "estadias", nombre: "Estadías", color: "#5C7C8C" }]} />
-          </Card>
-        </main>
-      </>
-    );
-  }
 
   function exportar() {
     exportarCSV(
@@ -130,9 +90,4 @@ export default function HospedajePage() {
       </main>
     </>
   );
-}
-
-function formatearCambio(valor: number | null): string | undefined {
-  if (valor === null) return undefined;
-  return `${valor >= 0 ? "+" : ""}${valor}% vs. periodo anterior`;
 }

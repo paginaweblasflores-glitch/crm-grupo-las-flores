@@ -1,7 +1,7 @@
-import { Pedido, EstadoPedido, CanalContacto } from "@/lib/types";
+import { Pedido, EstadoPedido, CanalContacto, NegocioId } from "@/lib/types";
 import { CLIENTES_INDIVIDUALES } from "./clientes";
 import { PRODUCTOS_CARTA } from "./nombres";
-import { pick, pickMany, randInt, daysAgoISO } from "./seed";
+import { pick, pickMany, randInt, randDiaConPeso, daysAgoISO } from "./seed";
 
 // El delivery, por ahora, solo existe en la web de Las Flores.
 const ESTADOS: EstadoPedido[] = ["entregado", "entregado", "entregado", "en-camino", "cancelado"];
@@ -13,7 +13,7 @@ function generarPedidos(cantidad: number): Pedido[] {
   const out: Pedido[] = [];
   for (let i = 0; i < cantidad; i++) {
     const cliente = pick(clientesLasFlores);
-    const diasAtras = randInt(0, 45);
+    const diasAtras = randDiaConPeso(0, 400);
     const productos = pickMany(PRODUCTOS_CARTA, randInt(1, 3));
     out.push({
       id: `las-flores-ped-${i + 1}`,
@@ -31,8 +31,12 @@ function generarPedidos(cantidad: number): Pedido[] {
   return out.sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
 }
 
-export const PEDIDOS: Pedido[] = generarPedidos(64);
+export const PEDIDOS: Pedido[] = generarPedidos(500); // ~13 meses, con estacionalidad (ver randDiaConPeso)
 
 export function pedidosDeCliente(clienteId: string): Pedido[] {
   return PEDIDOS.filter((p) => p.clienteId === clienteId);
+}
+
+export function pedidosPorNegocio(negocioId: NegocioId): Pedido[] {
+  return PEDIDOS.filter((p) => p.negocioId === negocioId);
 }

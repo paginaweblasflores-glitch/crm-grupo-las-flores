@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Gift, MessageCircle, CheckCircle2, Users2, Wallet, Settings2, Pencil, RotateCcw, ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { Gift, MessageCircle, CheckCircle2, Settings2, Pencil, RotateCcw, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { accesoA, puedeVerMontos, puedeAutorizar } from "@/lib/permissions";
+import { puedeVerMontos, puedeAutorizar } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
@@ -24,9 +24,6 @@ import {
   seguimientosConNuevos, proximosCumpleanosDe, clientesPorDia, esHoy,
 } from "@/lib/seguimiento-helpers";
 import { ClienteIndividual } from "@/lib/types";
-import { ExportarPDFBoton } from "@/components/ui/ExportarPDFBoton";
-import dynamic from "next/dynamic";
-const DonutChart = dynamic(() => import("@/components/charts/DonutChart").then((m) => m.DonutChart), { ssr: false, loading: () => <div className="h-[220px]" /> });
 
 const MESES_LABEL = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -40,10 +37,9 @@ export default function CumpleanosPage() {
   const configStore = useConfigSaludoCumpleanos(negocio.id);
 
   if (!usuario) return null;
-  const nivel = accesoA(usuario.rolTipo, "cumpleanos");
   const verMontos = puedeVerMontos(usuario.rolTipo);
   const esAdmin = puedeAutorizar(usuario.rolTipo);
-  const editable = usuario.rolTipo === "ventas";
+  const editable = usuario.rolTipo === "ventas" || usuario.rolTipo === "gerencial";
 
   if (!negocio.operando) {
     return (
@@ -62,40 +58,6 @@ export default function CumpleanosPage() {
   const proximos = proximosCumpleanosDe(todosLosClientes, BASE_DATE, 10).filter((p) => p.diffDias > 0);
   const seguimientos = seguimientosConNuevos(seguimientosPorNegocio(negocio.id), clientesCreadosNegocio, negocio.id);
   const resumenMes = resumenCumpleanosMes(negocio.id);
-
-  if (nivel === "resumen") {
-    const respondieron = seguimientos.filter((s) => s.respuesta === "si").length;
-    const noRespondieron = seguimientos.filter((s) => s.respuesta !== "si" && s.saludoEnviado).length;
-    const sinEnviar = seguimientos.filter((s) => !s.saludoEnviado).length;
-    const embudo = [
-      { nombre: "Reservaron", valor: resumenMes.personasQueReservaron },
-      { nombre: "Respondieron sin reservar", valor: Math.max(respondieron - resumenMes.personasQueReservaron, 0) },
-      { nombre: "Enviado, sin respuesta", valor: noRespondieron },
-      { nombre: "Sin enviar todavía", valor: sinEnviar },
-    ];
-    return (
-      <>
-        <Topbar titulo="Cumpleaños" descripcion={`Resumen ejecutivo · ${negocio.nombre}`} />
-        <main className="flex-1 p-8 animate-fade-in space-y-6" id="reporte">
-          <div className="flex items-center justify-end">
-            <ExportarPDFBoton />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatTile label="Saludos enviados este mes" value={resumenMes.enviados} icon={<Gift size={18} />} tono="terracota" />
-            <StatTile label="Personas que reservaron" value={resumenMes.personasQueReservaron} icon={<Users2 size={18} />} tono="naranja" />
-            <StatTile label="Monto generado este mes" value={`S/ ${resumenMes.montoTotal.toLocaleString("es-PE")}`} icon={<Wallet size={18} />} tono="verde" />
-          </div>
-          <Card className="romper-pagina">
-            <CardHeader title="Embudo de cumpleaños del mes" subtitle={`${resumenMes.totalDelMes} clientes cumplen años este mes`} />
-            <DonutChart data={embudo} />
-          </Card>
-          <Card>
-            <CardHeader title="Vista de Dirección" subtitle="Solo el número — el seguimiento día a día lo lleva Ventas y lo supervisa Administración" />
-          </Card>
-        </main>
-      </>
-    );
-  }
 
   return (
     <>
@@ -473,7 +435,7 @@ function AprobacionMes({ negocioId, totalDelMes }: { negocioId: string; totalDel
           </p>
         </div>
         {aprobado ? (
-          <Badge tono="verde"><CheckCircle2 size={12} /> Aprobado por Administración</Badge>
+          <Badge tono="verde"><CheckCircle2 size={12} /> Aprobado por Gerencial</Badge>
         ) : (
           <button
             onClick={aprobar}

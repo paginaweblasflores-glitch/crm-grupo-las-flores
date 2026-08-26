@@ -4,26 +4,39 @@ import dynamic from "next/dynamic";
 import { useApp } from "@/lib/app-context";
 import { accesoA } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
+import { ExportarPDFBoton } from "@/components/ui/ExportarPDFBoton";
+import { BASE_DATE } from "@/lib/mock/seed";
 
-// Cada rol solo ve uno de los dos — cargarlos perezosamente evita que el otro
-// (con sus gráficos de recharts) se descargue y parsee sin usarse.
+// Cada rol solo ve uno de los tres — cargarlos perezosamente evita que los
+// otros (con sus gráficos de recharts) se descarguen y parseen sin usarse.
 const DashboardNegocio = dynamic(() => import("@/components/dashboard/DashboardNegocio").then((m) => m.DashboardNegocio), { ssr: false });
-const DashboardEjecutivo = dynamic(() => import("@/components/dashboard/DashboardEjecutivo").then((m) => m.DashboardEjecutivo), { ssr: false });
+const PanelGerencial = dynamic(() => import("@/components/dashboard/PanelGerencial").then((m) => m.PanelGerencial), { ssr: false });
+const PanelEjecutivo = dynamic(() => import("@/components/dashboard/PanelEjecutivo").then((m) => m.PanelEjecutivo), { ssr: false });
+
+const FECHA_HOY = BASE_DATE.toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
 export default function DashboardPage() {
   const { usuario, negocio } = useApp();
   if (!usuario) return null;
 
   const esResumen = accesoA(usuario.rolTipo, "dashboard") === "resumen";
+  const esGerencial = usuario.rolTipo === "gerencial";
+
+  const descripcion = esResumen
+    ? "Panel de métricas de crecimiento del grupo"
+    : esGerencial
+      ? FECHA_HOY
+      : `Tablero de ${negocio.nombre}`;
 
   return (
     <>
       <Topbar
-        titulo={`Hola, ${usuario.nombre.split(" ")[0]}`}
-        descripcion={esResumen ? "Vista ejecutiva de los tres negocios" : `Tablero de ${negocio.nombre}`}
+        titulo={`Bienvenido, ${usuario.nombre.split(" ")[0]}`}
+        descripcion={descripcion}
+        accion={esGerencial ? <ExportarPDFBoton etiqueta="Exportar PDF" /> : undefined}
       />
       <main className="flex-1 p-8 animate-fade-in">
-        {esResumen ? <DashboardEjecutivo /> : <DashboardNegocio negocioId={negocio.id} operando={negocio.operando} />}
+        {esResumen ? <PanelEjecutivo /> : esGerencial ? <PanelGerencial /> : <DashboardNegocio negocioId={negocio.id} operando={negocio.operando} />}
       </main>
     </>
   );

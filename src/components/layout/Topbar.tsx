@@ -1,19 +1,23 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { ChevronDown, Check } from "lucide-react";
+import { useState, useRef, useEffect, ReactNode } from "react";
+import { ChevronDown, Check, LogOut } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { NegocioId } from "@/lib/types";
+import { puedeCambiarNegocio } from "@/lib/permissions";
 
-export function Topbar({ titulo, descripcion }: { titulo: string; descripcion?: string }) {
-  const { usuario, negocio, negociosDisponibles, cambiarNegocio } = useApp();
+export function Topbar({ titulo, descripcion, accion }: { titulo: string; descripcion?: string; accion?: ReactNode }) {
+  const { usuario, negocio, negociosDisponibles, cambiarNegocio, cerrarSesion } = useApp();
   const [abierto, setAbierto] = useState(false);
+  const [perfilAbierto, setPerfilAbierto] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const puedeElegir = negociosDisponibles.length > 1;
+  const perfilRef = useRef<HTMLDivElement>(null);
+  const puedeElegir = negociosDisponibles.length > 1 && Boolean(usuario && puedeCambiarNegocio(usuario.rolTipo));
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setAbierto(false);
+      if (perfilRef.current && !perfilRef.current.contains(e.target as Node)) setPerfilAbierto(false);
     }
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -29,6 +33,7 @@ export function Topbar({ titulo, descripcion }: { titulo: string; descripcion?: 
       </div>
 
       <div className="flex items-center gap-3 no-imprimir">
+        {accion}
         <div className="relative" ref={ref}>
           <button
             onClick={() => puedeElegir && setAbierto((v) => !v)}
@@ -76,14 +81,36 @@ export function Topbar({ titulo, descripcion }: { titulo: string; descripcion?: 
           )}
         </div>
 
-        <div className="flex items-center gap-2.5 pl-3 border-l border-[var(--color-gris-claro)]/40">
-          <div className="w-9 h-9 rounded-full bg-[var(--color-terracota)] text-white flex items-center justify-center text-xs font-bold">
-            {usuario.iniciales}
-          </div>
-          <div className="hidden sm:block">
-            <p className="text-sm font-semibold text-[var(--color-gris)] leading-tight">{usuario.nombre}</p>
-            <p className="text-[11px] text-[var(--color-gris-medio)]">{usuario.rolLabel}</p>
-          </div>
+        <div className="relative" ref={perfilRef}>
+          <button
+            onClick={() => setPerfilAbierto((v) => !v)}
+            className="flex items-center gap-2.5 pl-3 border-l border-[var(--color-gris-claro)]/40 hover:opacity-75 transition-opacity cursor-pointer"
+          >
+            <div className="w-9 h-9 rounded-full bg-[var(--color-terracota)] text-white flex items-center justify-center text-xs font-bold shrink-0">
+              {usuario.iniciales}
+            </div>
+            <div className="hidden sm:block text-left">
+              <p className="text-sm font-semibold text-[var(--color-gris)] leading-tight">{usuario.nombre}</p>
+              <p className="text-[11px] text-[var(--color-gris-medio)]">{usuario.rolLabel}</p>
+            </div>
+          </button>
+          {perfilAbierto && (
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl border border-[var(--color-gris-claro)]/40 shadow-lg py-1.5 z-20 animate-fade-in">
+              <div className="px-3.5 py-2.5 border-b border-[var(--color-gris-claro)]/30">
+                <p className="text-sm font-semibold text-[var(--color-gris)]">{usuario.nombre}</p>
+                <p className="text-xs text-[var(--color-gris-medio)]">{usuario.cargo}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setPerfilAbierto(false);
+                  cerrarSesion();
+                }}
+                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-medium text-[var(--color-rojo)] hover:bg-[var(--color-rojo-claro)] transition-colors"
+              >
+                <LogOut size={15} /> Cerrar sesión
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

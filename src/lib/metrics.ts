@@ -5,6 +5,7 @@ import { reservasPorNegocio } from "./mock/reservas";
 import { PEDIDOS } from "./mock/pedidos";
 import { HOSPEDAJES } from "./mock/hospedaje";
 import { proximosCumpleanos, seguimientosPorNegocio } from "./mock/seguimiento";
+import { NEGOCIOS } from "./mock/negocios";
 
 function diasDesde(fechaISO: string): number {
   return Math.round((BASE_DATE.getTime() - new Date(fechaISO).getTime()) / 86400000);
@@ -415,6 +416,51 @@ export function resumenHospedajePeriodo(periodo: Periodo) {
   };
 }
 
+// Ingresos "de verdad" de un negocio en un periodo: reservas atendidas +
+// delivery entregado + hospedaje (solo aplica a Umaru) — resumenPeriodo() no
+// suma hospedaje porque nació para el resumen de Dirección/Ventas, que no lo
+// necesitaban desglosado así; el Panel Gerencial sí necesita el ingreso real
+// total del negocio, no solo la parte de reservas/pedidos.
+export function ingresosTotalesPeriodo(negocioId: NegocioId, periodo: Periodo) {
+  const dias = diasDelPeriodo(periodo);
+  const reservasIngreso = (offset: number) =>
+    reservasPorNegocio(negocioId)
+      .filter((r) => enVentana(r.fecha, dias, offset) && r.estado === "atendida")
+      .reduce((a, r) => a + (r.monto ?? 0), 0);
+  const pedidosIngreso = (offset: number) =>
+    PEDIDOS.filter((p) => p.negocioId === negocioId && enVentana(p.fecha, dias, offset) && p.estado === "entregado").reduce((a, p) => a + p.monto, 0);
+  const hospedajeIngreso = (offset: number) =>
+    HOSPEDAJES.filter((h) => h.negocioId === negocioId && enVentana(h.checkIn, dias, offset)).reduce((a, h) => a + nochesDe(h) * h.tarifaNoche, 0);
+
+  const actual = reservasIngreso(0) + pedidosIngreso(0) + hospedajeIngreso(0);
+  const anterior = reservasIngreso(dias) + pedidosIngreso(dias) + hospedajeIngreso(dias);
+  return { total: actual, cambio: cambioPorcentual(actual, anterior) };
+}
+
+// Ticket promedio DEL periodo elegido — a diferencia de ticketPromedio()
+// (histórico, todo el tiempo), esta sí responde al selector
+// Diario/Semanal/Mensual/Anual, igual que sus 3 vecinas en el Panel
+// Gerencial. Mismo criterio de "venta real" que ingresosTotalesPeriodo():
+// reservas atendidas + pedidos entregados + hospedaje (si es Umaru).
+export function ticketPromedioPeriodo(negocioId: NegocioId, periodo: Periodo): number {
+  const dias = diasDelPeriodo(periodo);
+  const reservasAtendidas = reservasPorNegocio(negocioId).filter(
+    (r) => enVentana(r.fecha, dias, 0) && r.estado === "atendida"
+  );
+  const pedidosEntregados = PEDIDOS.filter(
+    (p) => p.negocioId === negocioId && enVentana(p.fecha, dias, 0) && p.estado === "entregado"
+  );
+  const hospedajesDelPeriodo = HOSPEDAJES.filter((h) => h.negocioId === negocioId && enVentana(h.checkIn, dias, 0));
+
+  const montos = [
+    ...reservasAtendidas.map((r) => r.monto ?? 0),
+    ...pedidosEntregados.map((p) => p.monto),
+    ...hospedajesDelPeriodo.map((h) => nochesDe(h) * h.tarifaNoche),
+  ];
+  if (montos.length === 0) return 0;
+  return Math.round(montos.reduce((a, b) => a + b, 0) / montos.length);
+}
+
 export function serieHospedajePorPeriodo(periodo: Periodo) {
   if (periodo === "anio") {
     const meses: { mes: string; estadias: number }[] = [];
@@ -442,6 +488,53 @@ export function serieHospedajePorPeriodo(periodo: Periodo) {
   return puntos;
 }
 
+// --- Panel de Dirección: crecimiento del grupo, sin desglose por módulo ----
+// Los socios en Lima no necesitan ver reservas ni delivery por separado —
+// necesitan saber si el grupo está creciendo. 4 números, no más (siguiendo
+// la práctica de dashboards ejecutivos: 3-5 métricas enfocadas en tendencia).
+export interface ResumenCrecimientoGrupo {
+  clientesTotales: number;
+  clientesNuevos: number; clientesNuevosCambio: number | null;
+  ingresos: number; ingresosCambio: number | null;
+  negociosActivos: number;
+}
+
+export function resumenCrecimientoGrupo(periodo: Periodo): ResumenCrecimientoGrupo {
+  const activos = NEGOCIOS.filter((n) => n.operando);
+  const resumenes = activos.map((n) => resumenPeriodo(n.id, periodo));
+
+  const clientesTotales = activos.reduce(
+    (a, n) => a + clientesIndividualesPorNegocio(n.id).length + corporativosPorNegocio(n.id).length,
+    0
+  );
+  const clientesNuevos = resumenes.reduce((a, r) => a + r.clientesNuevos, 0);
+  const ingresos = resumenes.reduce((a, r) => a + r.ingresos, 0);
+
+  const promedio = (valores: (number | null)[]) => {
+    const validos = valores.filter((v): v is number => v !== null);
+    return validos.length === 0 ? null : Math.round(validos.reduce((a, b) => a + b, 0) / validos.length);
+  };
+
+  return {
+    clientesTotales,
+    clientesNuevos,
+    clientesNuevosCambio: promedio(resumenes.map((r) => r.clientesNuevosCambio)),
+    ingresos,
+    ingresosCambio: promedio(resumenes.map((r) => r.ingresosCambio)),
+    negociosActivos: activos.length,
+  };
+}
+
+// --- Panel Gerencial: cuántos clientes tiene cada tienda, en proporción -----
+export function clientesPorNegocioTotales() {
+  const conteos = NEGOCIOS.map((n) => ({
+    negocio: n,
+    clientes: clientesIndividualesPorNegocio(n.id).length + corporativosPorNegocio(n.id).length,
+  }));
+  const total = conteos.reduce((a, c) => a + c.clientes, 0);
+  return conteos.map((c) => ({ ...c, porcentaje: total === 0 ? 0 : Math.round((c.clientes / total) * 100) }));
+}
+
 export function resumenNegocio(negocioId: NegocioId) {
   const clientes = clientesIndividualesPorNegocio(negocioId).length + corporativosPorNegocio(negocioId).length;
   const reservas = reservasSemana(negocioId);
@@ -454,5 +547,130 @@ export function resumenNegocio(negocioId: NegocioId) {
     ingresosSemana: pedidos.monto + reservas.confirmadas * ticketPromedio(negocioId),
     proximosCumples: cumples,
     ticketPromedio: ticketPromedio(negocioId),
+  };
+}
+
+// --- Módulo Estadísticas: dinámico por métrica (no solo ingresos) ----------
+// Mijael pidió poder elegir qué mirar (ingresos, reservas, delivery,
+// hospedaje, clientes nuevos) en vez de un reporte fijo — todo lo de acá
+// abajo recibe `metrica` como parámetro y cambia de fuente de datos según
+// cuál esté seleccionada en la UI.
+export type MetricaEstadistica = "ingresos" | "reservas" | "delivery" | "hospedaje" | "clientes";
+
+export const METRICAS_ESTADISTICA: { value: MetricaEstadistica; label: string; unidad: "dinero" | "conteo" }[] = [
+  { value: "ingresos", label: "Ingresos", unidad: "dinero" },
+  { value: "reservas", label: "Reservas", unidad: "conteo" },
+  { value: "delivery", label: "Delivery", unidad: "conteo" },
+  { value: "hospedaje", label: "Hospedaje", unidad: "conteo" },
+  { value: "clientes", label: "Clientes nuevos", unidad: "conteo" },
+];
+
+// Valor de una métrica para un negocio en un mes calendario específico.
+// "ingresos" combina reservas atendidas + pedidos entregados + hospedaje (si
+// es Umaru) — mismo criterio que ingresosTotalesPeriodo(); las demás son un
+// conteo simple de esa actividad puntual.
+function valorDelMes(negocioId: NegocioId, metrica: MetricaEstadistica, anio: number, mes: number): number {
+  const enElMes = (fechaISO: string) => {
+    const f = new Date(fechaISO);
+    return f.getFullYear() === anio && f.getMonth() === mes;
+  };
+  switch (metrica) {
+    case "ingresos": {
+      const reservas = reservasPorNegocio(negocioId).filter((r) => r.estado === "atendida" && enElMes(r.fecha)).reduce((a, r) => a + (r.monto ?? 0), 0);
+      const pedidos = PEDIDOS.filter((p) => p.negocioId === negocioId && p.estado === "entregado" && enElMes(p.fecha)).reduce((a, p) => a + p.monto, 0);
+      const hospedaje = HOSPEDAJES.filter((h) => h.negocioId === negocioId && enElMes(h.checkIn)).reduce((a, h) => a + nochesDe(h) * h.tarifaNoche, 0);
+      return reservas + pedidos + hospedaje;
+    }
+    case "reservas":
+      return reservasPorNegocio(negocioId).filter((r) => enElMes(r.fecha)).length;
+    case "delivery":
+      return PEDIDOS.filter((p) => p.negocioId === negocioId && enElMes(p.fecha)).length;
+    case "hospedaje":
+      return HOSPEDAJES.filter((h) => h.negocioId === negocioId && enElMes(h.checkIn)).length;
+    case "clientes":
+      return clientesIndividualesPorNegocio(negocioId).filter((c) => enElMes(c.fechaRegistro)).length;
+  }
+}
+
+export interface PuntoMensual { mes: string; etiqueta: string; valor: number; [key: string]: string | number; }
+
+// Tendencia mensual de la métrica elegida, últimos `meses` (12 por defecto).
+// `etiqueta` incluye el año ("Dic 25") porque la ventana de 12 meses cruza
+// dos años calendario — sin el año, un mes como diciembre puede leerse como
+// "el diciembre que viene" en vez del que ya pasó dentro de la ventana.
+export function serieMensualMetrica(negocioId: NegocioId, metrica: MetricaEstadistica, meses = 12): PuntoMensual[] {
+  const out: PuntoMensual[] = [];
+  for (let i = meses - 1; i >= 0; i--) {
+    const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
+    const mesLabel = MESES_LABEL[fecha.getMonth()];
+    out.push({
+      mes: mesLabel,
+      etiqueta: `${mesLabel} ${String(fecha.getFullYear()).slice(2)}`,
+      valor: valorDelMes(negocioId, metrica, fecha.getFullYear(), fecha.getMonth()),
+    });
+  }
+  return out;
+}
+
+// El mes con más y con menos actividad de la métrica elegida, de los
+// últimos 12 — para la fila de insights destacados del módulo Estadísticas.
+export function mejorYPeorMesMetrica(negocioId: NegocioId, metrica: MetricaEstadistica): { mejor: PuntoMensual | null; peor: PuntoMensual | null } {
+  const conDatos = serieMensualMetrica(negocioId, metrica, 12).filter((p) => p.valor > 0);
+  if (conDatos.length === 0) return { mejor: null, peor: null };
+  return {
+    mejor: conDatos.reduce((a, b) => (b.valor > a.valor ? b : a)),
+    peor: conDatos.reduce((a, b) => (b.valor < a.valor ? b : a)),
+  };
+}
+
+const DIAS_SEMANA_LABEL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]; // orden de Date.getDay()
+
+export interface PuntoDiaSemana { dia: string; valor: number; [key: string]: string | number; }
+
+// Actividad de la métrica elegida, agrupada por día de la semana sobre los
+// últimos `meses` — muestra si el negocio vende más el fin de semana o entre
+// semana. Se devuelve en orden Lunes→Domingo para que el gráfico se lea como
+// una semana normal, no como empieza Date.getDay() (domingo=0).
+export function actividadPorDiaSemanaMetrica(negocioId: NegocioId, metrica: MetricaEstadistica, meses = 12): PuntoDiaSemana[] {
+  const desde = new Date(BASE_DATE);
+  desde.setMonth(desde.getMonth() - meses);
+  const conteos = Array.from({ length: 7 }, () => 0);
+  const sumarPorDia = (fechaISO: string, valor = 1) => {
+    const f = new Date(fechaISO);
+    if (f >= desde && f <= BASE_DATE) conteos[f.getDay()] += valor;
+  };
+
+  switch (metrica) {
+    case "ingresos":
+      reservasPorNegocio(negocioId).filter((r) => r.estado === "atendida").forEach((r) => sumarPorDia(r.fecha, r.monto ?? 0));
+      PEDIDOS.filter((p) => p.negocioId === negocioId && p.estado === "entregado").forEach((p) => sumarPorDia(p.fecha, p.monto));
+      HOSPEDAJES.filter((h) => h.negocioId === negocioId).forEach((h) => sumarPorDia(h.checkIn, nochesDe(h) * h.tarifaNoche));
+      break;
+    case "reservas":
+      reservasPorNegocio(negocioId).forEach((r) => sumarPorDia(r.fecha));
+      break;
+    case "delivery":
+      PEDIDOS.filter((p) => p.negocioId === negocioId).forEach((p) => sumarPorDia(p.fecha));
+      break;
+    case "hospedaje":
+      HOSPEDAJES.filter((h) => h.negocioId === negocioId).forEach((h) => sumarPorDia(h.checkIn));
+      break;
+    case "clientes":
+      clientesIndividualesPorNegocio(negocioId).forEach((c) => sumarPorDia(c.fechaRegistro));
+      break;
+  }
+
+  const ordenLunesADomingo = [1, 2, 3, 4, 5, 6, 0];
+  return ordenLunesADomingo.map((dia) => ({ dia: DIAS_SEMANA_LABEL[dia], valor: conteos[dia] }));
+}
+
+// El mejor Y el peor día de la semana de la métrica elegida — Mijael pidió
+// explícitamente poder ver también "los días malos", no solo el mejor.
+export function mejorYPeorDiaSemanaMetrica(negocioId: NegocioId, metrica: MetricaEstadistica): { mejor: PuntoDiaSemana | null; peor: PuntoDiaSemana | null } {
+  const conDatos = actividadPorDiaSemanaMetrica(negocioId, metrica).filter((d) => d.valor > 0);
+  if (conDatos.length === 0) return { mejor: null, peor: null };
+  return {
+    mejor: conDatos.reduce((a, b) => (b.valor > a.valor ? b : a)),
+    peor: conDatos.reduce((a, b) => (b.valor < a.valor ? b : a)),
   };
 }

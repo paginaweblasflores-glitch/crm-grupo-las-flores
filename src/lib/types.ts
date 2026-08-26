@@ -12,9 +12,12 @@ export interface Negocio {
   descripcionEstado: string;
 }
 
-// Los tres perfiles de permisos. Cualquier cuenta nueva que cree Betsy se
+// Los tres perfiles de permisos. Cualquier cuenta nueva que cree Mijael se
 // asigna a uno de estos perfiles y hereda automáticamente sus permisos.
-export type RolTipo = "direccion" | "administracion" | "ventas";
+// - direccion: socios/directorio en Lima — solo un panel de métricas, cero acciones.
+// - gerencial: Mijael — control operativo total de los 3 negocios.
+// - ventas: el equipo de cada negocio (registra clientes, reservas, delivery, cumpleaños).
+export type RolTipo = "direccion" | "gerencial" | "ventas";
 
 export interface Usuario {
   id: string;
@@ -26,7 +29,7 @@ export interface Usuario {
   usuario: string; // usuario de acceso
   contrasena: string; // solo para el prototipo — en producción esto lo maneja Supabase Auth
   negocioId: NegocioId; // negocio al que pertenece la cuenta (Dirección no tiene uno fijo, ve los tres)
-  creadoPor?: string; // id de quién creó la cuenta (siempre Betsy, para cuentas nuevas)
+  creadoPor?: string; // id de quién creó la cuenta (siempre Mijael/Gerencial, para cuentas nuevas)
 }
 
 export type TipoDocumento = "DNI" | "Carné de extranjería" | "Pasaporte";
@@ -96,7 +99,9 @@ export interface Reserva {
   estado: EstadoReserva;
   monto?: number;
   registradoEn: string; // ISO timestamp de creación
-  requiereAutorizacion: boolean; // eventos grandes: los autoriza Administración, no Ventas
+  requiereAutorizacion: boolean; // eventos grandes: los autoriza Gerencial, no Ventas
+  registradoPor?: string; // nombre de quién la creó — para el comparativo de equipo
+  enviadoAWeb?: boolean; // simula el envío al CRM real de la web de Las Flores
 }
 
 export type EstadoPedido = "en-preparacion" | "en-camino" | "entregado" | "cancelado";
@@ -112,6 +117,8 @@ export interface Pedido {
   canal: CanalContacto;
   estado: EstadoPedido;
   registradoEn: string;
+  registradoPor?: string;
+  enviadoAWeb?: boolean;
 }
 
 export interface Hospedaje {
@@ -127,8 +134,7 @@ export interface Hospedaje {
 }
 
 // --- Seguimiento de cumpleaños (hoja "SEGUIMIENTO") -------------------------
-// Este módulo lo opera Ventas día a día; Administración supervisa y aprueba;
-// Dirección solo ve los números agregados (Capítulo 14 del Plan de CRM, ajustado).
+// Este módulo lo opera Ventas día a día; Gerencial supervisa y aprueba.
 export interface SeguimientoCumple {
   id: string;
   negocioId: NegocioId;
@@ -153,6 +159,23 @@ export interface Campana {
   totalClientes: number;
   enviados: number;
   canal: "whatsapp" | "instagram" | "facebook";
+  // Campos de las campañas creadas desde el sistema (las históricas del mock no los tienen).
+  mensaje?: string;
+  publico?: "todos" | "natural" | "corporativo";
+  registradoPor?: string;
+  festividadId?: string;
+}
+
+// --- Días festivos y fechas comerciales -------------------------------------
+export type TipoFestividad = "religioso" | "civico" | "comercial";
+
+export interface Festividad {
+  id: string;
+  nombre: string;
+  mesDia: string; // "MM-DD" — se repite cada año
+  tipo: TipoFestividad;
+  alcance: "todas" | NegocioId[];
+  descripcion?: string;
 }
 
 export type FrecuenciaClasificacion = "nuevo" | "ocasional" | "frecuente" | "inactivo";

@@ -25,8 +25,8 @@ export default function EstrategiasPage() {
           <Card>
             <EmptyState
               icon={<Lock size={22} />}
-              title="Este módulo no está disponible para Ventas"
-              description="Estrategias es una herramienta de decisión para Dirección y Administración."
+              title="Este módulo no está disponible para tu rol"
+              description="Estrategias es una herramienta de decisión para Gerencial."
             />
           </Card>
         </main>

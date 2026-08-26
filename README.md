@@ -34,26 +34,19 @@ sin tocar variables de entorno.
 
 ## Cómo está dividido el trabajo entre los tres roles
 
-Esto es lo central del ajuste que se le hizo al prototipo: cada rol tiene un trabajo
-distinto, no solo una pantalla distinta.
+Modelo definido por Mijael junto a Arturo y Luis (reunión de diseño de su propio CRM),
+reemplaza el modelo anterior de Dirección/Administración/Ventas.
 
 | Rol | Cómo trabaja | Qué NO hace |
 |---|---|---|
-| **Dirección** (Mijael) | Solo números y estadísticas para decidir: cada módulo que ve (Tablero, Clientes, Reservas, Delivery, Hospedaje, Cumpleaños, Campañas) tiene sus propios **filtros Diario/Semanal/Mensual/Anual** (que sí recalculan cada número, incluidos los que antes quedaban fijos), gráficos (barras y donas) y botón **"Exportar reporte (PDF)"**. Tiene **dos tableros**: "Tablero general" (los tres negocios juntos) y "Tablero — [negocio activo]" (el mismo tipo de resumen pero de un solo negocio, el que tenga seleccionado arriba). Es el único rol que ve y compara los tres negocios, **crea el primer administrador** de un negocio nuevo (Umaru, Mamina) cuando todavía no tiene a quién delegarle esa tarea, y puede usar **Estrategias** para pedir ideas de campaña. | No registra clientes, no responde chats, no autoriza nada, y no arma el resto de un equipo — eso lo hace el administrador que él mismo crea. |
-| **Administración** (Betsy) | Hace la mayor parte de la gestión de Restaurante Las Flores: acceso completo a todos los módulos, **autoriza** las reservas de evento que pide Ventas, **aprueba** el seguimiento de cumpleaños del mes, **crea las cuentas** del equipo (módulo Usuarios), y también puede usar **Estrategias** para armar campañas. | No gestiona Hotel Umaru — es un negocio grande e independiente, con personal propio. |
-| **Ventas** (Melisa) | Es quien más módulos usa día a día: registra clientes nuevos directo en el sistema (ya no en Excel), gestiona reservas y delivery, y lleva el seguimiento y el chat de cumpleaños. | No ve montos ni cifras de dinero en Cumpleaños (eso es de Administración/Dirección), y no puede autorizar reservas de evento grandes — solo pedirlas. |
+| **Dirección** (socios en Lima) | **Un solo panel** de crecimiento del grupo — clientes totales, ingresos consolidados, % de crecimiento, negocios activos, gráfico de tendencia y comparativo por negocio. Nada por módulo (no hay Clientes, Reservas, Delivery, etc. en su menú). | Cero acciones — no registra, no responde, no autoriza, no entra a ningún módulo operativo. |
+| **Gerencial** (Mijael) | Control operativo total de los 3 negocios: hace todo lo que hace Ventas (registra clientes, crea reservas/delivery, sigue cumpleaños, chatea) **más** crea/edita/elimina campañas, gestiona Días Festivos, crea cuentas de Ventas para cualquiera de los 3 negocios, autoriza reservas grandes, aprueba el mes de cumpleaños, y compara la actividad de su equipo (módulo Usuarios). Puede cambiar de negocio y operar en cualquiera de los tres. Tiene acceso a **Estrategias**. | — |
+| **Ventas** (el equipo de cada negocio) | Registra clientes, crea reservas y pedidos de delivery (quedan marcados "enviado a la web"), lleva el seguimiento y el chat de cumpleaños, y **ve** las campañas de su negocio (no las crea ni edita). | No ve montos agregados, no entra a Usuarios/Estrategias/Días Festivos, no autoriza nada — todo eso es de Gerencial. Cada cuenta queda fija a un solo negocio. |
 
-Betsy y Melisa trabajan **solo para Restaurante Las Flores** — por eso no tienen selector
-de negocio: el sistema las deja fijas en Las Flores. Solo Dirección puede cambiar entre
-Las Flores, Hotel Umaru y Mamina Restobar. Cuando Umaru o Mamina necesiten su propio
-equipo, **Mijael entra a Usuarios y crea el primer Administración de ese negocio**
-(el formulario ya viene con ese negocio y ese rol preseleccionados); de ahí en adelante,
-ese administrador arma el resto de su equipo (Ventas y otros administradores) — igual
-que Betsy hoy, cada uno queda limitado a crear cuentas para su propio negocio, con una
-lista de **cargos sugeridos según el tipo de negocio** (Vendedor/a, Mesero/a, Anfitrión/a,
-Cajero/a para restaurante; Recepcionista, Conserje, Botones para hotel; Administrador/a
-de sede, Gerente de sede, Supervisor/a para Administración), con opción "Otro" para casos
-puntuales.
+Cuando un negocio nuevo necesita su primer empleado, **Mijael entra a Usuarios y crea la
+cuenta de Ventas** para ese negocio (selector de negocio + cargos sugeridos según el tipo:
+Vendedor/a, Mesero/a, Anfitrión/a, Cajero/a para restaurante; Recepcionista, Conserje,
+Botones para hotel), con opción "Otro" para casos puntuales.
 
 La matriz completa de permisos está en `src/lib/permissions.ts`.
 
@@ -61,27 +54,30 @@ La matriz completa de permisos está en `src/lib/permissions.ts`.
 
 | Usuario | Contraseña | Rol |
 |---|---|---|
-| `mijael` | `direccion2026` | Dirección |
-| `betsy` | `admin2026` | Administración |
-| `melisa` | `ventas2026` | Ventas |
+| `socios` | `direccion2026` | Dirección (Lima) |
+| `mijael` | `gerencial2026` | Gerencial |
+| `betsy` | `ventas2026` | Ventas — Restaurante Las Flores |
+| `melisa` | `ventas2026` | Ventas — Restaurante Las Flores |
+| `carla` | `umaru2026` | Ventas — Hotel Umaru |
 
-Betsy (o el administrador de cada negocio) y Mijael pueden crear cuentas nuevas desde el
-módulo **Usuarios** — quedan disponibles para iniciar sesión de inmediato, en la misma
-pantalla de login.
+Mijael (Gerencial) puede crear cuentas de Ventas nuevas desde el módulo **Usuarios** —
+quedan disponibles para iniciar sesión de inmediato, en la misma pantalla de login.
 
 ## Módulos
 
-- **Tablero general** — vista ejecutiva de Dirección con los **tres negocios juntos**: filtros Diario/Semanal/Mensual/Anual, comparación de cada KPI contra el periodo anterior (↑/↓ %), gráfico de tendencia, comparativo por negocio y **"Exportar reporte (PDF)"**. Para Administración/Ventas, ese mismo ítem del menú se llama solo "Tablero" y es la vista operativa completa de su negocio (gráfico de reservas y delivery, conversión, actividad reciente).
-- **Tablero del negocio** — solo Dirección: el mismo tipo de resumen ejecutivo (filtros por periodo, KPIs con tendencia, gráfico, cumpleaños del mes) pero de **un solo negocio a la vez** — el que tenga seleccionado en el switcher de arriba. Útil para revisar Umaru o Las Flores por separado sin mezclar los números con el resto del grupo.
-- **Clientes** — ficha 360° (individuales y corporativos) para Administración/Ventas, con botón **"Nuevo cliente"** (selector Natural/Corporativo, campos investigados sobre el estándar del Excel, **validación real**: nombres/apellidos/representante solo letras, RUC de 11 dígitos que empieza con 1 o 2, celular de 9 dígitos que empieza con 9, y **no permite registrar un celular que ya pertenece a otro cliente de cualquiera de los 3 negocios**); botón de **WhatsApp directo** (`wa.me`) junto a cada cliente para escribirle sin copiar el número. Para Dirección, resumen con filtros por periodo — clientes individuales y corporativos nuevos **de ese periodo** (0 si no hubo ninguno ese día/semana/mes), gráfico y dona de origen del cliente.
-- **Reservas** — flujo de **autorización** (los eventos grandes que registra Ventas quedan "Pendiente de Administración" hasta que Betsy los autoriza) para Administración/Ventas; para Dirección, filtros por periodo — reservas, confirmadas/atendidas y tasa de conversión, las tres recalculadas según el periodo elegido — gráfico y dona de estado (confirmada/atendida/cancelada/no llegó).
-- **Delivery** — solo Restaurante Las Flores; en cualquier otro negocio el módulo **no aparece en el menú y no muestra ninguna tarjeta** (redirección silenciosa al Tablero). Vista de Dirección con filtros por periodo, gráfico de pedidos y dona de estado.
-- **Hospedaje** — solo Hotel Umaru, mismo criterio de ocultamiento silencioso. Vista de Dirección con filtros por periodo, KPIs (estadías, noches, ingreso) y gráfico.
-- **Cumpleaños** — lo opera Ventas: saludo **automático de verdad** (una plantilla y hora general editable, con `{nombre}`/`{negocio}`, que se puede **personalizar por cliente**); cuando llega la hora programada y el cliente cumple años hoy, el sistema le escribe el saludo solo — sin que nadie tenga que abrir el chat — y queda visible en Mensajería como cualquier otro mensaje enviado. Un **calendario mensual** muestra cuántos cumpleaños hay cada día; al elegir un día se ve quién cumple, a qué hora se le escribe y con qué mensaje, editable ahí mismo. Un cliente nuevo que Ventas registra este mes entra automáticamente a este seguimiento, con el mensaje general ya "armado" sin configurar nada. Administración supervisa y aprueba (botón "Aprobar mes", ve los montos) pero no edita el saludo. Dirección ve los tres números que le importan (enviados, personas que reservaron, monto generado) más un **embudo** (reservaron / respondieron sin reservar / enviado sin respuesta / sin enviar).
-- **Mensajería** — chat simulado por cliente con toggle **Manual / Automático (API)** (en automático, el sistema simula la respuesta del cliente), más una pestaña de **Mensajes programados**: la plantilla de cumpleaños ya personalizada por cliente (mismo patrón que una plantilla real aprobada de WhatsApp Business API) con su estado (Programado / Enviado / Respondido / Reserva confirmada). Algunos clientes ya traen una conversación completa "sembrada" — saludo enviado hace unos días, respuesta y hasta reserva confirmada — para mostrar cómo se ve un caso avanzado, no solo casilleros vacíos.
-- **Usuarios** — Administración crea cuentas de Ventas o Administración **para su propio negocio**; Dirección (Mijael) crea el **primer Administración de cualquier negocio** del grupo (formulario con negocio y rol preseleccionados). El campo Cargo es un **selector con opciones según el rol y el tipo de negocio** (restaurante, hotel, o Administración), con "Otro" para casos puntuales.
-- **Campañas** — catálogos y promociones mensuales; para Dirección, KPIs (campañas del año, envíos, alcance promedio), gráfico de envíos por mes y dona de canal más usado, con exportación a PDF.
-- **Estrategias** — Dirección y Administración (no Ventas): un chat estilo asistente para pedir ideas de campaña, revisar cumpleaños, ticket promedio, reservas, delivery o de dónde vienen los clientes, con **chips de sugerencia** para empezar rápido. Las respuestas se generan con los datos reales del negocio activo (`lib/estrategias.ts`), pero siguen siendo **simuladas** — no hay una API de IA real conectada todavía. Tiene un ícono de engranaje discreto para "conectar" un proveedor (OpenAI/Anthropic/Otro); la clave se guarda solo en `localStorage` del navegador y nunca sale de ahí, como paso pendiente junto con Supabase.
+- **Panel Ejecutivo** (Dirección) — el único ítem de menú que ve este rol: crecimiento del grupo en un solo panel (clientes totales, ingresos consolidados, % de crecimiento, negocios activos), filtros Diario/Semanal/Mensual/Anual, gráfico de tendencia, comparativo por negocio y **"Exportar reporte (PDF)"**. Sin tablas, sin módulos por separado — así lo pidió Mijael explícitamente ("ya no por módulos como delivery o reserva, más general").
+- **Panel Principal** (Gerencial) — reestructurado como un CRM, no como un reporte de punto de venta: primero lo accionable, después el dinero, después los clientes, y la relación con el cliente (retención, origen) antes que los patrones de largo plazo, no después. Orden real: (1) aviso de reservas pendientes de autorización; (2) **"Pulso financiero del periodo"** — filtro Diario/Semanal/Mensual/Anual con 4 tarjetas (ingresos totales, ingresos delivery u hospedaje según el negocio, reservas del periodo, **ticket promedio — ahora sí filtrado por periodo**, antes era el único de los 4 que no respondía al filtro); (3) **"Tu base de clientes"** — Clientes totales, Clientes corporativos, Próximos cumpleaños, Días festivos; (4) "Clientes por tienda" (el único cuadro que compara los 3 negocios a la vez) y "Próximas festividades"; (5) **"Relación con el cliente"** — de dónde vienen los clientes y qué tan seguido vuelven (reusa la clasificación de `lib/frecuencia.ts`) — es la sección más "CRM" del panel, por eso va antes de los patrones de 12 meses, no como cierre; (6) **"Mejores y peores momentos"** — mejor/peor mes, mejor/peor día, siempre por ingresos, sin filtro (criterio estándar de "mejor día de ventas" en cualquier restaurante — que el mismo dato no cambie de significado según una pestaña es lo que le da confianza al número); (7) una sola tarjeta de actividad con switch **"Esta semana" / "Patrón por día (12 meses)"** — antes eran dos gráficos separados que se veían como el mismo dato duplicado; en "Esta semana" se ve la tendencia de fechas reales (con leyenda, cambia a "Reservas y hospedaje" en vez de delivery para Umaru, que no lo tiene), en "Patrón por día" aparece el selector Ingresos/Reservas/Delivery-u-Hospedaje/Clientes nuevos. Los datos simulados tienen 13 meses de historial con estacionalidad real de Ayacucho (Semana Santa y Carnavales son los meses fuertes, no diciembre — coinciden con las fechas ya cargadas en `mock/festividades.ts`). "Exportar PDF" vive en la barra superior, no dentro del panel. Para Ventas, ese mismo ítem se llama "Tablero" y es la vista operativa de su propio negocio (gráfico de reservas y delivery, conversión, actividad reciente).
+- **Clientes** — ficha 360° (individuales y corporativos), con botón **"Nuevo cliente"** (selector Natural/Corporativo, campos investigados sobre el estándar del Excel, **validación real**: nombres/apellidos/representante solo letras, RUC de 11 dígitos que empieza con 1 o 2, celular de 9 dígitos que empieza con 9, y **no permite registrar un celular que ya pertenece a otro cliente de cualquiera de los 3 negocios**); botón de **WhatsApp directo** (`wa.me`) junto a cada cliente.
+- **Reservas** — flujo de **autorización** (los eventos grandes quedan "Pendiente de Gerencial" hasta que Mijael los autoriza); botón **"Nueva reserva"** para Ventas/Gerencial — al guardar queda marcada "Enviada a la web" (simula la sincronización con el CRM real de la web de Las Flores).
+- **Delivery** — solo Restaurante Las Flores; en cualquier otro negocio el módulo **no aparece en el menú** (redirección silenciosa). Botón **"Nuevo pedido"**, también marcado "Enviado a la web" al crearse.
+- **Hospedaje** — solo Hotel Umaru, mismo criterio de ocultamiento silencioso.
+- **Cumpleaños** — saludo **automático de verdad** (plantilla y hora general editable, con `{nombre}`/`{negocio}`, personalizable por cliente); cuando llega la hora programada y el cliente cumple años hoy, el sistema le escribe el saludo solo y queda visible en Mensajería. **Calendario mensual** — al elegir un día se ve quién cumple, a qué hora se le escribe y con qué mensaje, editable ahí mismo. Un cliente nuevo entra automáticamente a este seguimiento. Gerencial supervisa y aprueba el mes (ve los montos).
+- **Mensajería** — chat simulado por cliente con toggle **Manual / Automático (API)**, más **Mensajes programados** con la plantilla de cumpleaños personalizada y su estado. Algunos clientes ya traen una conversación "sembrada" para mostrar un caso avanzado.
+- **Campañas** — **control total para Gerencial** (crear, editar, eliminar; público objetivo natural/corporativo/todos, canal, mensaje — "enviar" es simulado, marca la campaña como enviada a toda la base elegida); Ventas ve la lista, no la edita. KPIs (campañas del año, envíos, alcance promedio), gráfico de envíos por mes y dona de canal más usado.
+- **Días Festivos** (solo Gerencial) — fechas comerciales/religiosas/cívicas del grupo (Carnavales, Semana Santa, Día de la Madre, Día del Padre, Fiestas Patrias, aniversario por negocio, 9 de diciembre, Navidad, Año Nuevo), con **CRUD completo** y un botón **"Crear campaña para esta fecha"** que abre el formulario de Campañas ya prellenado con el nombre.
+- **Usuarios** (solo Gerencial) — gestión de cuentas: crea, **edita y elimina** cuentas de Ventas para cualquiera de los 3 negocios. Solo las cuentas creadas desde aquí son editables/eliminables — las 5 cuentas base del prototipo se muestran como "Cuenta base", de solo lectura.
+- **Mi Equipo** (solo Gerencial) — el detalle de actividad que antes vivía en Usuarios: clientes naturales/corporativos registrados, reservas y pedidos gestionados por cada persona de Ventas (usa el campo `registradoPor` que ya se guarda al crear un cliente, reserva o pedido), comparativo visual de participación y trofeo para quien esté más activo, negocio por negocio.
+- **Estrategias** (solo Gerencial) — chat estilo asistente para pedir ideas de campaña, revisar cumpleaños, ticket promedio, reservas, delivery o de dónde vienen los clientes, con chips de sugerencia. Respuestas generadas con los datos reales del negocio activo (`lib/estrategias.ts`), pero **simuladas** — sin API de IA real conectada. Ícono de engranaje para "conectar" un proveedor (OpenAI/Anthropic/Otro); la clave solo se guarda en `localStorage`.
 
 ## Estructura del proyecto
 
@@ -90,22 +86,31 @@ src/
   app/
     login/               → usuario y contraseña (sesión simulada)
     (app)/                → páginas internas, protegidas por sesión
-      dashboard/ tablero-negocio/ clientes/ clientes/[id]/ reservas/ delivery/
-      hospedaje/ cumpleanos/ mensajeria/ usuarios/ campanas/ estrategias/
+      dashboard/ clientes/ clientes/[id]/ reservas/ delivery/ hospedaje/
+      cumpleanos/ mensajeria/ usuarios/ equipo/ campanas/
+      estrategias/ dias-festivos/
   components/
-    layout/                → Sidebar (oculta Delivery/Hospedaje/Tablero-negocio según
-                              rol y negocio, arma el label dinámico), Topbar
-    ui/                     → Card, Badge, Table, StatTile, ExportarPDFBoton…
-    dashboard/               → tablero ejecutivo, PeriodoSelector (filtro día/semana/mes/año)
-    charts/                   → BarChartSerie y DonutChart (recharts, reutilizables)
+    layout/                → Sidebar (agrupa los módulos por prioridad — Principal /
+                              Operación diaria / Relación con el cliente / Gestión —
+                              y los oculta según rol y negocio), Topbar (selector de
+                              negocio + slot de acción, ej. "Exportar PDF")
+    ui/                     → Card, Badge, Table, StatTile, ExportarPDFBoton, Paginacion…
+    dashboard/               → PanelEjecutivo (Dirección), PanelGerencial (Gerencial),
+                                DashboardNegocio (Ventas), PeriodoSelector
+    charts/                   → BarChartSerie, BarChartMensual y DonutChart
+                                 (recharts, reutilizables entre módulos)
   lib/
-    types.ts                 → modelo de datos (clientes, reservas, usuarios, mensajes…)
-    permissions.ts            → quién ve, edita o autoriza cada módulo
-    store.ts                   → acciones simuladas en localStorage (crear usuario,
-                                  registrar cliente, autorizar reserva, chatear,
-                                  chat de Estrategias, config de la API de IA…)
-    frecuencia.ts                → cálculo de "cliente nuevo / ocasional / frecuente / inactivo"
-    metrics.ts                    → KPIs y series para los tableros, todos filtrables por periodo
+    types.ts                 → modelo de datos (clientes, reservas, usuarios, mensajes,
+                                festividades…)
+    permissions.ts            → quién ve, edita o autoriza cada módulo — matriz por
+                                 RolTipo ("direccion" | "gerencial" | "ventas")
+    store.ts                   → acciones simuladas en localStorage (crear/editar/eliminar
+                                  usuario, registrar cliente, crear reserva/pedido/campaña,
+                                  autorizar reserva, chatear, festividades…)
+    frecuencia.ts                → cálculo de "cliente nuevo / ocasional / frecuente /
+                                    inactivo" y su distribución agregada por negocio
+    metrics.ts                    → KPIs y series para los tableros (Panel Ejecutivo, Panel
+                                     Principal), filtrables por periodo o por métrica
     estrategias.ts                 → respuestas simuladas del asistente de Estrategias,
                                       armadas con los datos reales del negocio
     export-csv.ts                  → exportación real a CSV/Excel, sin backend
@@ -125,6 +130,13 @@ teléfonos son ficticios** — no se usó ningún dato real de clientes.
 Reservas, delivery, hospedaje y el seguimiento de cumpleaños (saludo, visto, respuesta,
 reservación, adelanto, monto) son simulados, con algunos cumpleaños fijados a propósito
 en "hoy" y en los próximos días para que la demo siempre tenga algo que mostrar.
+
+Reservas, delivery y hospedaje cubren **~13 meses de historial** (antes solo 1-3 meses,
+insuficiente para ver patrones por mes) con una **estacionalidad intencional** en
+`lib/mock/seed.ts` (`randDiaConPeso`): diciembre es el mes fuerte (fiestas), febrero el más
+flojo, y viernes/sábado superan claramente a los días de semana. La semilla del generador
+es fija (`mulberry32(20260825)`), así que estos patrones son siempre los mismos — no
+cambian entre sesiones ni entre builds.
 
 ## Qué está simulado y qué falta conectar
 
@@ -170,18 +182,12 @@ Aun así, se aplicaron mejoras reales que ayudan en ambos casos:
 - Un par de listas que se recalculaban en cada tecleo (el buscador de Mensajería) ahora
   usan `useMemo` para no rehacer el filtro/orden si nada relevante cambió.
 
-## Pendiente del feedback de Mijael (documento "Retroalimentación CRM – SFIDA")
+## Feedback de Mijael (documento "Retroalimentación CRM – SFIDA") — completo
 
-Ya están implementadas las validaciones de RUC, celular y duplicados, la clasificación
-Natural/Corporativo, y el enlace directo a WhatsApp (ver sección Clientes arriba). Quedan
-dos puntos del documento sin construir todavía:
-
-- **Campañas masivas** — seleccionar un segmento de clientes (por tipo, origen, distrito,
-  frecuencia) y armar una campaña para todo el grupo de una vez, en vez de ir cliente por
-  cliente.
-- **Calendario de campañas comerciales** — fechas fijas del año (Carnavales, Semana Santa,
-  Día de la Madre, Día del Padre, Fiestas Patrias, aniversario, 9 de diciembre, Navidad,
-  Año Nuevo) donde asociar una promoción, un público objetivo y enviarla.
+Las validaciones de RUC/celular/duplicados, la clasificación Natural/Corporativo, el
+enlace directo a WhatsApp, las campañas masivas (segmento + público objetivo + envío
+simulado, módulo Campañas) y el calendario de fechas comerciales (módulo Días Festivos,
+con botón directo a "crear campaña para esta fecha") ya están implementados.
 
 ## Próximo paso
 

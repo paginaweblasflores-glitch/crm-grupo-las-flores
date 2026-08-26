@@ -96,10 +96,23 @@ function clientesConCumpleFijo(negocioId: NegocioId, offset: number): ClienteInd
   }));
 }
 
+// Atribuye clientes ya existentes a una persona de Ventas — así el
+// comparativo de equipo de Gerencial no aparece vacío antes de que alguien
+// registre un cliente nuevo desde el sistema.
+function atribuirA(clientes: ClienteIndividual[], nombre: string): ClienteIndividual[] {
+  return clientes.map((c) => ({ ...c, registradoPor: nombre }));
+}
+
+const LAS_FLORES_INDIVIDUALES = generarClientesIndividuales("las-flores", 52, 0);
+const UMARU_INDIVIDUALES = generarClientesIndividuales("umaru", 38, 0);
+
 export const CLIENTES_INDIVIDUALES: ClienteIndividual[] = [
-  ...generarClientesIndividuales("las-flores", 52, 0),
+  ...atribuirA(LAS_FLORES_INDIVIDUALES.slice(0, 18), "Betsy"),
+  ...atribuirA(LAS_FLORES_INDIVIDUALES.slice(18, 30), "Melisa"),
+  ...LAS_FLORES_INDIVIDUALES.slice(30),
   ...clientesConCumpleFijo("las-flores", 52),
-  ...generarClientesIndividuales("umaru", 38, 0),
+  ...atribuirA(UMARU_INDIVIDUALES.slice(0, 15), "Carla Huamán"),
+  ...UMARU_INDIVIDUALES.slice(15),
   ...clientesConCumpleFijo("umaru", 38),
 ];
 

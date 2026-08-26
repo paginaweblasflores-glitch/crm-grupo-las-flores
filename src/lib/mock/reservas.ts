@@ -1,6 +1,6 @@
 import { Reserva, NegocioId, EstadoReserva, CanalContacto } from "@/lib/types";
 import { CLIENTES_INDIVIDUALES } from "./clientes";
-import { pick, randInt, daysAgoISO } from "./seed";
+import { pick, randInt, randDiaConPeso, daysAgoISO } from "./seed";
 
 const ESTADOS: EstadoReserva[] = ["confirmada", "atendida", "atendida", "atendida", "cancelada", "no-llego"];
 const CANALES: CanalContacto[] = ["web", "web", "whatsapp", "telefono"];
@@ -11,7 +11,7 @@ function generarReservas(negocioId: NegocioId, cantidad: number): Reserva[] {
   const out: Reserva[] = [];
   for (let i = 0; i < cantidad; i++) {
     const cliente = pick(clientes);
-    const diasAtras = randInt(-6, 75); // algunas a futuro (confirmadas), la mayoría pasadas
+    const diasAtras = randDiaConPeso(-6, 400); // algunas a futuro (confirmadas), 13 meses de historial con estacionalidad
     const fecha = daysAgoISO(diasAtras);
     const personas = randInt(2, 10);
     const estado: EstadoReserva = diasAtras < 0 ? "confirmada" : pick(ESTADOS);
@@ -29,7 +29,7 @@ function generarReservas(negocioId: NegocioId, cantidad: number): Reserva[] {
       estado,
       monto: estado === "atendida" ? randInt(60, 480) : undefined,
       registradoEn: daysAgoISO(diasAtras + randInt(1, 4)),
-      // Los eventos grandes los pide Ventas, pero los autoriza Administración.
+      // Los eventos grandes los pide Ventas, pero los autoriza Gerencial.
       requiereAutorizacion: tipo === "evento",
     });
   }
@@ -37,8 +37,8 @@ function generarReservas(negocioId: NegocioId, cantidad: number): Reserva[] {
 }
 
 export const RESERVAS: Reserva[] = [
-  ...generarReservas("las-flores", 70),
-  ...generarReservas("umaru", 8), // Umaru: solo eventos puntuales del salón, no es su fuerte
+  ...generarReservas("las-flores", 360), // ~13 meses de historial, densidad similar a la de antes por semana
+  ...generarReservas("umaru", 40), // Umaru: solo eventos puntuales del salón, no es su fuerte
 ];
 
 export function reservasPorNegocio(negocioId: NegocioId): Reserva[] {

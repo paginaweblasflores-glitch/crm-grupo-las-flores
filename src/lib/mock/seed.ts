@@ -66,3 +66,57 @@ export function randRuc(): string {
 export function pad(n: number, len = 2): string {
   return String(n).padStart(len, "0");
 }
+
+// --- Estacionalidad para reservas/pedidos/hospedaje -------------------------
+// Sin esto, "qué mes vende más" o "qué día de la semana vende más" saldría
+// puro ruido — con la semilla fija ya es estable, pero no cuenta una historia
+// real. Los pesos siguen el calendario real de Ayacucho (mismas fechas que
+// mock/festividades.ts), no una temporada genérica de restaurante: Semana
+// Santa de Ayacucho es una de las más grandes y turísticas del Perú (cae en
+// marzo/abril — Semana Santa está fija el 04-02 en festividades.ts), y
+// Carnavales (14 de febrero) también trae bastante turismo a la ciudad — por
+// eso febrero y marzo/abril son meses FUERTES, no flojos. El mes más flojo es
+// setiembre: no hay ninguna festividad registrada cerca y ya pasó el impulso
+// de Fiestas Patrias (28 de julio). Diciembre sube por el 9 de diciembre
+// (Batalla de Ayacucho) y Navidad, pero no es el pico del año.
+const PESO_MES: Record<number, number> = {
+  0: 0.75,  // enero: post-fiestas, antes de Carnavales
+  1: 1.3,   // febrero: Carnavales (14-feb) — turismo real en Ayacucho
+  2: 1.3,   // marzo: previo a Semana Santa + aniversario Las Flores (15-mar)
+  3: 1.35,  // abril: Semana Santa (02-abr) — el evento turístico más grande del año
+  4: 0.9,   // mayo: Día de la Madre, sin más
+  5: 0.85,  // junio: temporada baja
+  6: 1.15,  // julio: Fiestas Patrias (28-jul)
+  7: 0.9,   // agosto: temporada regular
+  8: 0.7,   // setiembre: el mes más flojo, sin festividades cerca
+  9: 0.75,  // octubre: sigue flojo
+  10: 0.85, // noviembre: empieza a subir hacia diciembre
+  11: 1.2,  // diciembre: 9 de diciembre + Navidad
+};
+const PESO_MAX_MES = Math.max(...Object.values(PESO_MES));
+
+const PESO_DIA_SEMANA: Record<number, number> = {
+  0: 0.9, 1: 0.6, 2: 0.65, 3: 0.75, 4: 0.85, 5: 1.3, 6: 1.4,
+};
+const PESO_MAX_DIA = Math.max(...Object.values(PESO_DIA_SEMANA));
+
+const PESO_MAX = PESO_MAX_MES * PESO_MAX_DIA;
+
+function pesoFecha(fechaISO: string): number {
+  const d = new Date(fechaISO);
+  return PESO_MES[d.getMonth()] * PESO_DIA_SEMANA[d.getDay()];
+}
+
+// Elige un "días atrás" dentro del rango, favoreciendo por rechazo ponderado
+// las fechas que caen en meses/días de semana con más peso (ver arriba) — así
+// la cantidad total generada sigue siendo la pedida, pero distribuida con una
+// estacionalidad real en vez de uniforme.
+export function randDiaConPeso(minDias: number, maxDias: number): number {
+  let candidato = minDias;
+  for (let intento = 0; intento < 25; intento++) {
+    candidato = randInt(minDias, maxDias);
+    const peso = pesoFecha(daysAgoISO(candidato));
+    if (rand() < peso / PESO_MAX) return candidato;
+  }
+  return candidato;
+}

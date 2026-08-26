@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, CalendarCheck, CheckCircle2, XCircle, ShieldCheck } from "lucide-react";
+import { Download, CalendarCheck, CheckCircle2, XCircle, ShieldCheck, Plus, Globe2, X } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { accesoA, puedeAutorizar } from "@/lib/permissions";
-import { useAutorizaciones } from "@/lib/store";
+import { puedeAutorizar, puedeCrearReservasDelivery } from "@/lib/permissions";
+import { useAutorizaciones, useReservasCreadas } from "@/lib/store";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
@@ -13,14 +13,10 @@ import { Badge, type Tono } from "@/components/ui/Badge";
 import { Table, Thead, Th, Tr, Td } from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { reservasPorNegocio } from "@/lib/mock/reservas";
-import { reservasSemana, tasaConversionReservas, resumenPeriodo, reservasEstadoPorPeriodo, serieReservasPorPeriodo, distribucionEstadoReservas, Periodo, PERIODOS } from "@/lib/metrics";
+import { reservasSemana, tasaConversionReservas } from "@/lib/metrics";
 import { exportarCSV } from "@/lib/export-csv";
-import { EstadoReserva } from "@/lib/types";
-import { PeriodoSelector } from "@/components/dashboard/PeriodoSelector";
-import { ExportarPDFBoton } from "@/components/ui/ExportarPDFBoton";
-import dynamic from "next/dynamic";
-const BarChartSerie = dynamic(() => import("@/components/charts/BarChartSerie").then((m) => m.BarChartSerie), { ssr: false, loading: () => <div className="h-[220px]" /> });
-const DonutChart = dynamic(() => import("@/components/charts/DonutChart").then((m) => m.DonutChart), { ssr: false, loading: () => <div className="h-[220px]" /> });
+import { requerido, celularPeru, soloLetras, nombrePersona, Errores } from "@/lib/validacion";
+import { EstadoReserva, Reserva } from "@/lib/types";
 
 const ESTADO_TONO: Record<EstadoReserva, Tono> = {
   confirmada: "azul",
@@ -34,14 +30,20 @@ const ESTADO_LABEL: Record<EstadoReserva, string> = {
   cancelada: "Cancelada",
   "no-llego": "No llegó",
 };
+const HORAS = ["12:30", "13:00", "13:30", "19:00", "19:30", "20:00", "20:30"];
 
 export default function ReservasPage() {
   const { usuario, negocio } = useApp();
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState<EstadoReserva | "todas">("todas");
-  const [periodo, setPeriodo] = useState<Periodo>("semana");
+  const [formAbierto, setFormAbierto] = useState(false);
   const { autorizadas, autorizar, listo: listoAutorizaciones } = useAutorizaciones();
-  const todas = reservasPorNegocio(negocio.id);
+  const { items: creadas, add: agregarReserva } = useReservasCreadas();
+
+  const todas = useMemo(
+    () => [...creadas.filter((r) => r.negocioId === negocio.id), ...reservasPorNegocio(negocio.id)],
+    [creadas, negocio.id]
+  );
   const filtradas = useMemo(() => {
     let items = todas;
     if (filtro !== "todas") items = items.filter((r) => r.estado === filtro);
@@ -51,7 +53,6 @@ export default function ReservasPage() {
   }, [todas, filtro, busqueda]);
 
   if (!usuario) return null;
-  const nivel = accesoA(usuario.rolTipo, "reservas");
 
   if (!negocio.operando) {
     return (
@@ -66,49 +67,6 @@ export default function ReservasPage() {
 
   const semana = reservasSemana(negocio.id);
   const conversion = tasaConversionReservas(negocio.id);
-
-  if (nivel === "resumen") {
-    const resumen = resumenPeriodo(negocio.id, periodo);
-    const estado = reservasEstadoPorPeriodo(negocio.id, periodo);
-    const serie = serieReservasPorPeriodo(negocio.id, periodo);
-    const distribucion = distribucionEstadoReservas(negocio.id);
-    const periodoLabel = PERIODOS.find((p) => p.value === periodo)!.label;
-    return (
-      <>
-        <Topbar titulo="Reservas" descripcion={`Resumen ejecutivo · ${negocio.nombre}`} />
-        <main className="flex-1 p-8 animate-fade-in space-y-6" id="reporte">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <PeriodoSelector periodo={periodo} onChange={setPeriodo} />
-            <ExportarPDFBoton />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatTile
-              label={`Reservas (${periodoLabel.toLowerCase()})`} value={resumen.reservas} icon={<CalendarCheck size={18} />}
-              tono="terracota" trend={formatearCambio(resumen.reservasCambio)} trendUp={(resumen.reservasCambio ?? 0) >= 0}
-            />
-            <StatTile
-              label={`Confirmadas / atendidas (${periodoLabel.toLowerCase()})`} value={estado.confirmadas} icon={<CheckCircle2 size={18} />}
-              tono="verde" trend={formatearCambio(estado.confirmadasCambio)} trendUp={(estado.confirmadasCambio ?? 0) >= 0}
-            />
-            <StatTile label={`Tasa de conversión (${periodoLabel.toLowerCase()})`} value={`${estado.conversion}%`} icon={<XCircle size={18} />} tono="naranja" />
-          </div>
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-            <Card className="xl:col-span-2 romper-pagina">
-              <CardHeader title={`Reservas — ${periodo === "anio" ? "por mes" : "por día"}`} subtitle={`Vista ${periodoLabel.toLowerCase()}`} />
-              <BarChartSerie data={serie} series={[{ key: "reservas", nombre: "Reservas", color: "#5C7C8C" }]} />
-            </Card>
-            <Card className="romper-pagina">
-              <CardHeader title="Estado de las reservas" subtitle="Total histórico" />
-              <DonutChart data={distribucion} />
-            </Card>
-          </div>
-          <Card>
-            <CardHeader title="Vista de Dirección" subtitle="Resumen agregado — el detalle fila por fila lo maneja Ventas y Administración" />
-          </Card>
-        </main>
-      </>
-    );
-  }
 
   function exportar() {
     exportarCSV(
@@ -128,6 +86,15 @@ export default function ReservasPage() {
           <StatTile label="Tasa de conversión" value={`${conversion}%`} icon={<XCircle size={18} />} tono="naranja" />
         </div>
 
+        {formAbierto && (
+          <NuevaReservaForm
+            negocioId={negocio.id}
+            registradoPor={usuario.nombre}
+            onCancelar={() => setFormAbierto(false)}
+            onGuardar={(r) => { agregarReserva(r); setFormAbierto(false); }}
+          />
+        )}
+
         <div className="flex flex-wrap items-center gap-3 justify-between">
           <div className="flex gap-1.5 flex-wrap">
             {(["todas", "confirmada", "atendida", "cancelada", "no-llego"] as const).map((f) => (
@@ -144,6 +111,14 @@ export default function ReservasPage() {
           </div>
           <div className="flex items-center gap-3">
             <SearchInput value={busqueda} onChange={setBusqueda} placeholder="Buscar cliente…" />
+            {puedeCrearReservasDelivery(usuario.rolTipo) && !formAbierto && (
+              <button
+                onClick={() => setFormAbierto(true)}
+                className="flex items-center gap-2 bg-[var(--color-terracota)] text-white text-sm font-semibold rounded-xl px-4 py-2.5 hover:opacity-90 transition-opacity whitespace-nowrap"
+              >
+                <Plus size={15} /> Nueva reserva
+              </button>
+            )}
             <button onClick={exportar} className="flex items-center gap-2 bg-[var(--color-verde)] text-white text-sm font-semibold rounded-xl px-4 py-2.5 hover:opacity-90 transition-opacity whitespace-nowrap">
               <Download size={15} /> Exportar
             </button>
@@ -153,7 +128,7 @@ export default function ReservasPage() {
         <Card padding="p-0 pt-5">
           <Table>
             <Thead>
-              <Th>Cliente</Th><Th>Fecha</Th><Th>Hora</Th><Th>Personas</Th><Th>Tipo</Th><Th>Canal</Th><Th>Estado</Th><Th>Monto</Th><Th>Autorización</Th>
+              <Th>Cliente</Th><Th>Fecha</Th><Th>Hora</Th><Th>Personas</Th><Th>Tipo</Th><Th>Canal</Th><Th>Estado</Th><Th>Monto</Th><Th>Autorización</Th><Th>{" "}</Th>
             </Thead>
             <tbody>
               {filtradas.map((r) => {
@@ -182,7 +157,14 @@ export default function ReservasPage() {
                           Autorizar
                         </button>
                       ) : (
-                        <Badge tono="naranja">Pendiente de Administración</Badge>
+                        <Badge tono="naranja">Pendiente de Gerencial</Badge>
+                      )}
+                    </Td>
+                    <Td>
+                      {r.enviadoAWeb && (
+                        <span title="Enviado a la web de Las Flores" className="inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-azul)]">
+                          <Globe2 size={12} /> Web
+                        </span>
                       )}
                     </Td>
                   </Tr>
@@ -197,7 +179,116 @@ export default function ReservasPage() {
   );
 }
 
-function formatearCambio(valor: number | null): string | undefined {
-  if (valor === null) return undefined;
-  return `${valor >= 0 ? "+" : ""}${valor}% vs. periodo anterior`;
+function NuevaReservaForm({
+  negocioId, registradoPor, onGuardar, onCancelar,
+}: {
+  negocioId: string; registradoPor: string; onGuardar: (r: Reserva) => void; onCancelar: () => void;
+}) {
+  const [clienteNombre, setClienteNombre] = useState("");
+  const [celular, setCelular] = useState("");
+  const [fecha, setFecha] = useState("");
+  const [hora, setHora] = useState(HORAS[3]);
+  const [personas, setPersonas] = useState(2);
+  const [canal, setCanal] = useState<Reserva["canal"]>("telefono");
+  const [errores, setErrores] = useState<Errores>({});
+
+  function validar(): Errores {
+    const err: Errores = {};
+    const eNombre = nombrePersona(clienteNombre, "El nombre del cliente");
+    if (eNombre) err.clienteNombre = eNombre;
+    const eCelular = celularPeru(celular);
+    if (eCelular) err.celular = eCelular;
+    const eFecha = requerido(fecha, "La fecha");
+    if (eFecha) err.fecha = eFecha;
+    return err;
+  }
+
+  function guardar(e: React.FormEvent) {
+    e.preventDefault();
+    const err = validar();
+    setErrores(err);
+    if (Object.keys(err).length > 0) return;
+    const tipo: Reserva["tipo"] = personas > 8 ? "evento" : "mesa";
+    onGuardar({
+      id: `${negocioId}-res-manual-${Date.now()}`,
+      negocioId: negocioId as Reserva["negocioId"],
+      clienteId: `manual-${Date.now()}`,
+      clienteNombre: clienteNombre.trim(),
+      fecha,
+      hora,
+      personas,
+      tipo,
+      canal,
+      estado: "confirmada",
+      registradoEn: new Date().toISOString(),
+      requiereAutorizacion: tipo === "evento",
+      registradoPor,
+      enviadoAWeb: true,
+    });
+  }
+
+  return (
+    <Card className="animate-fade-in">
+      <div className="flex items-center justify-between mb-1">
+        <CardHeader title="Nueva reserva" subtitle="Al guardar se marca como enviada a la web de Las Flores" />
+        <button onClick={onCancelar} className="text-[var(--color-gris-medio)] hover:text-[var(--color-gris)]">
+          <X size={18} />
+        </button>
+      </div>
+      <form onSubmit={guardar} noValidate className="grid sm:grid-cols-2 gap-3">
+        <Campo label="Nombre del cliente" requerido error={errores.clienteNombre}>
+          <input value={clienteNombre} onChange={(e) => setClienteNombre(soloLetras(e.target.value))} className="input" />
+        </Campo>
+        <Campo label="Celular" requerido error={errores.celular}>
+          <input value={celular} onChange={(e) => setCelular(e.target.value.replace(/\D/g, "").slice(0, 9))} maxLength={9} inputMode="numeric" placeholder="9XXXXXXXX" className="input" />
+        </Campo>
+        <Campo label="Fecha" requerido error={errores.fecha}>
+          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="input" />
+        </Campo>
+        <Campo label="Hora" requerido>
+          <select value={hora} onChange={(e) => setHora(e.target.value)} className="input bg-white">
+            {HORAS.map((h) => <option key={h} value={h}>{h}</option>)}
+          </select>
+        </Campo>
+        <Campo label="Personas" requerido>
+          <input
+            type="number" min={1} max={40} value={personas}
+            onChange={(e) => setPersonas(Math.max(1, Number(e.target.value)))}
+            className="input"
+          />
+          {personas > 8 && (
+            <p className="text-[11px] text-[var(--color-naranja)] mt-1">Más de 8 personas: queda como evento, necesita autorización de Gerencial.</p>
+          )}
+        </Campo>
+        <Campo label="Canal">
+          <select value={canal} onChange={(e) => setCanal(e.target.value as Reserva["canal"])} className="input bg-white">
+            <option value="telefono">Teléfono</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="web">Web</option>
+            <option value="presencial">Presencial</option>
+          </select>
+        </Campo>
+        <div className="sm:col-span-2 flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onCancelar} className="text-sm font-medium text-[var(--color-gris-medio)] px-4 py-2">Cancelar</button>
+          <button type="submit" className="bg-[var(--color-terracota)] text-white text-sm font-semibold rounded-xl px-5 py-2.5 hover:opacity-90 transition-opacity">Guardar reserva</button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+function Campo({
+  label, children, requerido, error,
+}: {
+  label: string; children: React.ReactNode; requerido?: boolean; error?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-[var(--color-gris-medio)] mb-1">
+        {label} {requerido && <span className="text-[var(--color-rojo)]">*</span>}
+      </label>
+      {children}
+      {error && <p className="text-[11px] text-[var(--color-rojo)] mt-1 font-medium">{error}</p>}
+    </div>
+  );
 }

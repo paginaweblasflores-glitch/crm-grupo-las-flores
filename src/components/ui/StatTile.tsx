@@ -24,22 +24,20 @@ export function StatTile({
   }[tono];
 
   return (
-    <div className="bg-white rounded-2xl border border-[var(--color-gris-claro)]/40 shadow-sm p-5 flex items-start justify-between">
-      <div>
-        <p className="text-xs font-medium text-[var(--color-gris-medio)] mb-1.5">{label}</p>
-        <p className="text-2xl font-bold text-[var(--color-gris)] leading-none">{value}</p>
-        {trend && (
-          <p
-            className={clsx(
-              "text-xs mt-2 font-medium",
-              trendUp ? "text-[var(--color-verde)]" : "text-[var(--color-rojo)]"
-            )}
-          >
-            {trendUp ? "↑" : "↓"} {trend}
-          </p>
-        )}
-      </div>
-      {icon && <div className={clsx("rounded-xl p-2.5", bg)}>{icon}</div>}
+    <div className="bg-white rounded-2xl border border-[var(--color-gris-claro)]/40 shadow-sm p-5">
+      {icon && <div className={clsx("rounded-xl p-2.5 w-fit mb-3.5", bg)}>{icon}</div>}
+      <p className="text-[28px] font-bold text-[var(--color-gris)] leading-none tracking-tight tabular-nums">{value}</p>
+      <p className="text-xs font-medium text-[var(--color-gris-medio)] mt-2">{label}</p>
+      {trend && (
+        <p
+          className={clsx(
+            "text-xs mt-2 font-medium",
+            trendUp === undefined ? "text-[var(--color-gris-medio)]" : trendUp ? "text-[var(--color-verde)]" : "text-[var(--color-rojo)]"
+          )}
+        >
+          {trendUp !== undefined && (trendUp ? "↑ " : "↓ ")}{trend}
+        </p>
+      )}
     </div>
   );
 }

@@ -18,6 +18,8 @@ interface AppContextValue {
   cerrarSesion: () => void;
   cambiarNegocio: (id: NegocioId) => void;
   crearUsuario: (u: Usuario) => void;
+  editarUsuario: (id: string, patch: Partial<Usuario>) => void;
+  eliminarUsuario: (id: string) => void;
 }
 
 type Negocio = (typeof NEGOCIOS)[number];
@@ -31,7 +33,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [negocioId, setNegocioId] = useState<NegocioId>("las-flores");
   const [listo, setListo] = useState(false);
-  const { items: usuariosCreados, add: crearUsuario, listo: listoCreados } = useUsuariosCreados();
+  const { items: usuariosCreados, add: crearUsuario, update: actualizarUsuario, remove: removerUsuario, listo: listoCreados } = useUsuariosCreados();
 
   const todosLosUsuarios = useMemo(() => [...USUARIOS, ...usuariosCreados], [usuariosCreados]);
   const usuario = usuarioId ? todosLosUsuarios.find((u) => u.id === usuarioId) ?? null : null;
@@ -59,6 +61,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(STORAGE_NEGOCIO, negocioInicial);
     return true;
   }
+
+  const editarUsuario = (id: string, patch: Partial<Usuario>) => {
+    actualizarUsuario((u) => u.id === id, (u) => ({ ...u, ...patch }));
+  };
+
+  const eliminarUsuario = (id: string) => {
+    removerUsuario((u) => u.id === id);
+  };
 
   const cerrarSesion = () => {
     setUsuarioId(null);
@@ -91,6 +101,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     cerrarSesion,
     cambiarNegocio,
     crearUsuario,
+    editarUsuario,
+    eliminarUsuario,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
