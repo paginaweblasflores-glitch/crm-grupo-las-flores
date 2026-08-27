@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Trophy, Users, TrendingUp, CalendarCheck, Clock, ArrowRight,
@@ -81,10 +81,15 @@ export function EstadisticasVendedores({
   const [filtroPeriodo, setFiltroPeriodo] = useState<PeriodoFiltro>("mes");
   const [ordenPor, setOrdenPor] = useState<"ventas" | "clientes" | "conversion">("ventas");
 
-  useEffect(() => {
-    const s = negocioIdFijo ?? negocio.id;
-    setFiltroSede(s === "todas" ? "todos" : s);
-  }, [negocioIdFijo, negocio.id]);
+  // Ajusta filtroSede cuando cambia la sede activa (negocioIdFijo o el
+  // negocio del Topbar) sin usar un efecto — llamar setState dentro de un
+  // useEffect dispara un render en cascada; el patrón que recomienda React
+  // es comparar durante el render mismo y ajustar ahí si detecta el cambio.
+  const [sedePrevia, setSedePrevia] = useState(sedeActiva);
+  if (sedeActiva !== sedePrevia) {
+    setSedePrevia(sedeActiva);
+    setFiltroSede(sedeActiva === "todas" ? "todos" : sedeActiva);
+  }
 
   const { items: clientesCreados } = useClientesCreados();
   const { items: corpCreados } = useClientesCorporativosCreados();
