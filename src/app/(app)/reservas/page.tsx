@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Download, CalendarCheck, CheckCircle2, XCircle, ShieldCheck, Plus, Globe2, X } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { puedeAutorizar, puedeCrearReservasDelivery } from "@/lib/permissions";
@@ -34,17 +35,17 @@ const HORAS = ["12:30", "13:00", "13:30", "19:00", "19:30", "20:00", "20:30"];
 
 export default function ReservasPage() {
   const { usuario, negocio } = useApp();
+  const router = useRouter();
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState<EstadoReserva | "todas">("todas");
   const [formAbierto, setFormAbierto] = useState(false);
   const { autorizadas, autorizar, listo: listoAutorizaciones } = useAutorizaciones();
   const { items: creadas, add: agregarReserva } = useReservasCreadas();
 
+  // "Todas las sucursales" no es un negocio real donde se pueda crear una
+  // reserva — se redirige a Panel Principal, ver fueraDeAlcance más abajo.
   const todas = useMemo(
-    () => [
-      ...creadas.filter((r) => negocio.id === "todas" || r.negocioId === negocio.id),
-      ...reservasPorNegocio(negocio.id),
-    ],
+    () => [...creadas.filter((r) => r.negocioId === negocio.id), ...reservasPorNegocio(negocio.id)],
     [creadas, negocio.id]
   );
   const filtradas = useMemo(() => {
@@ -55,7 +56,13 @@ export default function ReservasPage() {
     return items;
   }, [todas, filtro, busqueda]);
 
-  if (!usuario) return null;
+  const fueraDeAlcance = negocio.id === "todas";
+
+  useEffect(() => {
+    if (fueraDeAlcance) router.replace("/dashboard");
+  }, [fueraDeAlcance, router]);
+
+  if (!usuario || fueraDeAlcance) return null;
 
   if (!negocio.operando) {
     return (

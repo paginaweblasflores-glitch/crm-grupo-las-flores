@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, UserPlus, MessageCircle } from "lucide-react";
 import { useApp } from "@/lib/app-context";
@@ -43,18 +43,14 @@ export default function ClientesPage() {
   const { items: creados, add: agregarCliente } = useClientesCreados();
   const { items: corpCreados, add: agregarCorporativo } = useClientesCorporativosCreados();
 
+  // "Todas las sucursales" no es un negocio real donde se pueda registrar un
+  // cliente — se redirige a Panel Principal, ver fueraDeAlcance más abajo.
   const individuales = useMemo(
-    () => [
-      ...creados.filter((c) => negocio.id === "todas" || c.negocioId === negocio.id),
-      ...clientesIndividualesPorNegocio(negocio.id),
-    ],
+    () => [...creados.filter((c) => c.negocioId === negocio.id), ...clientesIndividualesPorNegocio(negocio.id)],
     [creados, negocio.id]
   );
   const corporativos = useMemo(
-    () => [
-      ...corpCreados.filter((c) => negocio.id === "todas" || c.negocioId === negocio.id),
-      ...corporativosPorNegocio(negocio.id),
-    ],
+    () => [...corpCreados.filter((c) => c.negocioId === negocio.id), ...corporativosPorNegocio(negocio.id)],
     [corpCreados, negocio.id]
   );
 
@@ -91,7 +87,13 @@ export default function ClientesPage() {
   const individualesPagina = useMemo(() => paginar(individualesFiltrados, pagina, POR_PAGINA), [individualesFiltrados, pagina]);
   const corporativosPagina = useMemo(() => paginar(corporativosFiltrados, pagina, POR_PAGINA), [corporativosFiltrados, pagina]);
 
-  if (!usuario) return null;
+  const fueraDeAlcance = negocio.id === "todas";
+
+  useEffect(() => {
+    if (fueraDeAlcance) router.replace("/dashboard");
+  }, [fueraDeAlcance, router]);
+
+  if (!usuario || fueraDeAlcance) return null;
 
   function exportar() {
     if (tab === "individual") {

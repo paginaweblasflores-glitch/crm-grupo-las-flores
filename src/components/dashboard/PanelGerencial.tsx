@@ -19,7 +19,7 @@ import {
   clientesPorNegocioTotales, resumenPeriodo, pedidosPorPeriodo, resumenHospedajePeriodo, ingresosTotalesPeriodo, ticketPromedioPeriodo,
   serieParaPeriodo, serieHospedajePorPeriodo, PERIODOS, Periodo,
   mejorYPeorMesMetrica, actividadPorDiaSemanaMetrica, mejorYPeorDiaSemanaMetrica, distribucionOrigen,
-  METRICAS_ESTADISTICA, MetricaEstadistica,
+  METRICAS_ESTADISTICA, MetricaEstadistica, desglosePorNegocioMetrica,
 } from "@/lib/metrics";
 import { distribucionFrecuencia, clientesQueVolvieronEsteMes } from "@/lib/frecuencia";
 import { useFestividades, useAutorizaciones, useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
@@ -227,6 +227,7 @@ export function PanelGerencial() {
   });
   const metricaActiva = metricasDisponibles.find((m) => m.value === metrica) ?? metricasDisponibles[0];
   const porDiaSemana = actividadPorDiaSemanaMetrica(negocio.id, metricaActiva.value);
+  const desgloseNegocio = negocio.id === "todas" ? desglosePorNegocioMetrica(metricaActiva.value) : [];
   const volvieron = clientesQueVolvieronEsteMes(negocio.id);
   const origenClientes = distribucionOrigen(negocio.id);
   const frecuencia = distribucionFrecuencia(negocio.id);
@@ -510,6 +511,48 @@ export function PanelGerencial() {
           </div>
         </Card>
       </div>
+
+      {negocio.id === "todas" && (
+        <Card>
+          <CardHeader
+            title="Desglose por negocio"
+            subtitle="Cuánto aporta cada sede a la métrica elegida · últimos 12 meses"
+            action={
+              <div className="flex bg-[var(--color-crema)] rounded-xl p-1 flex-wrap no-imprimir">
+                {metricasDisponibles.map((m) => (
+                  <button
+                    key={m.value}
+                    onClick={() => setMetrica(m.value)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      metricaActiva.value === m.value ? "bg-white text-[var(--color-terracota)] shadow-sm" : "text-[var(--color-gris-medio)] hover:text-[var(--color-gris)]"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            }
+          />
+          <div className="space-y-4 mt-1">
+            {desgloseNegocio.map(({ negocio: n, valor, porcentaje }) => (
+              <div key={n.id}>
+                <div className="flex items-center justify-between text-sm mb-1.5">
+                  <span className="font-medium text-[var(--color-gris)]">{n.nombre}</span>
+                  <span className="text-[var(--color-gris-medio)]">
+                    {metricaActiva.unidad === "dinero" ? `S/ ${valor.toLocaleString("es-PE")}` : valor.toLocaleString("es-PE")} · {porcentaje}%
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-[var(--color-crema-oscuro)] overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${porcentaje}%`, backgroundColor: n.colorAcento }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Sección Solicitada: Estadísticas y Rendimiento de Vendedores */}
       <EstadisticasVendedores mostrarFiltroNegocio={false} />

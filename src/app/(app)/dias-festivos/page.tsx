@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Lock, PartyPopper, Plus, Pencil, Trash2, X, Megaphone } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { accesoA } from "@/lib/permissions";
@@ -22,11 +23,19 @@ const MESES_LABEL = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Jul
 
 export default function DiasFestivosPage() {
   const { usuario, negocio } = useApp();
+  const router = useRouter();
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState<Festividad | null>(null);
   const { festividades, add, update, remove, listo } = useFestividades();
 
-  if (!usuario) return null;
+  // "Todas las sucursales" no es un negocio real — se redirige a Panel Principal.
+  const fueraDeAlcance = negocio.id === "todas";
+
+  useEffect(() => {
+    if (fueraDeAlcance) router.replace("/dashboard");
+  }, [fueraDeAlcance, router]);
+
+  if (!usuario || fueraDeAlcance) return null;
   const nivel = accesoA(usuario.rolTipo, "diasFestivos");
 
   if (nivel === "no") {

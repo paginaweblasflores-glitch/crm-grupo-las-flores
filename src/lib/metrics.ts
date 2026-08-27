@@ -675,3 +675,23 @@ export function mejorYPeorDiaSemanaMetrica(negocioId: NegocioId, metrica: Metric
     peor: conDatos.reduce((a, b) => (b.valor < a.valor ? b : a)),
   };
 }
+
+// --- Panel Gerencial: desglose por negocio de la métrica elegida -----------
+// Para "Todas las sucursales" — cuánto aporta cada sede real a la métrica que
+// Mijael tenga seleccionada (mismo selector que ya usa el gráfico "Patrón por
+// día"), en la misma ventana de 12 meses que el resto de los insights de esa
+// métrica. Mismo patrón de barras que clientesPorNegocioTotales().
+export interface DesgloseNegocioMetrica {
+  negocio: (typeof NEGOCIOS)[number];
+  valor: number;
+  porcentaje: number;
+}
+
+export function desglosePorNegocioMetrica(metrica: MetricaEstadistica): DesgloseNegocioMetrica[] {
+  const conteos = NEGOCIOS.map((n) => ({
+    negocio: n,
+    valor: serieMensualMetrica(n.id, metrica, 12).reduce((a, p) => a + p.valor, 0),
+  }));
+  const total = conteos.reduce((a, c) => a + c.valor, 0);
+  return conteos.map((c) => ({ ...c, porcentaje: total === 0 ? 0 : Math.round((c.valor / total) * 100) }));
+}

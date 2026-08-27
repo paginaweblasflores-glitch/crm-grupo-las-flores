@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Send, Lock, MessageCircle, Bot, User, CalendarClock, MessagesSquare } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { accesoA } from "@/lib/permissions";
@@ -43,6 +43,7 @@ export default function MensajeriaPage() {
 
 function MensajeriaInner() {
   const { usuario, negocio } = useApp();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const clienteInicial = searchParams.get("cliente");
   const [vista, setVista] = useState<"chats" | "programados">("chats");
@@ -75,7 +76,14 @@ function MensajeriaInner() {
     return { clientes, seguimientos, seguimientoPorCliente, filtrados };
   }, [negocio.id, clientesCreadosNegocio, busqueda, usuario]);
 
-  if (!usuario) return null;
+  // "Todas las sucursales" no es un negocio real — se redirige a Panel Principal.
+  const fueraDeAlcance = negocio.id === "todas";
+
+  useEffect(() => {
+    if (fueraDeAlcance) router.replace("/dashboard");
+  }, [fueraDeAlcance, router]);
+
+  if (!usuario || fueraDeAlcance) return null;
   const nivel = accesoA(usuario.rolTipo, "mensajeria");
 
   if (nivel === "no") {

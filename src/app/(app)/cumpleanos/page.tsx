@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Gift, MessageCircle, CheckCircle2, Settings2, Pencil, RotateCcw, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { puedeVerMontos, puedeAutorizar } from "@/lib/permissions";
@@ -32,11 +33,19 @@ const MESES_LABEL = [
 
 export default function CumpleanosPage() {
   const { usuario, negocio } = useApp();
+  const router = useRouter();
   const { items: creados } = useClientesCreados();
   const overridesStore = useSeguimientoOverrides();
   const configStore = useConfigSaludoCumpleanos(negocio.id);
 
-  if (!usuario) return null;
+  // "Todas las sucursales" no es un negocio real — se redirige a Panel Principal.
+  const fueraDeAlcance = negocio.id === "todas";
+
+  useEffect(() => {
+    if (fueraDeAlcance) router.replace("/dashboard");
+  }, [fueraDeAlcance, router]);
+
+  if (!usuario || fueraDeAlcance) return null;
   const verMontos = puedeVerMontos(usuario.rolTipo);
   const esAdmin = puedeAutorizar(usuario.rolTipo);
   const editable = usuario.rolTipo === "ventas" || usuario.rolTipo === "gerencial";

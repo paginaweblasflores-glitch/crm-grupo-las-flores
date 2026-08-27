@@ -18,6 +18,7 @@ export function Sidebar() {
     if (!puedeVer(usuario.rolTipo, item.modulo)) return false;
     if (item.soloUmaru && negocio.id !== "umaru") return false;
     if (item.soloLasFlores && negocio.id !== "las-flores") return false;
+    if (negocio.id === "todas" && !item.disponibleEnTodas) return false;
     return true;
   });
 

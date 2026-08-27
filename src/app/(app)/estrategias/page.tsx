@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Lock, Send, Sparkles, Settings2, Check, Bot } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { accesoA } from "@/lib/permissions";
@@ -13,8 +14,17 @@ import { NegocioId } from "@/lib/types";
 
 export default function EstrategiasPage() {
   const { usuario, negocio } = useApp();
+  const router = useRouter();
 
-  if (!usuario) return null;
+  // "Todas las sucursales" no es un negocio real — Estrategias necesita uno
+  // específico para dar respuestas con datos reales, se redirige a Panel Principal.
+  const fueraDeAlcance = negocio.id === "todas";
+
+  useEffect(() => {
+    if (fueraDeAlcance) router.replace("/dashboard");
+  }, [fueraDeAlcance, router]);
+
+  if (!usuario || fueraDeAlcance) return null;
   const nivel = accesoA(usuario.rolTipo, "estrategias");
 
   if (nivel === "no") {

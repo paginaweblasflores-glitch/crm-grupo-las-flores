@@ -21,13 +21,20 @@ export interface NavItem {
   grupo: GrupoNav;
   soloUmaru?: boolean;
   soloLasFlores?: boolean;
+  // Casi todos los módulos son operativos — necesitan un negocio específico
+  // para tener sentido (registrar un cliente, crear una reserva, todo cuelga
+  // de un negocioId real). "Todas las sucursales" es una vista consolidada
+  // de solo lectura, así que por default un módulo NO está disponible ahí —
+  // hay que marcarlo true explícitamente si de verdad tiene sentido verlo
+  // con los 3 negocios juntos (hoy solo Panel Principal y Mi Equipo).
+  disponibleEnTodas?: boolean;
   // Para el módulo "dashboard": qué mostrar cuando el rol solo ve resumen
   // (Dirección) — su panel se llama distinto al de Gerencial/Ventas.
   labelResumen?: string;
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Panel Principal", modulo: "dashboard", icon: LayoutDashboard, grupo: "Principal", labelResumen: "Panel Ejecutivo" },
+  { href: "/dashboard", label: "Panel Principal", modulo: "dashboard", icon: LayoutDashboard, grupo: "Principal", labelResumen: "Panel Ejecutivo", disponibleEnTodas: true },
   { href: "/clientes", label: "Clientes", modulo: "clientes", icon: Users, grupo: "Operación diaria" },
   { href: "/reservas", label: "Reservas", modulo: "reservas", icon: CalendarCheck, grupo: "Operación diaria" },
   { href: "/delivery", label: "Delivery", modulo: "delivery", icon: Bike, grupo: "Operación diaria", soloLasFlores: true },
@@ -37,6 +44,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/campanas", label: "Campañas", modulo: "campanas", icon: Megaphone, grupo: "Relación con el cliente" },
   { href: "/dias-festivos", label: "Días Festivos", modulo: "diasFestivos", icon: PartyPopper, grupo: "Relación con el cliente" },
   { href: "/estrategias", label: "Estrategias", modulo: "estrategias", icon: Sparkles, grupo: "Gestión" },
-  { href: "/equipo", label: "Mi Equipo", modulo: "equipo", icon: Users2, grupo: "Gestión" },
+  { href: "/equipo", label: "Mi Equipo", modulo: "equipo", icon: Users2, grupo: "Gestión", disponibleEnTodas: true },
   { href: "/usuarios", label: "Usuarios", modulo: "usuarios", icon: UserCog, grupo: "Gestión" },
 ];

@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, Megaphone, Send, Percent, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { accesoA, puedeGestionarCampanas } from "@/lib/permissions";
@@ -34,6 +34,7 @@ export default function CampanasPage() {
 
 function CampanasInner() {
   const { usuario, negocio } = useApp();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const festividadId = searchParams.get("festividad");
   const nombreSugerido = searchParams.get("nombre");
@@ -41,7 +42,15 @@ function CampanasInner() {
   const [editando, setEditando] = useState<Campana | null>(null);
   const { items: creadas, add: agregarCampana, update: editarCampana, remove: eliminarCampana } = useCampanasCreadas();
 
-  if (!usuario) return null;
+  // "Todas las sucursales" no es un negocio real donde se pueda crear una
+  // campaña — se redirige a Panel Principal.
+  const fueraDeAlcance = negocio.id === "todas";
+
+  useEffect(() => {
+    if (fueraDeAlcance) router.replace("/dashboard");
+  }, [fueraDeAlcance, router]);
+
+  if (!usuario || fueraDeAlcance) return null;
   const nivel = accesoA(usuario.rolTipo, "campanas");
   const puedeGestionar = puedeGestionarCampanas(usuario.rolTipo);
 
