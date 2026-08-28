@@ -46,8 +46,8 @@ export default function LoginPage() {
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl px-7 py-8 border border-white/20">
         {/* Cabecera / Logo */}
         <div className="text-center mb-6">
-          <div className="w-16 h-16 mx-auto mb-3 rounded-2xl bg-[var(--color-crema)]/60 border border-[var(--color-gris-claro)]/40 p-2 flex items-center justify-center shadow-inner">
-            <Image src="/logo.png" alt="Grupo Las Flores" width={56} height={56} className="w-full h-full object-contain" priority />
+          <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-[var(--color-crema)]/60 border border-[var(--color-gris-claro)]/40 flex items-center justify-center shadow-inner overflow-hidden">
+            <Image src="/logo.png" alt="Grupo Las Flores" width={56} height={56} className="w-full h-full rounded-full object-cover" priority />
           </div>
           <h1 className="text-2xl font-bold text-[var(--color-terracota)] tracking-tight" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
             CRM Grupo Las Flores
