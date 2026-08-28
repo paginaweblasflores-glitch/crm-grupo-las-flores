@@ -16,12 +16,13 @@ export interface Negocio {
 // asigna a uno de estos perfiles y hereda automáticamente sus permisos.
 // - direccion: socios/directorio en Lima — solo un panel de métricas, cero acciones.
 // - gerencial: Mijael — control operativo total de los 3 negocios.
-// - ventas: el equipo de cada negocio (registra clientes, reservas, delivery, cumpleaños).
+// - ventas: el equipo de cada negocio (registra clientes, cumpleaños).
 export type RolTipo = "direccion" | "gerencial" | "ventas";
 
 export interface Usuario {
   id: string;
-  nombre: string;
+  nombre: string; // nombre de la cuenta — de área/cargo ("Ventas Uno"), no de persona
+  nombreReal?: string; // solo Gerente General: su perfil, ya dentro del sistema, muestra este nombre
   cargo: string;
   rolTipo: RolTipo;
   rolLabel: string;
@@ -48,7 +49,7 @@ export interface ClienteIndividual {
   departamento: string;
   provincia: string;
   distrito: string;
-  origen: "web-reservas" | "web-delivery" | "presencial" | "redes-sociales" | "referido" | "importado-excel";
+  origen: "crm" | "web" | "redes-sociales" | "referido" | "importado-excel";
   observaciones?: string;
   registradoPor?: string; // nombre de quién lo registró (cuando se agrega desde el sistema)
   // Campos investigados y agregados sobre el estándar del Excel original:
@@ -83,43 +84,7 @@ export interface ClienteCorporativo {
   aceptaComunicaciones?: boolean;
 }
 
-export type EstadoReserva = "confirmada" | "atendida" | "cancelada" | "no-llego";
 export type CanalContacto = "web" | "whatsapp" | "telefono" | "presencial";
-
-export interface Reserva {
-  id: string;
-  negocioId: NegocioId;
-  clienteId: string;
-  clienteNombre: string;
-  fecha: string; // ISO fecha de la reserva
-  hora: string;
-  personas: number;
-  tipo: "mesa" | "evento";
-  canal: CanalContacto;
-  estado: EstadoReserva;
-  monto?: number;
-  registradoEn: string; // ISO timestamp de creación
-  requiereAutorizacion: boolean; // eventos grandes: los autoriza Gerencial, no Ventas
-  registradoPor?: string; // nombre de quién la creó — para el comparativo de equipo
-  enviadoAWeb?: boolean; // simula el envío al CRM real de la web de Las Flores
-}
-
-export type EstadoPedido = "en-preparacion" | "en-camino" | "entregado" | "cancelado";
-
-export interface Pedido {
-  id: string;
-  negocioId: NegocioId;
-  clienteId: string;
-  clienteNombre: string;
-  fecha: string;
-  productos: string[];
-  monto: number;
-  canal: CanalContacto;
-  estado: EstadoPedido;
-  registradoEn: string;
-  registradoPor?: string;
-  enviadoAWeb?: boolean;
-}
 
 export interface Hospedaje {
   id: string;
@@ -184,7 +149,6 @@ export interface ResumenCliente {
   totalVisitas: number;
   visitas30Dias: number;
   ultimaVisita: string | null;
-  gastoTotal: number;
   clasificacion: FrecuenciaClasificacion;
 }
 

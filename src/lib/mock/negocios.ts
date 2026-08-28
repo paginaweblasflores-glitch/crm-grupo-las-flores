@@ -16,7 +16,7 @@ export const NEGOCIOS_SEDES: Negocio[] = [
     tipo: "restaurante",
     operando: true,
     colorAcento: "#8c3a25",
-    descripcionEstado: "Web propia con reservas y delivery, en pruebas",
+    descripcionEstado: "Web propia, en pruebas",
   },
   {
     id: "umaru",

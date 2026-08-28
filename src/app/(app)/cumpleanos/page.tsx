@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Gift, MessageCircle, CheckCircle2, Settings2, Pencil, RotateCcw, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { puedeVerMontos, puedeAutorizar } from "@/lib/permissions";
+import { puedeAutorizar } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
@@ -46,7 +46,6 @@ export default function CumpleanosPage() {
   }, [fueraDeAlcance, router]);
 
   if (!usuario || fueraDeAlcance) return null;
-  const verMontos = puedeVerMontos(usuario.rolTipo);
   const esAdmin = puedeAutorizar(usuario.rolTipo);
   const editable = usuario.rolTipo === "ventas" || usuario.rolTipo === "gerencial";
 
@@ -139,7 +138,7 @@ export default function CumpleanosPage() {
             <CardHeader title="Seguimiento" subtitle="Réplica del control que ya usa Meliza en Excel, ahora editable desde aquí" />
           </div>
           <SeguimientoTabla
-            seguimientos={seguimientos} verMontos={verMontos} editable={editable}
+            seguimientos={seguimientos} editable={editable}
             overrides={overridesStore.overrides} setOverride={overridesStore.set} listo={overridesStore.listo}
           />
         </Card>
@@ -459,9 +458,9 @@ function AprobacionMes({ negocioId, totalDelMes }: { negocioId: string; totalDel
 }
 
 function SeguimientoTabla({
-  seguimientos, verMontos, editable, overrides, setOverride, listo,
+  seguimientos, editable, overrides, setOverride, listo,
 }: {
-  seguimientos: ReturnType<typeof seguimientosConNuevos>; verMontos: boolean; editable: boolean;
+  seguimientos: ReturnType<typeof seguimientosConNuevos>; editable: boolean;
   overrides: Record<string, SeguimientoOverride>; setOverride: (id: string, patch: SeguimientoOverride) => void; listo: boolean;
 }) {
   const set = setOverride;
@@ -471,8 +470,6 @@ function SeguimientoTabla({
     <Table>
       <Thead>
         <Th>Nombre</Th><Th>Celular</Th><Th>Saludo</Th><Th>Visto</Th><Th>Respuesta</Th><Th>Reservación</Th>
-        {verMontos && <Th>Adelanto</Th>}
-        {verMontos && <Th>Consumo</Th>}
       </Thead>
       <tbody>
         {seguimientos.map((s) => {
@@ -533,8 +530,6 @@ function SeguimientoTabla({
                   </>
                 )}
               </Td>
-              {verMontos && <Td>{s.adelantoReserva ? `S/ ${s.adelantoReserva}` : "—"}</Td>}
-              {verMontos && <Td>{s.montoConsumo ? `S/ ${s.montoConsumo}` : "—"}</Td>}
             </Tr>
           );
         })}

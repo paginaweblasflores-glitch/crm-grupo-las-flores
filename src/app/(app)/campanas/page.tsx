@@ -104,7 +104,7 @@ function CampanasInner() {
         {(formAbierto || editando) && (
           <CampanaForm
             negocioId={negocio.id}
-            registradoPor={usuario.nombre}
+            registradoPor={usuario.id}
             campana={editando}
             nombreInicial={!editando ? nombreSugerido ?? undefined : undefined}
             festividadId={!editando ? festividadId ?? undefined : undefined}

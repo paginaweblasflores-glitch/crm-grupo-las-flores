@@ -28,10 +28,15 @@ export default function DashboardPage() {
       ? FECHA_HOY
       : `Tablero de ${negocio.nombre}`;
 
+  // Solo Gerente General guarda nombreReal — el saludo usa su primer nombre
+  // real; el resto de cuentas se saluda por el nombre completo del cargo
+  // ("Ventas Uno"), que ya no es un nombre de pila para recortar.
+  const primerNombre = usuario.nombreReal ? usuario.nombreReal.split(" ")[0] : usuario.nombre;
+
   return (
     <>
       <Topbar
-        titulo={`Bienvenido, ${usuario.nombre.split(" ")[0]}`}
+        titulo={`Bienvenido, ${primerNombre}`}
         descripcion={descripcion}
         accion={esGerencial ? <ExportarPDFBoton etiqueta="Exportar PDF" /> : undefined}
       />

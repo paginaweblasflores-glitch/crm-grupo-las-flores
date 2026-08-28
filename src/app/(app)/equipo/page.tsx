@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, Trophy, Users, CalendarCheck, Building2, Bike } from "lucide-react";
+import { Lock, Trophy, Users, Building2 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { accesoA } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
@@ -11,11 +11,7 @@ import { StatTile } from "@/components/ui/StatTile";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { NegocioId } from "@/lib/types";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "@/lib/mock/clientes";
-import { reservasPorNegocio } from "@/lib/mock/reservas";
-import { pedidosPorNegocio } from "@/lib/mock/pedidos";
-import {
-  useClientesCreados, useClientesCorporativosCreados, useReservasCreadas, usePedidosCreados,
-} from "@/lib/store";
+import { useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
 
 import { EstadisticasVendedores } from "@/components/dashboard/EstadisticasVendedores";
 
@@ -23,8 +19,6 @@ export default function EquipoPage() {
   const { usuario, usuarios, negocios } = useApp();
   const { items: clientesCreados } = useClientesCreados();
   const { items: corpCreados } = useClientesCorporativosCreados();
-  const { items: reservasCreadas } = useReservasCreadas();
-  const { items: pedidosCreados } = usePedidosCreados();
 
   if (!usuario) return null;
   const nivel = accesoA(usuario.rolTipo, "equipo");
@@ -66,8 +60,6 @@ export default function EquipoPage() {
           negocios={negocios}
           clientesCreados={clientesCreados}
           corpCreados={corpCreados}
-          reservasCreadas={reservasCreadas}
-          pedidosCreados={pedidosCreados}
         />
       </main>
     </>
@@ -80,37 +72,31 @@ interface RegistrablePor {
 }
 
 function EquipoContenido({
-  usuarios, negocios, clientesCreados, corpCreados, reservasCreadas, pedidosCreados,
+  usuarios, negocios, clientesCreados, corpCreados,
 }: {
   usuarios: { id: string; nombre: string; cargo: string; usuario: string; rolTipo: string; negocioId: NegocioId; creadoPor?: string; iniciales: string }[];
   negocios: { id: NegocioId; nombre: string; operando: boolean }[];
   clientesCreados: RegistrablePor[];
   corpCreados: RegistrablePor[];
-  reservasCreadas: RegistrablePor[];
-  pedidosCreados: RegistrablePor[];
 }) {
   const [filtroNegocio, setFiltroNegocio] = useState<NegocioId>(negocios[0].id);
 
   const equipo = usuarios.filter((u) => u.rolTipo === "ventas" && u.negocioId === filtroNegocio);
-  const tieneDelivery = filtroNegocio === "las-flores";
 
   const individualesDelNegocio: RegistrablePor[] = [...clientesIndividualesPorNegocio(filtroNegocio), ...clientesCreados.filter((c) => c.negocioId === filtroNegocio)];
   const corporativosDelNegocio: RegistrablePor[] = [...corporativosPorNegocio(filtroNegocio), ...corpCreados.filter((c) => c.negocioId === filtroNegocio)];
-  const reservasDelNegocio: RegistrablePor[] = [...reservasPorNegocio(filtroNegocio), ...reservasCreadas.filter((r) => r.negocioId === filtroNegocio)];
-  const pedidosDelNegocio: RegistrablePor[] = [...pedidosPorNegocio(filtroNegocio), ...pedidosCreados.filter((p) => p.negocioId === filtroNegocio)];
 
+  // `registradoPor` guarda el id estable de la cuenta, no su nombre visible.
   const actividad = equipo.map((u) => {
-    const individuales = individualesDelNegocio.filter((c) => c.registradoPor === u.nombre).length;
-    const corporativos = corporativosDelNegocio.filter((c) => c.registradoPor === u.nombre).length;
-    const reservas = reservasDelNegocio.filter((r) => r.registradoPor === u.nombre).length;
-    const pedidos = pedidosDelNegocio.filter((p) => p.registradoPor === u.nombre).length;
-    return { usuario: u, individuales, corporativos, reservas, pedidos, total: individuales + corporativos + reservas + pedidos };
+    const individuales = individualesDelNegocio.filter((c) => c.registradoPor === u.id).length;
+    const corporativos = corporativosDelNegocio.filter((c) => c.registradoPor === u.id).length;
+    return { usuario: u, individuales, corporativos, total: individuales + corporativos };
   }).sort((a, b) => b.total - a.total);
 
   const maxTotal = Math.max(0, ...actividad.map((a) => a.total));
   const totalEquipo = actividad.reduce((acc, a) => acc + a.total, 0);
-  const totalClientesEquipo = actividad.reduce((acc, a) => acc + a.individuales + a.corporativos, 0);
-  const totalGestionesEquipo = actividad.reduce((acc, a) => acc + a.reservas + a.pedidos, 0);
+  const totalIndividualesEquipo = actividad.reduce((acc, a) => acc + a.individuales, 0);
+  const totalCorporativosEquipo = actividad.reduce((acc, a) => acc + a.corporativos, 0);
 
   return (
     <div className="space-y-6">
@@ -130,8 +116,8 @@ function EquipoContenido({
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatTile label="Personas en el equipo" value={equipo.length} icon={<Users size={18} />} tono="terracota" />
-          <StatTile label="Clientes registrados" value={totalClientesEquipo} icon={<Building2 size={18} />} tono="verde" trend="individuales + corporativos, este equipo" trendUp />
-          <StatTile label="Reservas y pedidos gestionados" value={totalGestionesEquipo} icon={<CalendarCheck size={18} />} tono="naranja" />
+          <StatTile label="Clientes individuales" value={totalIndividualesEquipo} icon={<Users size={18} />} tono="verde" />
+          <StatTile label="Clientes corporativos" value={totalCorporativosEquipo} icon={<Building2 size={18} />} tono="naranja" />
         </div>
 
         {equipo.length === 0 ? (
@@ -171,7 +157,7 @@ function EquipoContenido({
                 <CardHeader title="Detalle por persona" subtitle="Todo lo que cada cuenta ha gestionado en este negocio" />
               </div>
               <div className="divide-y divide-[var(--color-gris-claro)]/20">
-                {actividad.map(({ usuario: u, individuales, corporativos, reservas, pedidos, total }) => (
+                {actividad.map(({ usuario: u, individuales, corporativos, total }) => (
                   <div key={u.id} className="px-5 py-4">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-9 h-9 rounded-full bg-[var(--color-terracota)] text-white flex items-center justify-center text-xs font-bold shrink-0">
@@ -189,8 +175,6 @@ function EquipoContenido({
                     <div className="flex flex-wrap gap-1.5">
                       <Badge tono="azul">{individuales} clientes naturales</Badge>
                       <Badge tono="verde">{corporativos} corporativos</Badge>
-                      <Badge tono="naranja">{reservas} reservas</Badge>
-                      {tieneDelivery && <Badge tono="gris"><Bike size={11} /> {pedidos} pedidos</Badge>}
                     </div>
                   </div>
                 ))}

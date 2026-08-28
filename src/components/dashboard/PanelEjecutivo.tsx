@@ -1,24 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Users, TrendingUp, Building2, Percent } from "lucide-react";
+import { Users, UserPlus, Percent, Building2 } from "lucide-react";
 import { NEGOCIOS } from "@/lib/mock/negocios";
 import {
-  resumenCrecimientoGrupo, resumenPeriodo, serieParaPeriodo, PERIODOS, Periodo,
+  resumenCrecimientoGrupo, clientesPorTipoPeriodo, serieClientesPorPeriodo, PERIODOS, Periodo,
 } from "@/lib/metrics";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Badge } from "@/components/ui/Badge";
-import { BarChartMensual } from "@/components/charts/BarChartMensual";
+import { BarChartSerie } from "@/components/charts/BarChartSerie";
 import { ExportarPDFBoton } from "@/components/ui/ExportarPDFBoton";
-import { EstadisticasVendedores } from "@/components/dashboard/EstadisticasVendedores";
 
-function sumarSeries(series: { mes: string; reservas: number; pedidos: number }[][]) {
+function sumarSeries(series: { mes: string; clientes: number }[][]) {
   const base = series[0].map((p) => ({ ...p }));
   for (let i = 1; i < series.length; i++) {
     series[i].forEach((p, idx) => {
-      base[idx].reservas += p.reservas;
-      base[idx].pedidos += p.pedidos;
+      base[idx].clientes += p.clientes;
     });
   }
   return base;
@@ -26,20 +24,24 @@ function sumarSeries(series: { mes: string; reservas: number; pedidos: number }[
 
 // Panel de Dirección (socios/directorio en Lima): solo crecimiento del
 // grupo, nada por módulo. Siguiendo la práctica de dashboards ejecutivos —
-// pocas métricas, enfocadas en tendencia — no reservas, no delivery, no
-// tablas fila por fila.
+// pocas métricas, enfocadas en tendencia — sin cifras de ventas, sin
+// tablas fila por fila. Enfoque 100% CRM: captación de clientes, no
+// ingresos (decisión de Mijael al eliminar Reservas/Delivery del sistema).
+// El ranking por asesor NO vive acá — es exclusivo del Panel Gerencial.
+// Por defecto se ve en Mensual: Dirección pidió específicamente "cuántos
+// clientes nuevos registrados al mes, en general".
 export function PanelEjecutivo() {
-  const [periodo, setPeriodo] = useState<Periodo>("semana");
+  const [periodo, setPeriodo] = useState<Periodo>("mes");
   const negociosOperando = NEGOCIOS.filter((n) => n.operando);
 
   const resumen = resumenCrecimientoGrupo(periodo);
-  const resumenesPeriodo = useMemo(
-    () => negociosOperando.map((n) => ({ negocio: n, resumen: resumenPeriodo(n.id, periodo) })),
+  const clientesPorNegocio = useMemo(
+    () => negociosOperando.map((n) => ({ negocio: n, clientes: clientesPorTipoPeriodo(n.id, periodo) })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [periodo]
   );
   const serieCombinada = useMemo(
-    () => sumarSeries(negociosOperando.map((n) => serieParaPeriodo(n.id, periodo))),
+    () => sumarSeries(negociosOperando.map((n) => serieClientesPorPeriodo(n.id, periodo))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [periodo]
   );
@@ -79,16 +81,15 @@ export function PanelEjecutivo() {
           value={resumen.clientesTotales}
           icon={<Users size={18} />}
           tono="terracota"
-          trend={`+${resumen.clientesNuevos} en el periodo`}
-          trendUp
+          trend="Cartera total del grupo"
         />
         <StatTile
-          label={`Ingresos consolidados (${periodoLabel.toLowerCase()})`}
-          value={`S/ ${resumen.ingresos.toLocaleString("es-PE")}`}
-          icon={<TrendingUp size={18} />}
+          label={`Clientes nuevos (${periodoLabel.toLowerCase()})`}
+          value={resumen.clientesNuevos}
+          icon={<UserPlus size={18} />}
           tono="verde"
-          trend={formatearCambio(resumen.ingresosCambio)}
-          trendUp={(resumen.ingresosCambio ?? 0) >= 0}
+          trend={`de los ${resumen.negociosActivos} negocios activos`}
+          trendUp
         />
         <StatTile
           label="Crecimiento de clientes"
@@ -109,18 +110,18 @@ export function PanelEjecutivo() {
       <Card>
         <CardHeader
           title={`Actividad del grupo — ${periodo === "anio" ? "por mes" : "por día"}`}
-          subtitle={`Reservas y delivery combinados de los negocios activos · vista ${periodoLabel.toLowerCase()}`}
+          subtitle={`Clientes nuevos combinados de los negocios activos · vista ${periodoLabel.toLowerCase()}`}
         />
-        <BarChartMensual data={serieCombinada} />
+        <BarChartSerie data={serieCombinada} xKey="mes" series={[{ key: "clientes", nombre: "Clientes nuevos", color: "#8C3A25" }]} />
       </Card>
 
       <Card>
         <CardHeader
           title="Comparativo por negocio"
-          subtitle={`Quién está creciendo más · vista ${periodoLabel.toLowerCase()}`}
+          subtitle={`Quién está captando más clientes · vista ${periodoLabel.toLowerCase()}`}
         />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {resumenesPeriodo.map(({ negocio, resumen: r }) => (
+          {clientesPorNegocio.map(({ negocio, clientes: c }) => (
             <div key={negocio.id} className="rounded-xl border border-[var(--color-gris-claro)]/40 p-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="flex items-center gap-2 font-semibold text-[var(--color-gris)]">
@@ -130,29 +131,21 @@ export function PanelEjecutivo() {
                 <Badge tono="gris">{negocio.tipo === "hotel" ? "Hotel" : "Restaurante"}</Badge>
               </div>
               <dl className="grid grid-cols-2 gap-y-2.5 text-sm">
-                <dt className="text-[var(--color-gris-medio)]">Clientes nuevos</dt>
+                <dt className="text-[var(--color-gris-medio)]">Clientes individuales</dt>
                 <dd className="text-right font-semibold text-[var(--color-gris)]">
-                  {r.clientesNuevos} <Cambio valor={r.clientesNuevosCambio} />
+                  {c.individuales} <Cambio valor={c.individualesCambio} />
                 </dd>
-                <dt className="text-[var(--color-gris-medio)]">Ingresos</dt>
+                <dt className="text-[var(--color-gris-medio)]">Clientes corporativos</dt>
                 <dd className="text-right font-semibold text-[var(--color-gris)]">
-                  S/ {r.ingresos.toLocaleString("es-PE")} <Cambio valor={r.ingresosCambio} />
+                  {c.corporativos} <Cambio valor={c.corporativosCambio} />
                 </dd>
               </dl>
             </div>
           ))}
         </div>
       </Card>
-
-      {/* Estadísticas de Rendimiento Comercial para Directorio */}
-      <EstadisticasVendedores mostrarFiltroNegocio={false} />
     </div>
   );
-}
-
-function formatearCambio(valor: number | null): string | undefined {
-  if (valor === null) return undefined;
-  return `${valor >= 0 ? "+" : ""}${valor}% vs. periodo anterior`;
 }
 
 function Cambio({ valor }: { valor: number | null }) {

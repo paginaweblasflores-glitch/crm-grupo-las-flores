@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Users, CalendarCheck, Bike, BedDouble, Gift, Megaphone,
+  LayoutDashboard, Users, BedDouble, Gift, Megaphone,
   MessageCircle, UserCog, Sparkles, PartyPopper, Users2,
 } from "lucide-react";
 import { ModuloId } from "@/lib/permissions";
@@ -36,8 +36,6 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Panel Principal", modulo: "dashboard", icon: LayoutDashboard, grupo: "Principal", labelResumen: "Panel Ejecutivo", disponibleEnTodas: true },
   { href: "/clientes", label: "Clientes", modulo: "clientes", icon: Users, grupo: "Operación diaria" },
-  { href: "/reservas", label: "Reservas", modulo: "reservas", icon: CalendarCheck, grupo: "Operación diaria" },
-  { href: "/delivery", label: "Delivery", modulo: "delivery", icon: Bike, grupo: "Operación diaria", soloLasFlores: true },
   { href: "/hospedaje", label: "Hospedaje", modulo: "hospedaje", icon: BedDouble, grupo: "Operación diaria", soloUmaru: true },
   { href: "/cumpleanos", label: "Cumpleaños", modulo: "cumpleanos", icon: Gift, grupo: "Relación con el cliente" },
   { href: "/mensajeria", label: "Mensajería", modulo: "mensajeria", icon: MessageCircle, grupo: "Relación con el cliente" },

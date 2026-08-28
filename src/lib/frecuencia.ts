@@ -1,12 +1,12 @@
-// Cálculo de frecuencia de un cliente — misma lógica explicada en el
-// Capítulo 11 del Plan de CRM: se cuentan las reservas/pedidos/hospedajes
-// que comparten el mismo cliente, no se pregunta ni se estima a mano.
+// Cálculo de frecuencia de un cliente — se cuentan sus hospedajes (el único
+// registro de compra que queda en el sistema tras eliminar Reservas y
+// Delivery). Para negocios sin hospedaje (Las Flores, Mamina) esto significa
+// que, honestamente, el CRM ya no tiene ninguna señal de "visita" — es la
+// consecuencia directa de esa decisión, no un error de cálculo.
 
 import { ClienteIndividual, FrecuenciaClasificacion, NegocioId, ResumenCliente } from "./types";
 import type { Tono } from "@/components/ui/Badge";
 import { BASE_DATE } from "./mock/seed";
-import { reservasDeCliente } from "./mock/reservas";
-import { pedidosDeCliente } from "./mock/pedidos";
 import { hospedajesDeCliente } from "./mock/hospedaje";
 import { clientesIndividualesPorNegocio } from "./mock/clientes";
 
@@ -16,19 +16,14 @@ function diasDesde(fechaISO: string): number {
 }
 
 export function resumenDeCliente(cliente: ClienteIndividual): ResumenCliente {
-  const reservas = reservasDeCliente(cliente.id).filter((r) => r.estado !== "cancelada" && r.estado !== "no-llego");
-  const pedidos = pedidosDeCliente(cliente.id).filter((p) => p.estado !== "cancelado");
   const hospedajes = hospedajesDeCliente(cliente.id);
 
-  const eventos: { fecha: string; monto: number }[] = [
-    ...reservas.map((r) => ({ fecha: r.fecha, monto: r.monto ?? 0 })),
-    ...pedidos.map((p) => ({ fecha: p.fecha, monto: p.monto })),
-    ...hospedajes.map((h) => ({ fecha: h.checkOut, monto: h.tarifaNoche })),
+  const eventos: { fecha: string }[] = [
+    ...hospedajes.map((h) => ({ fecha: h.checkOut })),
   ].filter((e) => new Date(e.fecha) <= BASE_DATE);
 
   const totalVisitas = eventos.length;
   const visitas30Dias = eventos.filter((e) => diasDesde(e.fecha) <= 30).length;
-  const gastoTotal = eventos.reduce((acc, e) => acc + e.monto, 0);
 
   const fechasOrdenadas = eventos.map((e) => e.fecha).sort((a, b) => (a < b ? 1 : -1));
   const ultimaVisita = fechasOrdenadas[0] ?? null;
@@ -44,7 +39,7 @@ export function resumenDeCliente(cliente: ClienteIndividual): ResumenCliente {
     clasificacion = "ocasional";
   }
 
-  return { totalVisitas, visitas30Dias, ultimaVisita, gastoTotal, clasificacion };
+  return { totalVisitas, visitas30Dias, ultimaVisita, clasificacion };
 }
 
 export const ETIQUETA_CLASIFICACION: Record<FrecuenciaClasificacion, string> = {

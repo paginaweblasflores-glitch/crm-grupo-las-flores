@@ -277,8 +277,13 @@ function UsuarioForm({
             <p className="text-[11px] text-[var(--color-naranja)] mt-1">Este negocio todavía no opera — la cuenta queda lista para cuando abra.</p>
           )}
         </Campo>
-        <Campo label="Nombre completo" requerido error={errores.nombre}>
-          <input value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} className="input" />
+        <Campo label="Nombre de la cuenta" requerido error={errores.nombre}>
+          <input
+            value={form.nombre}
+            onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
+            placeholder="Ej. Ventas Cuatro"
+            className="input"
+          />
         </Campo>
         <Campo label="Cargo" requerido error={errores.cargo}>
           <select

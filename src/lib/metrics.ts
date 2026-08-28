@@ -1,10 +1,8 @@
 import { NegocioId } from "./types";
 import { BASE_DATE } from "./mock/seed";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "./mock/clientes";
-import { reservasPorNegocio } from "./mock/reservas";
-import { PEDIDOS, pedidosPorNegocio } from "./mock/pedidos";
 import { HOSPEDAJES } from "./mock/hospedaje";
-import { proximosCumpleanos, seguimientosPorNegocio } from "./mock/seguimiento";
+import { seguimientosPorNegocio } from "./mock/seguimiento";
 import { NEGOCIOS } from "./mock/negocios";
 
 function diasDesde(fechaISO: string): number {
@@ -18,107 +16,60 @@ export function clientesNuevos(negocioId: NegocioId, dias: number): number {
   }).length;
 }
 
-export function reservasSemana(negocioId: NegocioId) {
-  const items = reservasPorNegocio(negocioId).filter((r) => {
-    const d = diasDesde(r.fecha);
-    return d >= 0 && d <= 7;
-  });
-  const confirmadas = items.filter((r) => r.estado === "confirmada" || r.estado === "atendida");
-  return { total: items.length, confirmadas: confirmadas.length };
-}
-
-export function pedidosSemana(negocioId: NegocioId) {
-  const items = pedidosPorNegocio(negocioId).filter((p) => {
-    const d = diasDesde(p.fecha);
-    return d >= 0 && d <= 7;
-  });
-  const monto = items.reduce((acc, p) => acc + (p.estado !== "cancelado" ? p.monto : 0), 0);
-  return { total: items.length, monto };
-}
-
-export function ticketPromedio(negocioId: NegocioId): number {
-  const reservasAtendidas = reservasPorNegocio(negocioId).filter((r) => r.estado === "atendida" && r.monto);
-  const pedidos = pedidosPorNegocio(negocioId).filter((p) => p.estado === "entregado");
-  const montos = [...reservasAtendidas.map((r) => r.monto ?? 0), ...pedidos.map((p) => p.monto)];
-  if (montos.length === 0) return 0;
-  return Math.round(montos.reduce((a, b) => a + b, 0) / montos.length);
-}
-
-export function tasaConversionReservas(negocioId: NegocioId): number {
-  const items = reservasPorNegocio(negocioId).filter((r) => r.estado !== "confirmada");
-  if (items.length === 0) return 0;
-  const atendidas = items.filter((r) => r.estado === "atendida").length;
-  return Math.round((atendidas / items.length) * 100);
-}
-
 const MESES_LABEL = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"];
-
-export function serieMensual(negocioId: NegocioId, cantidadMeses = 6) {
-  const meses: { mes: string; reservas: number; pedidos: number }[] = [];
-  for (let i = cantidadMeses - 1; i >= 0; i--) {
-    const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
-    const label = MESES_LABEL[fecha.getMonth()];
-    const reservas = reservasPorNegocio(negocioId).filter((r) => {
-      const f = new Date(r.fecha);
-      return f.getMonth() === fecha.getMonth() && f.getFullYear() === fecha.getFullYear();
-    }).length;
-    const pedidos = PEDIDOS.filter((p) => p.negocioId === negocioId).filter((p) => {
-      const f = new Date(p.fecha);
-      return f.getMonth() === fecha.getMonth() && f.getFullYear() === fecha.getFullYear();
-    }).length;
-    meses.push({ mes: label, reservas, pedidos });
-  }
-  return meses;
-}
 
 export interface ActividadItem {
   id: string;
-  tipo: "reserva" | "delivery" | "hospedaje";
+  tipo: "cliente" | "hospedaje";
   titulo: string;
   detalle: string;
   fecha: string;
 }
 
+// Actividad reciente de relación con el cliente: nuevos registros (el
+// enfoque 100% CRM del sistema) más hospedaje, el único módulo de estancia
+// que queda tras eliminar Reservas y Delivery.
 export function actividadReciente(negocioId: NegocioId, n = 6): ActividadItem[] {
-  const reservas: ActividadItem[] = reservasPorNegocio(negocioId).map((r) => ({
-    id: r.id,
-    tipo: "reserva",
-    titulo: `Reserva de ${r.clienteNombre}`,
-    detalle: `${r.personas} personas · ${r.estado}`,
-    fecha: r.registradoEn,
+  const clientesInd: ActividadItem[] = clientesIndividualesPorNegocio(negocioId).map((c) => ({
+    id: c.id,
+    tipo: "cliente",
+    titulo: `Nuevo cliente: ${c.nombres} ${c.apellidos}`,
+    detalle: `Individual · ${c.origen.replace(/-/g, " ")}`,
+    fecha: c.fechaRegistro,
   }));
-  const pedidos: ActividadItem[] = PEDIDOS.filter((p) => p.negocioId === negocioId).map((p) => ({
-    id: p.id,
-    tipo: "delivery",
-    titulo: `Pedido de ${p.clienteNombre}`,
-    detalle: `S/ ${p.monto} · ${p.estado}`,
-    fecha: p.registradoEn,
+  const clientesCorp: ActividadItem[] = corporativosPorNegocio(negocioId).map((c) => ({
+    id: c.id,
+    tipo: "cliente",
+    titulo: `Nuevo cliente: ${c.razonSocial}`,
+    detalle: "Corporativo",
+    fecha: c.fechaRegistro,
   }));
   const hospedajes: ActividadItem[] = HOSPEDAJES.filter((h) => h.negocioId === negocioId).map((h) => ({
     id: h.id,
     tipo: "hospedaje",
     titulo: `Hospedaje de ${h.clienteNombre}`,
-    detalle: `Hab. ${h.habitacion} · S/ ${h.tarifaNoche}/noche`,
+    detalle: `Hab. ${h.habitacion}`,
     fecha: h.checkIn,
   }));
-  return [...reservas, ...pedidos, ...hospedajes]
+  return [...clientesInd, ...clientesCorp, ...hospedajes]
     .sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
     .slice(0, n);
 }
 
-// Lo único que Dirección necesita del módulo de Cumpleaños: cuántos se
-// mandaron este mes, cuántas reservas concretas salieron de ahí, y cuánta
-// plata generaron — números para decidir, no la gestión día a día.
+// Lo único que Dirección/Gerencial necesita del módulo de Cumpleaños: cuántos
+// saludos se mandaron este mes y cuántos terminaron en una visita — números
+// de fidelización, no de plata. Este campo "reservación" es propio del
+// seguimiento de cumpleaños (si el cliente terminó visitando tras el
+// saludo), no del módulo Reservas — es independiente y no se ve afectado por
+// su eliminación.
 export function resumenCumpleanosMes(negocioId: NegocioId) {
   const seguimientos = seguimientosPorNegocio(negocioId);
   const enviados = seguimientos.filter((s) => s.saludoEnviado).length;
   const reservaron = seguimientos.filter((s) => s.reservacion === "si");
-  const montoTotal = reservaron.reduce((acc, s) => acc + (s.montoConsumo ?? 0), 0);
   return {
     totalDelMes: seguimientos.length,
     enviados,
     personasQueReservaron: reservaron.length,
-    montoTotal,
   };
 }
 
@@ -148,9 +99,6 @@ function diasDelPeriodo(periodo: Periodo): number {
 
 export interface ResumenPeriodo {
   clientesNuevos: number; clientesNuevosCambio: number | null;
-  reservas: number; reservasCambio: number | null;
-  pedidos: number; pedidosCambio: number | null;
-  ingresos: number; ingresosCambio: number | null;
 }
 
 export function resumenPeriodo(negocioId: NegocioId, periodo: Periodo): ResumenPeriodo {
@@ -159,63 +107,21 @@ export function resumenPeriodo(negocioId: NegocioId, periodo: Periodo): ResumenP
   const contarClientes = (offset: number) =>
     clientesIndividualesPorNegocio(negocioId).filter((c) => enVentana(c.fechaRegistro, dias, offset)).length;
 
-  const reservasEnVentana = (offset: number) => reservasPorNegocio(negocioId).filter((r) => enVentana(r.fecha, dias, offset));
-  const pedidosEnVentana = (offset: number) => PEDIDOS.filter((p) => (negocioId === "todas" || p.negocioId === negocioId) && enVentana(p.fecha, dias, offset));
-
-  const ingresosEnVentana = (offset: number) => {
-    const r = reservasEnVentana(offset).filter((x) => x.estado === "atendida").reduce((a, x) => a + (x.monto ?? 0), 0);
-    const p = pedidosEnVentana(offset).filter((x) => x.estado === "entregado").reduce((a, x) => a + x.monto, 0);
-    const h = HOSPEDAJES.filter((x) => (negocioId === "todas" || x.negocioId === negocioId) && enVentana(x.checkIn, dias, offset)).reduce((a, x) => a + (x.tarifaNoche ?? 0), 0);
-    return r + p + h;
-  };
-
   const clientesActual = contarClientes(0);
   const clientesAnterior = contarClientes(dias);
-  const reservasActual = reservasEnVentana(0).length;
-  const reservasAnterior = reservasEnVentana(dias).length;
-  const pedidosActual = pedidosEnVentana(0).length;
-  const pedidosAnterior = pedidosEnVentana(dias).length;
-  const ingresosActual = ingresosEnVentana(0);
-  const ingresosAnterior = ingresosEnVentana(dias);
 
   return {
     clientesNuevos: clientesActual,
     clientesNuevosCambio: cambioPorcentual(clientesActual, clientesAnterior),
-    reservas: reservasActual,
-    reservasCambio: cambioPorcentual(reservasActual, reservasAnterior),
-    pedidos: pedidosActual,
-    pedidosCambio: cambioPorcentual(pedidosActual, pedidosAnterior),
-    ingresos: ingresosActual,
-    ingresosCambio: cambioPorcentual(ingresosActual, ingresosAnterior),
   };
 }
 
-// Serie para el gráfico según el periodo elegido: por día (diario/semanal/
-// mensual) o por mes (anual) — así el gráfico siempre tiene una resolución
-// razonable en vez de 365 barras diarias ilegibles.
-export function serieParaPeriodo(negocioId: NegocioId, periodo: Periodo) {
-  if (periodo === "anio") {
-    return serieMensual(negocioId, 12);
-  }
-  const dias = periodo === "dia" ? 7 : periodo === "semana" ? 7 : 30; // "dia" también muestra la semana como contexto
-  const puntos: { mes: string; reservas: number; pedidos: number }[] = [];
-  for (let i = dias - 1; i >= 0; i--) {
-    const fecha = new Date(BASE_DATE);
-    fecha.setDate(fecha.getDate() - i);
-    const clave = fecha.toISOString().slice(0, 10);
-    const label = fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" });
-    const reservas = reservasPorNegocio(negocioId).filter((r) => r.fecha === clave).length;
-    const pedidos = PEDIDOS.filter((p) => p.negocioId === negocioId && p.fecha === clave).length;
-    puntos.push({ mes: label, reservas, pedidos });
-  }
-  return puntos;
-}
-
 // --- Distribuciones para gráficos de dona por módulo -----------------------
-const ORIGEN_LABEL: Record<string, string> = {
-  "web-reservas": "Web — Reservas",
-  "web-delivery": "Web — Delivery",
-  presencial: "Presencial",
+// Única fuente de las etiquetas de canal de registro — antes había una
+// segunda copia divergente en PanelGerencial.tsx, se consolidó acá.
+export const ORIGEN_LABEL: Record<string, string> = {
+  crm: "CRM (presencial)",
+  web: "Sitio web",
   "redes-sociales": "Redes sociales",
   referido: "Referido",
   "importado-excel": "Importado de Excel",
@@ -227,120 +133,6 @@ export function distribucionOrigen(negocioId: NegocioId) {
     conteo[c.origen] = (conteo[c.origen] ?? 0) + 1;
   });
   return Object.entries(conteo).map(([origen, valor]) => ({ nombre: ORIGEN_LABEL[origen] ?? origen, valor }));
-}
-
-const ESTADO_RESERVA_LABEL: Record<string, string> = {
-  confirmada: "Confirmada", atendida: "Atendida", cancelada: "Cancelada", "no-llego": "No llegó",
-};
-
-export function distribucionEstadoReservas(negocioId: NegocioId) {
-  const conteo: Record<string, number> = {};
-  reservasPorNegocio(negocioId).forEach((r) => { conteo[r.estado] = (conteo[r.estado] ?? 0) + 1; });
-  return Object.entries(conteo).map(([estado, valor]) => ({ nombre: ESTADO_RESERVA_LABEL[estado] ?? estado, valor }));
-}
-
-const ESTADO_PEDIDO_LABEL: Record<string, string> = {
-  "en-preparacion": "En preparación", "en-camino": "En camino", entregado: "Entregado", cancelado: "Cancelado",
-};
-
-export function distribucionEstadoPedidos(negocioId: NegocioId) {
-  const conteo: Record<string, number> = {};
-  pedidosPorNegocio(negocioId).forEach((p) => { conteo[p.estado] = (conteo[p.estado] ?? 0) + 1; });
-  return Object.entries(conteo).map(([estado, valor]) => ({ nombre: ESTADO_PEDIDO_LABEL[estado] ?? estado, valor }));
-}
-
-// --- Delivery por periodo ----------------------------------------------------
-export function pedidosPorPeriodo(negocioId: NegocioId, periodo: Periodo) {
-  const dias = diasDelPeriodo(periodo);
-  const enVentanaPedidos = (offset: number) => pedidosPorNegocio(negocioId).filter((p) => enVentana(p.fecha, dias, offset));
-  const actual = enVentanaPedidos(0);
-  const anterior = enVentanaPedidos(dias);
-  const montoActual = actual.filter((p) => p.estado === "entregado").reduce((a, p) => a + p.monto, 0);
-  const montoAnterior = anterior.filter((p) => p.estado === "entregado").reduce((a, p) => a + p.monto, 0);
-  return {
-    total: actual.length, totalCambio: cambioPorcentual(actual.length, anterior.length),
-    monto: montoActual, montoCambio: cambioPorcentual(montoActual, montoAnterior),
-  };
-}
-
-export function seriePedidosPorPeriodo(negocioId: NegocioId, periodo: Periodo) {
-  if (periodo === "anio") {
-    const meses: { mes: string; pedidos: number }[] = [];
-    for (let i = 11; i >= 0; i--) {
-      const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
-      const label = MESES_LABEL[fecha.getMonth()];
-      const pedidos = pedidosPorNegocio(negocioId).filter((p) => {
-        const f = new Date(p.fecha);
-        return f.getMonth() === fecha.getMonth() && f.getFullYear() === fecha.getFullYear();
-      }).length;
-      meses.push({ mes: label, pedidos });
-    }
-    return meses;
-  }
-  const dias = periodo === "mes" ? 30 : 7;
-  const puntos: { mes: string; pedidos: number }[] = [];
-  for (let i = dias - 1; i >= 0; i--) {
-    const fecha = new Date(BASE_DATE);
-    fecha.setDate(fecha.getDate() - i);
-    const clave = fecha.toISOString().slice(0, 10);
-    const label = fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" });
-    const pedidos = PEDIDOS.filter((p) => p.negocioId === negocioId && p.fecha === clave).length;
-    puntos.push({ mes: label, pedidos });
-  }
-  return puntos;
-}
-
-// --- Reservas: confirmadas/atendidas y conversión, dentro del periodo -------
-// Antes estas dos tarjetas del resumen de Dirección quedaban fijas (una
-// siempre calculaba "esta semana" sin importar el filtro elegido, la otra
-// promediaba todo el histórico) — ahora ambas se recalculan sobre la misma
-// ventana de tiempo que el resto del resumen.
-export function reservasEstadoPorPeriodo(negocioId: NegocioId, periodo: Periodo) {
-  const dias = diasDelPeriodo(periodo);
-  const enP = (offset: number) => reservasPorNegocio(negocioId).filter((r) => enVentana(r.fecha, dias, offset));
-  const actual = enP(0);
-  const anterior = enP(dias);
-
-  const confirmadasActual = actual.filter((r) => r.estado === "confirmada" || r.estado === "atendida").length;
-  const confirmadasAnterior = anterior.filter((r) => r.estado === "confirmada" || r.estado === "atendida").length;
-
-  const elegiblesActual = actual.filter((r) => r.estado !== "confirmada");
-  const atendidasActual = elegiblesActual.filter((r) => r.estado === "atendida").length;
-  const conversion = elegiblesActual.length === 0 ? 0 : Math.round((atendidasActual / elegiblesActual.length) * 100);
-
-  return {
-    confirmadas: confirmadasActual,
-    confirmadasCambio: cambioPorcentual(confirmadasActual, confirmadasAnterior),
-    conversion,
-  };
-}
-
-// --- Reservas: serie de una sola variable (para el resumen de Reservas) ----
-export function serieReservasPorPeriodo(negocioId: NegocioId, periodo: Periodo) {
-  if (periodo === "anio") {
-    const meses: { mes: string; reservas: number }[] = [];
-    for (let i = 11; i >= 0; i--) {
-      const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
-      const label = MESES_LABEL[fecha.getMonth()];
-      const reservas = reservasPorNegocio(negocioId).filter((r) => {
-        const f = new Date(r.fecha);
-        return f.getMonth() === fecha.getMonth() && f.getFullYear() === fecha.getFullYear();
-      }).length;
-      meses.push({ mes: label, reservas });
-    }
-    return meses;
-  }
-  const dias = periodo === "mes" ? 30 : 7;
-  const puntos: { mes: string; reservas: number }[] = [];
-  for (let i = dias - 1; i >= 0; i--) {
-    const fecha = new Date(BASE_DATE);
-    fecha.setDate(fecha.getDate() - i);
-    const clave = fecha.toISOString().slice(0, 10);
-    const label = fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" });
-    const reservas = reservasPorNegocio(negocioId).filter((r) => r.fecha === clave).length;
-    puntos.push({ mes: label, reservas });
-  }
-  return puntos;
 }
 
 // --- Clientes: nuevos por periodo, separado por tipo ------------------------
@@ -407,59 +199,10 @@ export function resumenHospedajePeriodo(periodo: Periodo) {
   const enPeriodo = (offset: number) => HOSPEDAJES.filter((h) => enVentana(h.checkIn, dias, offset));
   const actual = enPeriodo(0);
   const anterior = enPeriodo(dias);
-  const ingreso = (arr: typeof HOSPEDAJES) => arr.reduce((a, h) => a + nochesDe(h) * h.tarifaNoche, 0);
-  const ingresoActual = ingreso(actual);
-  const ingresoAnterior = ingreso(anterior);
   return {
     estadias: actual.length, estadiasCambio: cambioPorcentual(actual.length, anterior.length),
     noches: actual.reduce((a, h) => a + nochesDe(h), 0),
-    ingreso: ingresoActual, ingresoCambio: cambioPorcentual(ingresoActual, ingresoAnterior),
   };
-}
-
-// Ingresos "de verdad" de un negocio en un periodo: reservas atendidas +
-// delivery entregado + hospedaje (solo aplica a Umaru) — resumenPeriodo() no
-// suma hospedaje porque nació para el resumen de Dirección/Ventas, que no lo
-// necesitaban desglosado así; el Panel Gerencial sí necesita el ingreso real
-// total del negocio, no solo la parte de reservas/pedidos.
-export function ingresosTotalesPeriodo(negocioId: NegocioId, periodo: Periodo) {
-  const dias = diasDelPeriodo(periodo);
-  const reservasIngreso = (offset: number) =>
-    reservasPorNegocio(negocioId)
-      .filter((r) => enVentana(r.fecha, dias, offset) && r.estado === "atendida")
-      .reduce((a, r) => a + (r.monto ?? 0), 0);
-  const pedidosIngreso = (offset: number) =>
-    PEDIDOS.filter((p) => (negocioId === "todas" || p.negocioId === negocioId) && enVentana(p.fecha, dias, offset) && p.estado === "entregado").reduce((a, p) => a + p.monto, 0);
-  const hospedajeIngreso = (offset: number) =>
-    HOSPEDAJES.filter((h) => (negocioId === "todas" || h.negocioId === negocioId) && enVentana(h.checkIn, dias, offset)).reduce((a, h) => a + nochesDe(h) * h.tarifaNoche, 0);
-
-  const actual = reservasIngreso(0) + pedidosIngreso(0) + hospedajeIngreso(0);
-  const anterior = reservasIngreso(dias) + pedidosIngreso(dias) + hospedajeIngreso(dias);
-  return { total: actual, cambio: cambioPorcentual(actual, anterior) };
-}
-
-// Ticket promedio DEL periodo elegido — a diferencia de ticketPromedio()
-// (histórico, todo el tiempo), esta sí responde al selector
-// Diario/Semanal/Mensual/Anual, igual que sus 3 vecinas en el Panel
-// Gerencial. Mismo criterio de "venta real" que ingresosTotalesPeriodo():
-// reservas atendidas + pedidos entregados + hospedaje (si es Umaru).
-export function ticketPromedioPeriodo(negocioId: NegocioId, periodo: Periodo): number {
-  const dias = diasDelPeriodo(periodo);
-  const reservasAtendidas = reservasPorNegocio(negocioId).filter(
-    (r) => enVentana(r.fecha, dias, 0) && r.estado === "atendida"
-  );
-  const pedidosEntregados = PEDIDOS.filter(
-    (p) => (negocioId === "todas" || p.negocioId === negocioId) && enVentana(p.fecha, dias, 0) && p.estado === "entregado"
-  );
-  const hospedajesDelPeriodo = HOSPEDAJES.filter((h) => (negocioId === "todas" || h.negocioId === negocioId) && enVentana(h.checkIn, dias, 0));
-
-  const montos = [
-    ...reservasAtendidas.map((r) => r.monto ?? 0),
-    ...pedidosEntregados.map((p) => p.monto),
-    ...hospedajesDelPeriodo.map((h) => nochesDe(h) * h.tarifaNoche),
-  ];
-  if (montos.length === 0) return 0;
-  return Math.round(montos.reduce((a, b) => a + b, 0) / montos.length);
 }
 
 export function serieHospedajePorPeriodo(periodo: Periodo) {
@@ -490,13 +233,13 @@ export function serieHospedajePorPeriodo(periodo: Periodo) {
 }
 
 // --- Panel de Dirección: crecimiento del grupo, sin desglose por módulo ----
-// Los socios en Lima no necesitan ver reservas ni delivery por separado —
-// necesitan saber si el grupo está creciendo. 4 números, no más (siguiendo
-// la práctica de dashboards ejecutivos: 3-5 métricas enfocadas en tendencia).
+// Los socios en Lima no necesitan ver el detalle operativo — necesitan saber
+// si el grupo está creciendo en clientes. Enfoque 100% CRM: sin ingresos
+// consolidados (decisión de Mijael al eliminar Reservas/Delivery).
 export interface ResumenCrecimientoGrupo {
   clientesTotales: number;
+  corporativosTotales: number;
   clientesNuevos: number; clientesNuevosCambio: number | null;
-  ingresos: number; ingresosCambio: number | null;
   negociosActivos: number;
 }
 
@@ -508,8 +251,8 @@ export function resumenCrecimientoGrupo(periodo: Periodo): ResumenCrecimientoGru
     (a, n) => a + clientesIndividualesPorNegocio(n.id).length + corporativosPorNegocio(n.id).length,
     0
   );
+  const corporativosTotales = activos.reduce((a, n) => a + corporativosPorNegocio(n.id).length, 0);
   const clientesNuevos = resumenes.reduce((a, r) => a + r.clientesNuevos, 0);
-  const ingresos = resumenes.reduce((a, r) => a + r.ingresos, 0);
 
   const promedio = (valores: (number | null)[]) => {
     const validos = valores.filter((v): v is number => v !== null);
@@ -518,10 +261,9 @@ export function resumenCrecimientoGrupo(periodo: Periodo): ResumenCrecimientoGru
 
   return {
     clientesTotales,
+    corporativosTotales,
     clientesNuevos,
     clientesNuevosCambio: promedio(resumenes.map((r) => r.clientesNuevosCambio)),
-    ingresos,
-    ingresosCambio: promedio(resumenes.map((r) => r.ingresosCambio)),
     negociosActivos: activos.length,
   };
 }
@@ -536,56 +278,27 @@ export function clientesPorNegocioTotales() {
   return conteos.map((c) => ({ ...c, porcentaje: total === 0 ? 0 : Math.round((c.clientes / total) * 100) }));
 }
 
-export function resumenNegocio(negocioId: NegocioId) {
-  const clientes = clientesIndividualesPorNegocio(negocioId).length + corporativosPorNegocio(negocioId).length;
-  const reservas = reservasSemana(negocioId);
-  const pedidos = pedidosSemana(negocioId);
-  const cumples = proximosCumpleanos(negocioId, BASE_DATE, 10).length;
-  return {
-    clientes,
-    reservasSemana: reservas.total,
-    pedidosSemana: pedidos.total,
-    ingresosSemana: pedidos.monto + reservas.confirmadas * ticketPromedio(negocioId),
-    proximosCumples: cumples,
-    ticketPromedio: ticketPromedio(negocioId),
-  };
-}
-
-// --- Módulo Estadísticas: dinámico por métrica (no solo ingresos) ----------
-// Mijael pidió poder elegir qué mirar (ingresos, reservas, delivery,
-// hospedaje, clientes nuevos) en vez de un reporte fijo — todo lo de acá
-// abajo recibe `metrica` como parámetro y cambia de fuente de datos según
-// cuál esté seleccionada en la UI.
-export type MetricaEstadistica = "ingresos" | "reservas" | "delivery" | "hospedaje" | "clientes";
+// --- Módulo Estadísticas: dinámico por métrica ------------------------------
+// Tras eliminar Reservas y Delivery, "ingresos" deja de existir como
+// concepto (enfoque 100% CRM) — solo quedan las métricas que sí tienen una
+// fuente de datos real: Hospedaje (solo Umaru) y Clientes nuevos (los 3
+// negocios). Los paneles anclan a "clientes" por defecto y a veces ni
+// siquiera muestran el selector, pero la infraestructura queda genérica por
+// si se necesita en más lugares.
+export type MetricaEstadistica = "hospedaje" | "clientes";
 
 export const METRICAS_ESTADISTICA: { value: MetricaEstadistica; label: string; unidad: "dinero" | "conteo" }[] = [
-  { value: "ingresos", label: "Ingresos", unidad: "dinero" },
-  { value: "reservas", label: "Reservas", unidad: "conteo" },
-  { value: "delivery", label: "Delivery", unidad: "conteo" },
   { value: "hospedaje", label: "Hospedaje", unidad: "conteo" },
   { value: "clientes", label: "Clientes nuevos", unidad: "conteo" },
 ];
 
 // Valor de una métrica para un negocio en un mes calendario específico.
-// "ingresos" combina reservas atendidas + pedidos entregados + hospedaje (si
-// es Umaru) — mismo criterio que ingresosTotalesPeriodo(); las demás son un
-// conteo simple de esa actividad puntual.
 function valorDelMes(negocioId: NegocioId, metrica: MetricaEstadistica, anio: number, mes: number): number {
   const enElMes = (fechaISO: string) => {
     const f = new Date(fechaISO);
     return f.getFullYear() === anio && f.getMonth() === mes;
   };
   switch (metrica) {
-    case "ingresos": {
-      const reservas = reservasPorNegocio(negocioId).filter((r) => r.estado === "atendida" && enElMes(r.fecha)).reduce((a, r) => a + (r.monto ?? 0), 0);
-      const pedidos = PEDIDOS.filter((p) => p.negocioId === negocioId && p.estado === "entregado" && enElMes(p.fecha)).reduce((a, p) => a + p.monto, 0);
-      const hospedaje = HOSPEDAJES.filter((h) => h.negocioId === negocioId && enElMes(h.checkIn)).reduce((a, h) => a + nochesDe(h) * h.tarifaNoche, 0);
-      return reservas + pedidos + hospedaje;
-    }
-    case "reservas":
-      return reservasPorNegocio(negocioId).filter((r) => enElMes(r.fecha)).length;
-    case "delivery":
-      return PEDIDOS.filter((p) => p.negocioId === negocioId && enElMes(p.fecha)).length;
     case "hospedaje":
       return HOSPEDAJES.filter((h) => h.negocioId === negocioId && enElMes(h.checkIn)).length;
     case "clientes":
@@ -614,7 +327,7 @@ export function serieMensualMetrica(negocioId: NegocioId, metrica: MetricaEstadi
 }
 
 // El mes con más y con menos actividad de la métrica elegida, de los
-// últimos 12 — para la fila de insights destacados del módulo Estadísticas.
+// últimos 12 — para la fila de insights destacados del panel.
 export function mejorYPeorMesMetrica(negocioId: NegocioId, metrica: MetricaEstadistica): { mejor: PuntoMensual | null; peor: PuntoMensual | null } {
   const conDatos = serieMensualMetrica(negocioId, metrica, 12).filter((p) => p.valor > 0);
   if (conDatos.length === 0) return { mejor: null, peor: null };
@@ -629,7 +342,7 @@ const DIAS_SEMANA_LABEL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves",
 export interface PuntoDiaSemana { dia: string; valor: number; [key: string]: string | number; }
 
 // Actividad de la métrica elegida, agrupada por día de la semana sobre los
-// últimos `meses` — muestra si el negocio vende más el fin de semana o entre
+// últimos `meses` — muestra si el negocio capta más el fin de semana o entre
 // semana. Se devuelve en orden Lunes→Domingo para que el gráfico se lea como
 // una semana normal, no como empieza Date.getDay() (domingo=0).
 export function actividadPorDiaSemanaMetrica(negocioId: NegocioId, metrica: MetricaEstadistica, meses = 12): PuntoDiaSemana[] {
@@ -642,17 +355,6 @@ export function actividadPorDiaSemanaMetrica(negocioId: NegocioId, metrica: Metr
   };
 
   switch (metrica) {
-    case "ingresos":
-      reservasPorNegocio(negocioId).filter((r) => r.estado === "atendida").forEach((r) => sumarPorDia(r.fecha, r.monto ?? 0));
-      PEDIDOS.filter((p) => p.negocioId === negocioId && p.estado === "entregado").forEach((p) => sumarPorDia(p.fecha, p.monto));
-      HOSPEDAJES.filter((h) => h.negocioId === negocioId).forEach((h) => sumarPorDia(h.checkIn, nochesDe(h) * h.tarifaNoche));
-      break;
-    case "reservas":
-      reservasPorNegocio(negocioId).forEach((r) => sumarPorDia(r.fecha));
-      break;
-    case "delivery":
-      PEDIDOS.filter((p) => p.negocioId === negocioId).forEach((p) => sumarPorDia(p.fecha));
-      break;
     case "hospedaje":
       HOSPEDAJES.filter((h) => h.negocioId === negocioId).forEach((h) => sumarPorDia(h.checkIn));
       break;
@@ -677,10 +379,9 @@ export function mejorYPeorDiaSemanaMetrica(negocioId: NegocioId, metrica: Metric
 }
 
 // --- Panel Gerencial: desglose por negocio de la métrica elegida -----------
-// Para "Todas las sucursales" — cuánto aporta cada sede real a la métrica que
-// Mijael tenga seleccionada (mismo selector que ya usa el gráfico "Patrón por
-// día"), en la misma ventana de 12 meses que el resto de los insights de esa
-// métrica. Mismo patrón de barras que clientesPorNegocioTotales().
+// Para "Todas las sucursales" — cuánto aporta cada sede real a la métrica
+// elegida, en la misma ventana de 12 meses que el resto de los insights de
+// esa métrica. Mismo patrón de barras que clientesPorNegocioTotales().
 export interface DesgloseNegocioMetrica {
   negocio: (typeof NEGOCIOS)[number];
   valor: number;
@@ -693,5 +394,24 @@ export function desglosePorNegocioMetrica(metrica: MetricaEstadistica): Desglose
     valor: serieMensualMetrica(n.id, metrica, 12).reduce((a, p) => a + p.valor, 0),
   }));
   const total = conteos.reduce((a, c) => a + c.valor, 0);
-  return conteos.map((c) => ({ ...c, porcentaje: total === 0 ? 0 : Math.round((c.valor / total) * 100) }));
+  return conteos
+    .map((c) => ({ ...c, porcentaje: total === 0 ? 0 : Math.round((c.valor / total) * 100) }))
+    .sort((a, b) => b.valor - a.valor);
+}
+
+// --- Panel Gerencial: registros por canal web, desglosados por sede --------
+// Bajo "Todas las sucursales" — cuántos clientes llegaron por la web de cada
+// negocio. "Web" ya es un valor único de `origen` (no hace falta un valor
+// distinto por sede: un cliente ya pertenece a un solo negocio, así que
+// cruzar origen==="web" con negocioId ya da "web de Las Flores/Umaru/Mamina"
+// sin inflar el enum de origen).
+export function origenWebPorNegocio(): DesgloseNegocioMetrica[] {
+  const conteos = NEGOCIOS.map((n) => ({
+    negocio: n,
+    valor: clientesIndividualesPorNegocio(n.id).filter((c) => c.origen === "web").length,
+  }));
+  const total = conteos.reduce((a, c) => a + c.valor, 0);
+  return conteos
+    .map((c) => ({ ...c, porcentaje: total === 0 ? 0 : Math.round((c.valor / total) * 100) }))
+    .sort((a, b) => b.valor - a.valor);
 }

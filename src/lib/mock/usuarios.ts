@@ -1,9 +1,15 @@
 import { Usuario } from "@/lib/types";
 
-// Cuentas base del prototipo. Mijael (Gerencial) puede crear cuentas nuevas
-// de Ventas para cualquiera de los 3 negocios desde el módulo de Usuarios —
-// esas se guardan aparte (ver lib/store.ts) y se combinan con esta lista al
-// iniciar sesión.
+// Cuentas base del prototipo — son cuentas de ÁREA/CARGO, no de persona (así
+// lo pidió Mijael: "ya no más con nombres reales sino con los nombres de
+// áreas"). La única excepción es Gerente General, que además guarda
+// `nombreReal` — el perfil (Topbar, saludo) lo muestra tal cual una vez
+// dentro del sistema, aunque el selector de login siga mostrando el nombre
+// del cargo como todas las demás cuentas.
+// Las 3 cuentas de Ventas llevan `creadoPor: "mijael"` a propósito, para que
+// el módulo de Usuarios las trate como gestionables (editar/cambiar
+// contraseña) igual que cualquier cuenta nueva, no como "cuenta base"
+// bloqueada.
 export const USUARIOS: Usuario[] = [
   {
     id: "socios",
@@ -12,64 +18,57 @@ export const USUARIOS: Usuario[] = [
     rolTipo: "direccion",
     rolLabel: "Dirección",
     iniciales: "D",
-    usuario: "socios",
-    contrasena: "direccion2026",
+    usuario: "directorio",
+    contrasena: "directorio2026",
     negocioId: "las-flores",
   },
   {
     id: "mijael",
-    nombre: "Mijael Rodrigues",
+    nombre: "Gerente General",
+    nombreReal: "Mijail Rodríguez",
     cargo: "Gerente General — Grupo Las Flores",
     rolTipo: "gerencial",
     rolLabel: "Gerencial",
     iniciales: "MR",
-    usuario: "mijael",
-    contrasena: "gerencial2026",
+    usuario: "gerentegeneral",
+    contrasena: "gerentegeneral2026",
     negocioId: "las-flores",
   },
   {
     id: "betsy",
-    nombre: "Betsy",
-    cargo: "Administración y Ventas — Restaurante Las Flores",
-    rolTipo: "ventas",
-    rolLabel: "Ventas",
-    iniciales: "BT",
-    usuario: "betsy",
-    contrasena: "ventas2026",
-    negocioId: "las-flores",
-  },
-  {
-    id: "melisa",
-    nombre: "Melisa",
+    nombre: "Ventas Uno",
     cargo: "Ventas — Restaurante Las Flores",
     rolTipo: "ventas",
     rolLabel: "Ventas",
-    iniciales: "ML",
-    usuario: "melisa",
-    contrasena: "ventas2026",
+    iniciales: "VU",
+    usuario: "ventasuno",
+    contrasena: "ventasuno2026",
     negocioId: "las-flores",
+    creadoPor: "mijael",
+  },
+  {
+    id: "melisa",
+    nombre: "Ventas Dos",
+    cargo: "Ventas — Restaurante Las Flores",
+    rolTipo: "ventas",
+    rolLabel: "Ventas",
+    iniciales: "VD",
+    usuario: "ventasdos",
+    contrasena: "ventasdos2026",
+    negocioId: "las-flores",
+    creadoPor: "mijael",
   },
   {
     id: "carla",
-    nombre: "Carla Huamán",
-    cargo: "Recepcionista — Hotel Umaru",
+    nombre: "Ventas Tres",
+    cargo: "Ventas — Hotel Umaru",
     rolTipo: "ventas",
     rolLabel: "Ventas",
-    iniciales: "CH",
-    usuario: "carla",
-    contrasena: "umaru2026",
+    iniciales: "VT",
+    usuario: "ventastres",
+    contrasena: "ventastres2026",
     negocioId: "umaru",
-  },
-  {
-    id: "valeria",
-    nombre: "Valeria Castro",
-    cargo: "Ventas y Atención — Mamina Restobar",
-    rolTipo: "ventas",
-    rolLabel: "Ventas",
-    iniciales: "VC",
-    usuario: "valeria",
-    contrasena: "mamina2026",
-    negocioId: "mamina",
+    creadoPor: "mijael",
   },
 ];
 

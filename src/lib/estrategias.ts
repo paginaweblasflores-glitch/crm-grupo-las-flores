@@ -6,20 +6,17 @@
 import { NegocioId } from "./types";
 import {
   resumenPeriodo, clientesPorTipoPeriodo, distribucionOrigen, resumenCumpleanosMes,
-  ticketPromedio, pedidosPorPeriodo,
 } from "./metrics";
+import { clientesQueVolvieronEsteMes, distribucionFrecuencia } from "./frecuencia";
 import { campanasPorNegocio } from "./mock/campanas";
 
-export function sugerenciasPara(negocioId: NegocioId): string[] {
-  const base = [
+export function sugerenciasPara(): string[] {
+  return [
     "Arma una campaña para el próximo mes",
     "¿Cómo van los cumpleaños de este mes?",
-    "Ideas para subir el ticket promedio",
+    "Ideas para que vuelvan más clientes",
     "¿De dónde vienen mis clientes nuevos?",
-    "¿Qué tal van las reservas este mes?",
   ];
-  if (negocioId === "las-flores") base.push("¿Cómo van los pedidos por delivery?");
-  return base;
 }
 
 function origenPrincipal(negocioId: NegocioId): { nombre: string; valor: number } | null {
@@ -37,8 +34,8 @@ export function generarRespuesta(prompt: string, negocioId: NegocioId, negocioNo
     const tasa = c.enviados === 0 ? 0 : Math.round((c.personasQueReservaron / c.enviados) * 100);
     return (
       `Este mes en ${negocioNombre}: ${c.totalDelMes} clientes cumplen años, se enviaron ${c.enviados} saludos y ` +
-      `${c.personasQueReservaron} terminaron reservando (S/ ${c.montoTotal.toLocaleString("es-PE")} generados) — una conversión de saludo a reserva de ${tasa}%.\n\n` +
-      `Sugerencia: si la conversión está por debajo de 20%, prueba agregar un beneficio concreto al saludo (ej. "postre de cortesía" o "10% en tu consumo") en vez de solo felicitar — suele mover más a reservar. Puedes armar ese mensaje desde Mensajería.`
+      `${c.personasQueReservaron} terminaron visitando — una conversión de saludo a visita de ${tasa}%.\n\n` +
+      `Sugerencia: si la conversión está por debajo de 20%, prueba agregar un beneficio concreto al saludo (ej. "postre de cortesía") en vez de solo felicitar — suele mover más a visitar. Puedes armar ese mensaje desde Mensajería.`
     );
   }
 
@@ -56,28 +53,14 @@ export function generarRespuesta(prompt: string, negocioId: NegocioId, negocioNo
     );
   }
 
-  if (p.includes("ticket") || p.includes("gasto promedio") || p.includes("consumo promedio")) {
-    const ticket = ticketPromedio(negocioId);
+  if (p.includes("vuelv") || p.includes("retenci") || p.includes("frecuen")) {
+    const volvieron = clientesQueVolvieronEsteMes(negocioId);
+    const distrib = distribucionFrecuencia(negocioId);
+    const inactivos = distrib.find((d) => d.nombre === "Cliente inactivo")?.valor ?? 0;
     return (
-      `El ticket promedio actual en ${negocioNombre} es S/ ${ticket}.\n\n` +
-      `Ideas concretas para subirlo: (1) sugerir un combo o adicional al momento de la reserva/pedido, (2) crear un "menú del mes" con un plato de mayor margen, ` +
-      `(3) ofrecer upgrade de mesa/experiencia para reservas de eventos. Si me dices cuál te interesa, te ayudo a armar cómo comunicarlo.`
-    );
-  }
-
-  if (p.includes("delivery") || p.includes("pedido")) {
-    const semana = pedidosPorPeriodo(negocioId, "semana");
-    const mesPedidos = pedidosPorPeriodo(negocioId, "mes");
-    return (
-      `Delivery en ${negocioNombre}: ${semana.total} pedidos esta semana (S/ ${semana.monto.toLocaleString("es-PE")}), ${mesPedidos.total} en el mes.\n\n` +
-      `Si ${semana.totalCambio !== null && semana.totalCambio < 0 ? "está bajando" : "quieres empujarlo más"}, una campaña dirigida solo a clientes que ya pidieron delivery antes (no a toda la base) suele convertir mejor que una general — puedo ayudarte a armar esa segmentación.`
-    );
-  }
-
-  if (p.includes("reserva")) {
-    return (
-      `Reservas en ${negocioNombre} este mes: ${mes.reservas}${formatearCambioTexto(mes.reservasCambio)}.\n\n` +
-      `Si están bajas, revisa qué días de la semana concentran menos reservas y prueba una promoción específica para esos días (2x1 entre semana, descuento en horario valle) en vez de una oferta general — suele rendir mejor.`
+      `Este mes volvieron ${volvieron} clientes en ${negocioNombre}${inactivos > 0 ? `, y tienes ${inactivos} clientes inactivos (sin visitas en más de 90 días)` : ""}.\n\n` +
+      `Ideas concretas: (1) manda un mensaje directo a los clientes inactivos con un motivo concreto para volver (no un saludo genérico), (2) revisa si los cumpleaños de este mes ya recibieron su saludo — suele ser el gancho más fácil, ` +
+      `(3) si tienes una fecha festiva cerca, arma una campaña dirigida solo a los que no han vuelto en un tiempo. Dime cuál te interesa y te ayudo a armarla.`
     );
   }
 
@@ -93,17 +76,12 @@ export function generarRespuesta(prompt: string, negocioId: NegocioId, negocioNo
 
   if (p.includes("negocio") && p.includes("atenci")) {
     return (
-      `Para comparar los tres negocios lado a lado con números reales, usa el Tablero General (arriba del todo) — ahí ves clientes, reservas, ingresos y el comparativo por negocio con el mismo filtro de periodo. Desde aquí solo puedo hablarte del negocio que tienes seleccionado (${negocioNombre}).`
+      `Para comparar los tres negocios lado a lado con números reales, usa el Panel Principal (arriba del todo) — ahí ves clientes y el comparativo por negocio con el mismo filtro de periodo. Desde aquí solo puedo hablarte del negocio que tienes seleccionado (${negocioNombre}).`
     );
   }
 
   return (
-    `Puedo ayudarte con ${negocioNombre} sobre: armar una campaña, revisar cumpleaños del mes, ideas para el ticket promedio, cómo van las reservas o el delivery, y de dónde vienen tus clientes nuevos.\n\n` +
+    `Puedo ayudarte con ${negocioNombre} sobre: armar una campaña, revisar cumpleaños del mes, ideas para que vuelvan más clientes, y de dónde vienen tus clientes nuevos.\n\n` +
     `Prueba una de las sugerencias de abajo, o cuéntame con más detalle qué necesitas decidir.`
   );
-}
-
-function formatearCambioTexto(valor: number | null): string {
-  if (valor === null) return "";
-  return ` (${valor >= 0 ? "+" : ""}${valor}% vs. el mes anterior)`;
 }

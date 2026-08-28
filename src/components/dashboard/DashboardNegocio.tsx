@@ -1,15 +1,12 @@
-import { Users, CalendarCheck, Bike, Gift } from "lucide-react";
+import { Users, Building2, Gift, MessageCircle } from "lucide-react";
 import { NegocioId } from "@/lib/types";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { RingProgress } from "@/components/ui/RingProgress";
-import { BarChartMensual } from "@/components/charts/BarChartMensual";
+import { BarChartSerie } from "@/components/charts/BarChartSerie";
 import { ActividadFeed } from "@/components/dashboard/ActividadFeed";
 import { EmptyState } from "@/components/ui/EmptyState";
-import {
-  clientesNuevos, reservasSemana, pedidosSemana, serieMensual, actividadReciente,
-  tasaConversionReservas, ticketPromedio,
-} from "@/lib/metrics";
+import { clientesNuevos, actividadReciente, resumenCumpleanosMes, serieMensualMetrica } from "@/lib/metrics";
 import { proximosCumpleanos } from "@/lib/mock/seguimiento";
 import { BASE_DATE } from "@/lib/mock/seed";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "@/lib/mock/clientes";
@@ -19,7 +16,7 @@ export function DashboardNegocio({ negocioId, operando }: { negocioId: NegocioId
     return (
       <Card>
         <EmptyState
-          icon={<CalendarCheck size={22} />}
+          icon={<Gift size={22} />}
           title="Este negocio aún no opera"
           description="Mamina Restobar todavía no tiene fecha de apertura definida. En cuanto abra, se activa dentro de este mismo CRM — sin rediseñar nada."
         />
@@ -28,42 +25,41 @@ export function DashboardNegocio({ negocioId, operando }: { negocioId: NegocioId
   }
 
   const nuevos = clientesNuevos(negocioId, 30);
-  const reservas = reservasSemana(negocioId);
-  const pedidos = pedidosSemana(negocioId);
   const cumples = proximosCumpleanos(negocioId, BASE_DATE, 10);
   const totalClientes = clientesIndividualesPorNegocio(negocioId).length + corporativosPorNegocio(negocioId).length;
-  const conversion = tasaConversionReservas(negocioId);
+  const totalCorporativos = corporativosPorNegocio(negocioId).length;
+  const cumpleMes = resumenCumpleanosMes(negocioId);
+  const conversionSaludos = cumpleMes.totalDelMes > 0
+    ? Math.round((cumpleMes.personasQueReservaron / cumpleMes.totalDelMes) * 100)
+    : 0;
+  const serieClientes = serieMensualMetrica(negocioId, "clientes", 6);
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatTile label="Clientes totales" value={totalClientes} icon={<Users size={18} />} trend={`+${nuevos} en 30 días`} trendUp tono="terracota" />
-        <StatTile label="Reservas esta semana" value={reservas.total} icon={<CalendarCheck size={18} />} tono="naranja" />
-        {negocioId === "las-flores" ? (
-          <StatTile label="Pedidos delivery (semana)" value={pedidos.total} icon={<Bike size={18} />} tono="azul" />
-        ) : (
-          <StatTile label="Ticket promedio" value={`S/ ${ticketPromedio(negocioId)}`} icon={<Bike size={18} />} tono="azul" />
-        )}
+        <StatTile label="Clientes corporativos" value={totalCorporativos} icon={<Building2 size={18} />} tono="azul" trend={`de ${totalClientes} clientes`} />
         <StatTile label="Cumpleaños (próx. 10 días)" value={cumples.length} icon={<Gift size={18} />} tono="verde" />
+        <StatTile label="Saludos de cumpleaños (mes)" value={cumpleMes.enviados} icon={<MessageCircle size={18} />} tono="naranja" trend={`de ${cumpleMes.totalDelMes} programados`} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
         <Card className="xl:col-span-2">
-          <CardHeader title="Reservas y delivery — últimos 6 meses" subtitle="Datos simulados, con la misma forma que tendría la web real" />
-          <BarChartMensual data={serieMensual(negocioId)} />
+          <CardHeader title="Clientes nuevos — últimos 6 meses" subtitle="Datos simulados, con la misma forma que tendría la web real" />
+          <BarChartSerie data={serieClientes} xKey="mes" series={[{ key: "valor", nombre: "Clientes nuevos", color: "#8C3A25" }]} />
         </Card>
 
         <Card>
-          <CardHeader title="Conversión de reservas" subtitle="Atendidas vs. canceladas / no llegó" />
+          <CardHeader title="Cumpleaños que terminan en visita" subtitle="Saludos enviados vs. clientes que reservaron" />
           <div className="flex items-center justify-center py-2">
-            <RingProgress value={conversion} sublabel="conversión" />
+            <RingProgress value={conversionSaludos} sublabel="conversión" />
           </div>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <Card>
-          <CardHeader title="Actividad reciente" subtitle="Reservas, delivery y hospedaje registrados" />
+          <CardHeader title="Actividad reciente" subtitle="Últimos clientes registrados y hospedajes" />
           <ActividadFeed items={actividadReciente(negocioId, 7)} />
         </Card>
 

@@ -158,7 +158,7 @@ export default function ClientesPage() {
         {formAbierto && (
           <NuevoClienteForm
             negocioId={negocio.id}
-            registradoPor={usuario.nombre}
+            registradoPor={usuario.id}
             celularExiste={celularExiste}
             onCancelar={() => setFormAbierto(false)}
             onGuardarIndividual={(c) => {

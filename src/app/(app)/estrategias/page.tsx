@@ -95,7 +95,7 @@ function EstrategiasContenido({ negocioId, negocioNombre }: { negocioId: Negocio
           </div>
 
           <div className="px-5 pt-3 flex gap-1.5 flex-wrap">
-            {sugerenciasPara(negocioId).map((s) => (
+            {sugerenciasPara().map((s) => (
               <button
                 key={s}
                 onClick={() => enviarPrompt(s)}

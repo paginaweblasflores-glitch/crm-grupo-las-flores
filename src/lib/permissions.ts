@@ -8,10 +8,9 @@
 //   eliminar cuentas de Ventas) y días festivos. El módulo "Mi Equipo" es
 //   donde ve el detalle y compara la actividad de su equipo entre los 3
 //   negocios — separado de Usuarios, que es solo gestión de cuentas.
-// - Ventas (el equipo de cada negocio): registra clientes, crea reservas y
-//   delivery, lleva el seguimiento de cumpleaños con el chat integrado, y ve
-//   (sin editar) las campañas de su negocio. No ve montos agregados ni entra
-//   a Usuarios/Estrategias/Días Festivos.
+// - Ventas (el equipo de cada negocio): registra clientes, lleva el
+//   seguimiento de cumpleaños con el chat integrado, y ve (sin editar) las
+//   campañas de su negocio. No entra a Usuarios/Estrategias/Días Festivos.
 
 import { RolTipo, NegocioId } from "./types";
 
@@ -20,8 +19,6 @@ export type NivelAcceso = "completo" | "resumen" | "no";
 export type ModuloId =
   | "dashboard"
   | "clientes"
-  | "reservas"
-  | "delivery"
   | "hospedaje"
   | "cumpleanos"
   | "campanas"
@@ -35,8 +32,6 @@ export const PERMISOS: Record<RolTipo, Record<ModuloId, NivelAcceso>> = {
   direccion: {
     dashboard: "resumen",
     clientes: "no",
-    reservas: "no",
-    delivery: "no",
     hospedaje: "no",
     cumpleanos: "no",
     campanas: "no",
@@ -49,8 +44,6 @@ export const PERMISOS: Record<RolTipo, Record<ModuloId, NivelAcceso>> = {
   gerencial: {
     dashboard: "completo",
     clientes: "completo",
-    reservas: "completo",
-    delivery: "completo",
     hospedaje: "completo",
     cumpleanos: "completo",
     campanas: "completo",
@@ -63,8 +56,6 @@ export const PERMISOS: Record<RolTipo, Record<ModuloId, NivelAcceso>> = {
   ventas: {
     dashboard: "completo",
     clientes: "completo",
-    reservas: "completo",
-    delivery: "completo",
     hospedaje: "completo",
     cumpleanos: "completo",
     campanas: "resumen",
@@ -84,13 +75,7 @@ export function puedeVer(rol: RolTipo, modulo: ModuloId): boolean {
   return accesoA(rol, modulo) !== "no";
 }
 
-// Dirección y Gerencial ven toda la plata y las estadísticas críticas; Ventas
-// opera pero no ve montos agregados.
-export function puedeVerMontos(rol: RolTipo): boolean {
-  return rol !== "ventas";
-}
-
-// Autorizar reservas grandes, aprobar el mes de cumpleaños, etc.
+// Aprobar el mes de cumpleaños, etc.
 export function puedeAutorizar(rol: RolTipo): boolean {
   return rol === "gerencial";
 }
@@ -105,10 +90,6 @@ export function puedeRegistrarClientes(rol: RolTipo): boolean {
 
 export function puedeGestionarCampanas(rol: RolTipo): boolean {
   return rol === "gerencial";
-}
-
-export function puedeCrearReservasDelivery(rol: RolTipo): boolean {
-  return rol === "gerencial" || rol === "ventas";
 }
 
 // Cada cuenta de Ventas pertenece a un solo negocio — cada negocio es grande

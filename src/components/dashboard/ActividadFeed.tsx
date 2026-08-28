@@ -1,10 +1,9 @@
-import { CalendarCheck, Bike, BedDouble } from "lucide-react";
+import { UserPlus, BedDouble } from "lucide-react";
 import { ActividadItem } from "@/lib/metrics";
 
-const ICONOS = { reserva: CalendarCheck, delivery: Bike, hospedaje: BedDouble };
+const ICONOS = { cliente: UserPlus, hospedaje: BedDouble };
 const TONOS = {
-  reserva: "bg-[var(--color-terracota)]/10 text-[var(--color-terracota)]",
-  delivery: "bg-[var(--color-naranja-claro)]/40 text-[var(--color-terracota-oscuro)]",
+  cliente: "bg-[var(--color-terracota)]/10 text-[var(--color-terracota)]",
   hospedaje: "bg-[var(--color-azul-claro)] text-[var(--color-azul)]",
 };
 

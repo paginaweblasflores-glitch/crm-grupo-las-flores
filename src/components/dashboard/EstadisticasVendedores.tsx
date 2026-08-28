@@ -3,37 +3,31 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Trophy, Users, TrendingUp, CalendarCheck, Clock, ArrowRight,
-  MessageCircle, Star, Sparkles, Filter, CheckCircle2, ChevronRight, Award,
+  Trophy, Users, Star, Clock,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { NegocioId, Usuario } from "@/lib/types";
 import { NEGOCIOS, getNegocio } from "@/lib/mock/negocios";
-import { CLIENTES_INDIVIDUALES, CLIENTES_CORPORATIVOS, clientesIndividualesPorNegocio, corporativosPorNegocio } from "@/lib/mock/clientes";
-import { RESERVAS, reservasPorNegocio } from "@/lib/mock/reservas";
-import { PEDIDOS, pedidosPorNegocio } from "@/lib/mock/pedidos";
-import { HOSPEDAJES } from "@/lib/mock/hospedaje";
-import { useClientesCreados, useClientesCorporativosCreados, useReservasCreadas, usePedidosCreados } from "@/lib/store";
+import { CLIENTES_INDIVIDUALES, CLIENTES_CORPORATIVOS } from "@/lib/mock/clientes";
+import { useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
+import { enVentana } from "@/lib/metrics";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Badge } from "@/components/ui/Badge";
-import { BASE_DATE } from "@/lib/mock/seed";
 
+// "semana" queda declarado por si algún llamador externo todavía lo usa,
+// pero el selector visible de este componente solo ofrece mes/año/todo —
+// Mijael pidió explícitamente "al mes cuánto registró".
 export type PeriodoFiltro = "semana" | "mes" | "anio" | "todo";
+const DIAS_POR_PERIODO: Partial<Record<PeriodoFiltro, number>> = { semana: 7, mes: 30, anio: 365 };
 
 interface AsesorEstadistica {
   usuario: Usuario;
   negocioNombre: string;
   negocioColor: string;
-  ventasTotales: number;
-  reservasTotales: number;
-  reservasAtendidas: number;
-  pedidosEntregados: number;
-  tasaConversion: number;
   clientesNaturales: number;
   clientesCorporativos: number;
   totalClientes: number;
-  ticketPromedio: number;
   ultimoCliente: {
     id: string;
     nombre: string;
@@ -78,8 +72,8 @@ export function EstadisticasVendedores({
   const { usuarios, negocios, negocio } = useApp();
   const sedeActiva = negocioIdFijo ?? negocio.id;
   const [filtroSede, setFiltroSede] = useState<string>(sedeActiva === "todas" ? "todos" : sedeActiva);
+  // "Al mes cuánto registró" — Mijael pidió el ranking mensual, no histórico.
   const [filtroPeriodo, setFiltroPeriodo] = useState<PeriodoFiltro>("mes");
-  const [ordenPor, setOrdenPor] = useState<"ventas" | "clientes" | "conversion">("ventas");
 
   // Ajusta filtroSede cuando cambia la sede activa (negocioIdFijo o el
   // negocio del Topbar) sin usar un efecto — llamar setState dentro de un
@@ -93,39 +87,39 @@ export function EstadisticasVendedores({
 
   const { items: clientesCreados } = useClientesCreados();
   const { items: corpCreados } = useClientesCorporativosCreados();
-  const { items: reservasCreadas } = useReservasCreadas();
-  const { items: pedidosCreados } = usePedidosCreados();
 
-  // Filtrado de asesores (cuentas de rol 'ventas' o administrativas con actividad comercial)
+  // Filtrado de asesores (cuentas de rol 'ventas')
   const equipoComercial = useMemo(() => {
-    return usuarios.filter((u) => u.rolTipo === "ventas" || u.id === "betsy");
+    return usuarios.filter((u) => u.rolTipo === "ventas");
   }, [usuarios]);
 
-  // Consolidación de datos combinando mock y almacenamiento local
-  const todosClientesInd = useMemo(() => [...CLIENTES_INDIVIDUALES, ...clientesCreados], [clientesCreados]);
-  const todosClientesCorp = useMemo(() => [...CLIENTES_CORPORATIVOS, ...corpCreados], [corpCreados]);
-  const todasReservas = useMemo(() => [...RESERVAS, ...reservasCreadas], [reservasCreadas]);
-  const todosPedidos = useMemo(() => [...PEDIDOS, ...pedidosCreados], [pedidosCreados]);
+  // Consolidación de datos combinando mock y almacenamiento local, filtrados
+  // por el periodo elegido (por fecha de registro).
+  const dias = DIAS_POR_PERIODO[filtroPeriodo];
+  const enPeriodo = (fechaRegistro: string) => dias === undefined || enVentana(fechaRegistro, dias, 0);
+  const todosClientesInd = useMemo(
+    () => [...CLIENTES_INDIVIDUALES, ...clientesCreados].filter((c) => enPeriodo(c.fechaRegistro)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clientesCreados, filtroPeriodo]
+  );
+  const todosClientesCorp = useMemo(
+    () => [...CLIENTES_CORPORATIVOS, ...corpCreados].filter((c) => enPeriodo(c.fechaRegistro)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [corpCreados, filtroPeriodo]
+  );
 
-  // Cálculo de estadísticas por cada asesor
+  // Cálculo de estadísticas por cada asesor — enfoque 100% CRM: captación de
+  // clientes, sin cifras de ventas en soles (ver decisión de Mijael al
+  // eliminar Reservas/Delivery del sistema).
   const estadisticas: AsesorEstadistica[] = useMemo(() => {
     return equipoComercial
       .filter((u) => filtroSede === "todos" || u.negocioId === filtroSede)
       .map((u) => {
         const neg = getNegocio(u.negocioId) ?? NEGOCIOS[0];
 
-        // 1. Clientes registrados por este asesor
-        const matchVendedor = (reg?: string) => {
-          if (!reg) return false;
-          const r = reg.toLowerCase();
-          const n = u.nombre.toLowerCase();
-          if (r === n) return true;
-          if (u.id === "betsy" && r === "betsy") return true;
-          if (u.id === "melisa" && r === "melisa") return true;
-          if (u.id === "carla" && r.includes("carla")) return true;
-          if (u.id === "valeria" && r.includes("valeria")) return true;
-          return false;
-        };
+        // `registradoPor` guarda el id estable de la cuenta, no su nombre
+        // visible — renombrar una cuenta desde Usuarios no rompe esto.
+        const matchVendedor = (reg?: string) => reg === u.id;
 
         const clientesInd = todosClientesInd.filter((c) => matchVendedor(c.registradoPor));
         const clientesCorp = todosClientesCorp.filter((c) => matchVendedor(c.registradoPor));
@@ -151,74 +145,35 @@ export function EstadisticasVendedores({
 
         const ultimoCliente = todosMisClientes[0] ?? null;
 
-        // 2. Reservas gestionadas por este asesor
-        const misReservas = todasReservas.filter((r) => matchVendedor(r.registradoPor));
-
-        const reservasAtendidas = misReservas.filter((r) => r.estado === "atendida");
-        const montoReservas = reservasAtendidas.reduce((sum, r) => sum + (r.monto ?? 0), 0);
-
-        // 3. Pedidos delivery gestionados
-        const misPedidos = todosPedidos.filter((p) => matchVendedor(p.registradoPor));
-        const pedidosEntregados = misPedidos.filter((p) => p.estado === "entregado");
-        const montoPedidos = pedidosEntregados.reduce((sum, p) => sum + (p.monto ?? 0), 0);
-
-        // 4. Hospedajes atendidos (Hotel Umaru)
-        const montoHospedaje = u.negocioId === "umaru" ? HOSPEDAJES.slice(0, 18).reduce((sum, h) => sum + h.tarifaNoche, 0) : 0;
-
-        const ventasTotales = montoReservas + montoPedidos + montoHospedaje;
-        const totalTransaccionesConVenta = reservasAtendidas.length + pedidosEntregados.length + (u.negocioId === "umaru" ? 18 : 0);
-        const ticketPromedio = totalTransaccionesConVenta > 0 ? Math.round(ventasTotales / totalTransaccionesConVenta) : 0;
-
-        const tasaConversion = misReservas.length > 0 ? Math.round((reservasAtendidas.length / misReservas.length) * 100) : 100;
-
         return {
           usuario: u,
           negocioNombre: neg.nombre,
           negocioColor: neg.colorAcento,
-          ventasTotales,
-          reservasTotales: misReservas.length,
-          reservasAtendidas: reservasAtendidas.length,
-          pedidosEntregados: pedidosEntregados.length,
-          tasaConversion,
           clientesNaturales: clientesInd.length,
           clientesCorporativos: clientesCorp.length,
           totalClientes: todosMisClientes.length,
-          ticketPromedio,
           ultimoCliente,
         };
       });
-  }, [equipoComercial, filtroSede, todosClientesInd, todosClientesCorp, todasReservas, todosPedidos]);
+  }, [equipoComercial, filtroSede, todosClientesInd, todosClientesCorp]);
 
-  // Ordenamiento interactivo
+  // Ordenamiento único: por clientes captados (ya no hay cifra de ventas que
+  // ordenar aparte, así que no hace falta un selector de criterio).
   const estadisticasOrdenadas = useMemo(() => {
-    return [...estadisticas].sort((a, b) => {
-      if (ordenPor === "ventas") return b.ventasTotales - a.ventasTotales;
-      if (ordenPor === "clientes") return b.totalClientes - a.totalClientes;
-      if (ordenPor === "conversion") return b.tasaConversion - a.tasaConversion;
-      return 0;
-    });
-  }, [estadisticas, ordenPor]);
-
-  // Destacados (Top Vendedor y Top Captador)
-  const topVendedor = useMemo(() => {
-    if (estadisticas.length === 0) return null;
-    return [...estadisticas].sort((a, b) => b.ventasTotales - a.ventasTotales)[0];
+    return [...estadisticas].sort((a, b) => b.totalClientes - a.totalClientes);
   }, [estadisticas]);
 
+  // Destacada (Mayor Captadora)
   const topCaptador = useMemo(() => {
     if (estadisticas.length === 0) return null;
-    return [...estadisticas].sort((a, b) => b.totalClientes - a.totalClientes)[0];
-  }, [estadisticas]);
-
-  const totalVentasGrupo = useMemo(() => {
-    return estadisticas.reduce((sum, e) => sum + e.ventasTotales, 0);
-  }, [estadisticas]);
+    return estadisticasOrdenadas[0];
+  }, [estadisticas, estadisticasOrdenadas]);
 
   const totalClientesCaptados = useMemo(() => {
     return estadisticas.reduce((sum, e) => sum + e.totalClientes, 0);
   }, [estadisticas]);
 
-  const maxVenta = Math.max(...estadisticas.map((e) => e.ventasTotales), 1);
+  const maxClientes = Math.max(...estadisticas.map((e) => e.totalClientes), 1);
 
   return (
     <div className="space-y-5">
@@ -230,7 +185,7 @@ export function EstadisticasVendedores({
             Rendimiento del Equipo Comercial
           </h2>
           <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">
-            Métricas de ventas, captación de clientes y última actividad por asesor
+            Captación de clientes y última actividad por asesor
           </p>
         </div>
 
@@ -260,38 +215,25 @@ export function EstadisticasVendedores({
             </div>
           )}
 
-          {/* Selector de Criterio de Orden */}
+          {/* Filtro por Periodo */}
           <div className="flex bg-[var(--color-crema)] rounded-xl p-1 text-xs">
-            <button
-              onClick={() => setOrdenPor("ventas")}
-              className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
-                ordenPor === "ventas" ? "bg-white text-[var(--color-terracota)] shadow-sm" : "text-[var(--color-gris-medio)]"
-              }`}
-            >
-              Por Ventas (S/)
-            </button>
-            <button
-              onClick={() => setOrdenPor("clientes")}
-              className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
-                ordenPor === "clientes" ? "bg-white text-[var(--color-terracota)] shadow-sm" : "text-[var(--color-gris-medio)]"
-              }`}
-            >
-              Por Clientes
-            </button>
+            {([["mes", "Este mes"], ["anio", "Este año"], ["todo", "Todo"]] as [PeriodoFiltro, string][]).map(([valor, etiqueta]) => (
+              <button
+                key={valor}
+                onClick={() => setFiltroPeriodo(valor)}
+                className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
+                  filtroPeriodo === valor ? "bg-white text-[var(--color-terracota)] shadow-sm" : "text-[var(--color-gris-medio)]"
+                }`}
+              >
+                {etiqueta}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
       {/* Tarjetas de Resumen y Destacados */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatTile
-          label="Top Vendedora"
-          value={topVendedor ? topVendedor.usuario.nombre : "—"}
-          icon={<Trophy size={18} />}
-          tono="terracota"
-          trend={topVendedor ? `S/ ${topVendedor.ventasTotales.toLocaleString("es-PE")} en ventas` : undefined}
-          trendUp
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatTile
           label="Mayor Captadora"
           value={topCaptador ? topCaptador.usuario.nombre : "—"}
@@ -301,18 +243,11 @@ export function EstadisticasVendedores({
           trendUp
         />
         <StatTile
-          label="Ventas totales equipo"
-          value={`S/ ${totalVentasGrupo.toLocaleString("es-PE")}`}
-          icon={<TrendingUp size={18} />}
-          tono="naranja"
-          trend={`${estadisticas.length} asesores activos`}
-        />
-        <StatTile
           label="Total clientes captados"
           value={totalClientesCaptados}
           icon={<Users size={18} />}
           tono="azul"
-          trend="Cartera unificada del grupo"
+          trend={`${estadisticas.length} asesores activos · cartera unificada del grupo`}
         />
       </div>
 
@@ -338,18 +273,14 @@ export function EstadisticasVendedores({
               <tr>
                 <th className="py-3 px-4">Pos / Asesor(a)</th>
                 <th className="py-3 px-4">Sede Asignada</th>
-                <th className="py-3 px-4 text-right">Ventas Generadas</th>
-                <th className="py-3 px-4 text-center">Participación</th>
                 <th className="py-3 px-4 text-center">Clientes Captados</th>
+                <th className="py-3 px-4 text-center">Participación</th>
                 <th className="py-3 px-4">Último Registro de Cliente</th>
-                <th className="py-3 px-4 text-center">Conversión</th>
-                <th className="py-3 px-4 text-right">Ticket Prom.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-gris-claro)]/20 font-medium text-[var(--color-gris)]">
               {estadisticasOrdenadas.map((e, idx) => {
-                const porcentajeParticipacion = totalVentasGrupo > 0 ? Math.round((e.ventasTotales / totalVentasGrupo) * 100) : 0;
-                const esPrimeroVentas = topVendedor?.usuario.id === e.usuario.id;
+                const porcentajeParticipacion = totalClientesCaptados > 0 ? Math.round((e.totalClientes / totalClientesCaptados) * 100) : 0;
                 const esPrimeroClientes = topCaptador?.usuario.id === e.usuario.id;
 
                 return (
@@ -374,10 +305,7 @@ export function EstadisticasVendedores({
                           <div>
                             <div className="flex items-center gap-1.5 font-bold text-[13px] text-[var(--color-gris)]">
                               <span>{e.usuario.nombre}</span>
-                              {esPrimeroVentas && (
-                                <span title="Top en Ventas" className="text-amber-500">🏆</span>
-                              )}
-                              {esPrimeroClientes && !esPrimeroVentas && (
+                              {esPrimeroClientes && (
                                 <span title="Mayor Captadora de Clientes" className="text-emerald-500">🌟</span>
                               )}
                             </div>
@@ -397,13 +325,13 @@ export function EstadisticasVendedores({
                       </span>
                     </td>
 
-                    {/* Ventas Generadas */}
-                    <td className="py-3.5 px-4 text-right">
-                      <span className="font-bold text-sm text-[var(--color-verde)]">
-                        S/ {e.ventasTotales.toLocaleString("es-PE")}
+                    {/* Clientes Captados */}
+                    <td className="py-3.5 px-4 text-center">
+                      <span className="font-bold text-sm text-[var(--color-terracota)]">
+                        {e.totalClientes}
                       </span>
                       <p className="text-[10px] text-[var(--color-gris-medio)]">
-                        {e.reservasAtendidas} reservas + {e.pedidosEntregados} pedidos
+                        {e.clientesNaturales} nat. / {e.clientesCorporativos} corp.
                       </p>
                     </td>
 
@@ -416,20 +344,10 @@ export function EstadisticasVendedores({
                         <div className="h-1.5 rounded-full bg-[var(--color-crema-oscuro)] overflow-hidden">
                           <div
                             className="h-full rounded-full bg-[var(--color-terracota)] transition-all"
-                            style={{ width: `${Math.min(100, Math.max(5, (e.ventasTotales / maxVenta) * 100))}%` }}
+                            style={{ width: `${Math.min(100, Math.max(5, (e.totalClientes / maxClientes) * 100))}%` }}
                           />
                         </div>
                       </div>
-                    </td>
-
-                    {/* Clientes Captados */}
-                    <td className="py-3.5 px-4 text-center">
-                      <span className="font-bold text-sm text-[var(--color-terracota)]">
-                        {e.totalClientes}
-                      </span>
-                      <p className="text-[10px] text-[var(--color-gris-medio)]">
-                        {e.clientesNaturales} nat. / {e.clientesCorporativos} corp.
-                      </p>
                     </td>
 
                     {/* Cuándo fue el Último Registro de Cliente */}
@@ -454,19 +372,6 @@ export function EstadisticasVendedores({
                       )}
                     </td>
 
-                    {/* Tasa de Conversión */}
-                    <td className="py-3.5 px-4 text-center">
-                      <Badge tono={e.tasaConversion >= 80 ? "verde" : e.tasaConversion >= 60 ? "naranja" : "rojo"}>
-                        {e.tasaConversion}% éxito
-                      </Badge>
-                    </td>
-
-                    {/* Ticket Promedio */}
-                    <td className="py-3.5 px-4 text-right">
-                      <span className="font-bold text-xs text-[var(--color-gris)]">
-                        S/ {e.ticketPromedio}
-                      </span>
-                    </td>
                   </tr>
                 );
               })}

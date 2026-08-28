@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X, User, Building2 } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { DISTRITOS_AYACUCHO, ACTIVIDADES_ECONOMICAS } from "@/lib/mock/nombres";
+import { getNegocio } from "@/lib/mock/negocios";
 import { ClienteIndividual, ClienteCorporativo, NegocioId, TipoDocumento, Genero } from "@/lib/types";
 import {
   requerido, celularPeru, emailOpcional, fechaPasada, exactoDigitos, limitarDigitos,
@@ -78,7 +79,8 @@ function FormIndividual({
   const [genero, setGenero] = useState<Genero | "">("");
   const [distrito, setDistrito] = useState<string>(DISTRITOS_AYACUCHO[0]);
   const [direccionExacta, setDireccionExacta] = useState("");
-  const [origen, setOrigen] = useState<ClienteIndividual["origen"]>("presencial");
+  const [origen, setOrigen] = useState<ClienteIndividual["origen"]>("crm");
+  const nombreNegocio = getNegocio(negocioId)?.nombre ?? "este negocio";
   const [aceptaComunicaciones, setAceptaComunicaciones] = useState(true);
   const [observaciones, setObservaciones] = useState("");
   const [errores, setErrores] = useState<Errores>({});
@@ -188,9 +190,8 @@ function FormIndividual({
 
       <Campo label="¿Cómo llegó el cliente?">
         <select value={origen} onChange={(e) => setOrigen(e.target.value as ClienteIndividual["origen"])} className="input bg-white">
-          <option value="presencial">Presencial</option>
-          <option value="web-reservas">Web — Reservas</option>
-          <option value="web-delivery">Web — Delivery</option>
+          <option value="crm">CRM (registro presencial)</option>
+          <option value="web">{`Web — ${nombreNegocio}`}</option>
           <option value="redes-sociales">Redes sociales</option>
           <option value="referido">Referido por otro cliente</option>
         </select>

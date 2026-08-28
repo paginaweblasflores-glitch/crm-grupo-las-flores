@@ -5,7 +5,7 @@ import {
 import { pick, randInt, randPhone, randRuc, daysAgoISO, pad, BASE_DATE } from "./seed";
 
 const ORIGENES: ClienteIndividual["origen"][] = [
-  "web-reservas", "web-delivery", "presencial", "importado-excel",
+  "crm", "web", "importado-excel",
 ];
 
 function randFechaNacimiento(): string {
@@ -98,15 +98,17 @@ function clientesConCumpleFijo(negocioId: NegocioId, offset: number): ClienteInd
   }));
 }
 
-// Atribuye clientes ya existentes a una persona de Ventas — así el
+// Atribuye clientes ya existentes a una cuenta de Ventas — así el
 // comparativo de equipo de Gerencial no aparece vacío antes de que alguien
-// registre un cliente nuevo desde el sistema.
-function atribuirA(clientes: ClienteIndividual[], nombre: string): ClienteIndividual[] {
-  return clientes.map((c) => ({ ...c, registradoPor: nombre }));
+// registre un cliente nuevo desde el sistema. Guarda el `id` ESTABLE de la
+// cuenta (no el nombre que se muestra en pantalla) — así renombrar una
+// cuenta desde Usuarios no rompe la atribución histórica.
+function atribuirA(clientes: ClienteIndividual[], usuarioId: string): ClienteIndividual[] {
+  return clientes.map((c) => ({ ...c, registradoPor: usuarioId }));
 }
 
 const LAS_FLORES_INDIVIDUALES = generarClientesIndividuales("las-flores", 52, 0);
-// Asegurar que el primer cliente de Melisa (índice 18) tenga fecha de hoy reciente
+// Asegurar que el primer cliente de Ventas Dos (índice 18) tenga fecha de hoy reciente
 if (LAS_FLORES_INDIVIDUALES[18]) {
   LAS_FLORES_INDIVIDUALES[18].fechaRegistro = daysAgoISO(0);
 }
@@ -115,15 +117,16 @@ const UMARU_INDIVIDUALES = generarClientesIndividuales("umaru", 38, 0);
 const MAMINA_INDIVIDUALES = generarClientesIndividuales("mamina", 30, 0);
 
 export const CLIENTES_INDIVIDUALES: ClienteIndividual[] = [
-  ...atribuirA(LAS_FLORES_INDIVIDUALES.slice(0, 18), "Betsy"),
-  ...atribuirA(LAS_FLORES_INDIVIDUALES.slice(18, 30), "Melisa"),
+  ...atribuirA(LAS_FLORES_INDIVIDUALES.slice(0, 18), "betsy"), // Ventas Uno
+  ...atribuirA(LAS_FLORES_INDIVIDUALES.slice(18, 30), "melisa"), // Ventas Dos
   ...LAS_FLORES_INDIVIDUALES.slice(30),
   ...clientesConCumpleFijo("las-flores", 52),
-  ...atribuirA(UMARU_INDIVIDUALES.slice(0, 15), "Carla Huamán"),
+  ...atribuirA(UMARU_INDIVIDUALES.slice(0, 15), "carla"), // Ventas Tres
   ...UMARU_INDIVIDUALES.slice(15),
   ...clientesConCumpleFijo("umaru", 38),
-  ...atribuirA(MAMINA_INDIVIDUALES.slice(0, 14), "Valeria Castro"),
-  ...MAMINA_INDIVIDUALES.slice(14),
+  // Mamina no tiene cuenta de Ventas por ahora — estos clientes quedan sin
+  // vendedor asignado, en vez de atribuirse a una cuenta que ya no existe.
+  ...MAMINA_INDIVIDUALES,
   ...clientesConCumpleFijo("mamina", 30),
 ];
 

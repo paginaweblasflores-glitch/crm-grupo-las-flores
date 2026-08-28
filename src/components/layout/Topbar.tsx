@@ -13,6 +13,9 @@ export function Topbar({ titulo, descripcion, accion }: { titulo: string; descri
   const ref = useRef<HTMLDivElement>(null);
   const perfilRef = useRef<HTMLDivElement>(null);
   const puedeElegir = negociosDisponibles.length > 1 && Boolean(usuario && puedeCambiarNegocio(usuario.rolTipo));
+  // Solo Gerente General guarda nombreReal — su perfil, ya dentro del sistema,
+  // muestra su nombre real; el resto de cuentas se ve por el nombre del cargo.
+  const nombreMostrado = usuario?.nombreReal ?? usuario?.nombre;
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -96,14 +99,14 @@ export function Topbar({ titulo, descripcion, accion }: { titulo: string; descri
               {usuario.iniciales}
             </div>
             <div className="hidden sm:block text-left">
-              <p className="text-sm font-semibold text-[var(--color-gris)] leading-tight">{usuario.nombre}</p>
+              <p className="text-sm font-semibold text-[var(--color-gris)] leading-tight">{nombreMostrado}</p>
               <p className="text-[11px] text-[var(--color-gris-medio)]">{usuario.rolLabel}</p>
             </div>
           </button>
           {perfilAbierto && (
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl border border-[var(--color-gris-claro)]/40 shadow-lg py-1.5 z-20 animate-fade-in">
               <div className="px-3.5 py-2.5 border-b border-[var(--color-gris-claro)]/30">
-                <p className="text-sm font-semibold text-[var(--color-gris)]">{usuario.nombre}</p>
+                <p className="text-sm font-semibold text-[var(--color-gris)]">{nombreMostrado}</p>
                 <p className="text-xs text-[var(--color-gris-medio)]">{usuario.cargo}</p>
               </div>
               <button

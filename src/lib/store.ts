@@ -3,8 +3,8 @@
 
 // Almacenes simulados en localStorage — reemplazan lo que en producción sería
 // Supabase. Cada uno modela una acción real del sistema (registrar un
-// cliente, crear un usuario, autorizar una reserva, chatear con un cliente)
-// para que el prototipo funcione de verdad, sin backend.
+// cliente, crear un usuario, chatear con un cliente) para que el prototipo
+// funcione de verdad, sin backend.
 //
 // El patrón "leer localStorage en un useEffect al montar" dispara la regla
 // set-state-in-effect en todos los hooks de este archivo — es intencional:
@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  Usuario, ClienteIndividual, ClienteCorporativo, Mensaje, Reserva, Pedido, Campana, Festividad,
+  Usuario, ClienteIndividual, ClienteCorporativo, Mensaje, Campana, Festividad,
 } from "./types";
 import { PLANTILLA_CUMPLEANOS_DEFECTO, HORA_ENVIO_DEFECTO } from "./mensajes";
 import { FESTIVIDADES } from "./mock/festividades";
@@ -77,7 +77,7 @@ function useLocalArray<T>(key: string) {
   return { items, add, update, remove, listo };
 }
 
-// --- Cuentas creadas por Betsy ---------------------------------------------
+// --- Cuentas creadas por Gerente General ------------------------------------
 export function useUsuariosCreados() {
   return useLocalArray<Usuario>("crm-usuarios-creados");
 }
@@ -89,17 +89,6 @@ export function useClientesCreados() {
 
 export function useClientesCorporativosCreados() {
   return useLocalArray<ClienteCorporativo>("crm-clientes-corporativos-creados");
-}
-
-// --- Reservas y pedidos creados desde el sistema (Ventas/Gerencial) --------
-// Nacen con enviadoAWeb: true — simula que se sincronizan con el CRM real de
-// la web de Las Flores (no hay integración real, es la simulación acordada).
-export function useReservasCreadas() {
-  return useLocalArray<Reserva>("crm-reservas-creadas");
-}
-
-export function usePedidosCreados() {
-  return useLocalArray<Pedido>("crm-pedidos-creados");
 }
 
 // --- Campañas creadas desde el sistema (Gerencial: crear/editar/eliminar) --
@@ -155,28 +144,7 @@ export function useFestividades() {
   return { festividades, add, update, remove, listo };
 }
 
-// --- Reservas de evento autorizadas por Gerencial ----------------------------
-export function useAutorizaciones() {
-  const [autorizadas, setAutorizadas] = useState<Set<string>>(new Set());
-  const [listo, setListo] = useState(false);
-
-  useEffect(() => {
-    setAutorizadas(new Set(readLS<string[]>("crm-reservas-autorizadas", [])));
-    setListo(true);
-  }, []);
-
-  const autorizar = useCallback((reservaId: string) => {
-    setAutorizadas((prev) => {
-      const next = new Set(prev).add(reservaId);
-      writeLS("crm-reservas-autorizadas", Array.from(next));
-      return next;
-    });
-  }, []);
-
-  return { autorizadas, autorizar, listo };
-}
-
-// --- Aprobación mensual del seguimiento de cumpleaños (la hace Betsy) ------
+// --- Aprobación mensual del seguimiento de cumpleaños (la hace Gerente General) --
 export function useAprobacionCumpleanos(negocioId: string) {
   const key = `crm-cumpleanos-aprobado-${negocioId}`;
   const [aprobado, setAprobado] = useState(false);
