@@ -2,7 +2,7 @@ import { NegocioId } from "./types";
 import { BASE_DATE } from "./mock/seed";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "./mock/clientes";
 import { HOSPEDAJES } from "./mock/hospedaje";
-import { seguimientosPorNegocio } from "./mock/seguimiento";
+import { seguimientosPorNegocio, resumenCumpleanosHistoricoMes } from "./mock/seguimiento";
 import { NEGOCIOS } from "./mock/negocios";
 
 function diasDesde(fechaISO: string): number {
@@ -238,21 +238,33 @@ export function serieHospedajePorPeriodo(periodo: Periodo) {
 // consolidados (decisión de Mijael al eliminar Reservas/Delivery).
 export interface ResumenCrecimientoGrupo {
   clientesTotales: number;
-  corporativosTotales: number;
   clientesNuevos: number; clientesNuevosCambio: number | null;
+  // "Volvió" se mide con la conversión de saludos de cumpleaños
+  // (resumenCumpleanosMes) porque es la única señal de "visita" que existe
+  // por igual en los 3 negocios — a diferencia de hospedaje, que solo
+  // existe para Umaru (ver frecuencia.ts). Cubre solo a quienes cumplieron
+  // años este mes y recibieron el saludo, no a toda la cartera — es un
+  // proxy honesto, no "todas las visitas del grupo". El denominador es
+  // `enviados` (saludos que de verdad salieron), no `totalDelMes` (todos
+  // los que cumplen años este mes, incluidos los que aún no llegan a su
+  // fecha) — así "de X saludos, Y confirmaron" describe saludos reales.
+  cumpleanosConvertidos: number;
+  cumpleanosEnviados: number;
   negociosActivos: number;
 }
 
 export function resumenCrecimientoGrupo(periodo: Periodo): ResumenCrecimientoGrupo {
   const activos = NEGOCIOS.filter((n) => n.operando);
   const resumenes = activos.map((n) => resumenPeriodo(n.id, periodo));
+  const cumpleanos = activos.map((n) => resumenCumpleanosMes(n.id));
 
   const clientesTotales = activos.reduce(
     (a, n) => a + clientesIndividualesPorNegocio(n.id).length + corporativosPorNegocio(n.id).length,
     0
   );
-  const corporativosTotales = activos.reduce((a, n) => a + corporativosPorNegocio(n.id).length, 0);
   const clientesNuevos = resumenes.reduce((a, r) => a + r.clientesNuevos, 0);
+  const cumpleanosConvertidos = cumpleanos.reduce((a, c) => a + c.personasQueReservaron, 0);
+  const cumpleanosEnviados = cumpleanos.reduce((a, c) => a + c.enviados, 0);
 
   const promedio = (valores: (number | null)[]) => {
     const validos = valores.filter((v): v is number => v !== null);
@@ -261,11 +273,55 @@ export function resumenCrecimientoGrupo(periodo: Periodo): ResumenCrecimientoGru
 
   return {
     clientesTotales,
-    corporativosTotales,
     clientesNuevos,
     clientesNuevosCambio: promedio(resumenes.map((r) => r.clientesNuevosCambio)),
+    cumpleanosConvertidos,
+    cumpleanosEnviados,
     negociosActivos: activos.length,
   };
+}
+
+export interface PuntoFidelizacion { mes: string; convertidos: number; enviados: number; [key: string]: string | number; }
+
+// Tendencia de 12 meses de "Fidelización" para el grupo (mismo patrón de
+// ventana rodante que serieClientesPorPeriodo/serieMensualMetrica). Cada uno
+// de los 12 meses de la ventana aparece una sola vez, así que basta el
+// número de mes calendario (sin año) para ubicar a quién le tocaba cumplir
+// años ese mes — ver resumenCumpleanosHistoricoMes en mock/seguimiento.ts.
+export function historialFidelizacionGrupo(meses = 12): PuntoFidelizacion[] {
+  const activos = NEGOCIOS.filter((n) => n.operando);
+  const out: PuntoFidelizacion[] = [];
+  for (let i = meses - 1; i >= 0; i--) {
+    const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
+    const totales = activos.map((n) => resumenCumpleanosHistoricoMes(n.id, fecha.getMonth() + 1));
+    out.push({
+      mes: MESES_LABEL[fecha.getMonth()],
+      enviados: totales.reduce((a, t) => a + t.enviados, 0),
+      convertidos: totales.reduce((a, t) => a + t.convertidos, 0),
+    });
+  }
+  return out;
+}
+
+// Fidelización de UN negocio, respetando el mismo filtro Mensual/Anual que ya
+// usa "Comparativo por negocio" (clientesPorTipoPeriodo) — así ambas
+// tarjetas de comparativo por sede se mueven juntas con el mismo selector.
+// En Mensual usa el mes en curso real (resumenCumpleanosMes); en Anual suma
+// los 12 meses del historial (resumenCumpleanosHistoricoMes).
+export function resumenCumpleanosPeriodo(negocioId: NegocioId, periodo: Periodo): { enviados: number; convertidos: number } {
+  if (periodo === "anio") {
+    let enviados = 0;
+    let convertidos = 0;
+    for (let i = 0; i < 12; i++) {
+      const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
+      const t = resumenCumpleanosHistoricoMes(negocioId, fecha.getMonth() + 1);
+      enviados += t.enviados;
+      convertidos += t.convertidos;
+    }
+    return { enviados, convertidos };
+  }
+  const r = resumenCumpleanosMes(negocioId);
+  return { enviados: r.enviados, convertidos: r.personasQueReservaron };
 }
 
 // --- Panel Gerencial: cuántos clientes tiene cada tienda, en proporción -----

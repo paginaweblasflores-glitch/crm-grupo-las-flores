@@ -38,7 +38,7 @@ export default function DashboardPage() {
       <Topbar
         titulo={`Bienvenido, ${primerNombre}`}
         descripcion={descripcion}
-        accion={esGerencial ? <ExportarPDFBoton etiqueta="Exportar PDF" /> : undefined}
+        accion={esGerencial || esResumen ? <ExportarPDFBoton etiqueta="Exportar PDF" /> : undefined}
       />
       <main className="flex-1 p-8 animate-fade-in">
         {esResumen ? <PanelEjecutivo /> : esGerencial ? <PanelGerencial /> : <DashboardNegocio negocioId={negocio.id} operando={negocio.operando} />}

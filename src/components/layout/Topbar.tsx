@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, ReactNode } from "react";
-import { ChevronDown, Check, LogOut } from "lucide-react";
+import { ChevronDown, Check, LogOut, Building2 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { NegocioId } from "@/lib/types";
 import { puedeCambiarNegocio } from "@/lib/permissions";
@@ -13,6 +13,11 @@ export function Topbar({ titulo, descripcion, accion }: { titulo: string; descri
   const ref = useRef<HTMLDivElement>(null);
   const perfilRef = useRef<HTMLDivElement>(null);
   const puedeElegir = negociosDisponibles.length > 1 && Boolean(usuario && puedeCambiarNegocio(usuario.rolTipo));
+  // Dirección siempre ve los 3 negocios consolidados — su `negocioId` de
+  // cuenta no significa nada para este rol (existe solo porque el tipo
+  // Usuario lo exige), así que el pill no debe mostrar un negocio
+  // específico como si Dirección estuviera "parada" en uno solo.
+  const esDireccion = usuario?.rolTipo === "direccion";
   // Solo Gerente General guarda nombreReal — su perfil, ya dentro del sistema,
   // muestra su nombre real; el resto de cuentas se ve por el nombre del cargo.
   const nombreMostrado = usuario?.nombreReal ?? usuario?.nombre;
@@ -42,11 +47,20 @@ export function Topbar({ titulo, descripcion, accion }: { titulo: string; descri
             onClick={() => puedeElegir && setAbierto((v) => !v)}
             className={`flex items-center gap-2 bg-white border border-[var(--color-gris-claro)]/50 rounded-xl px-3.5 py-2 text-sm font-medium text-[var(--color-gris)] transition-colors ${puedeElegir ? "hover:border-[var(--color-terracota)]/40 cursor-pointer" : "cursor-default"}`}
           >
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: negocio.colorAcento }}
-            />
-            {negocio.nombre}
+            {esDireccion ? (
+              <>
+                <Building2 size={14} className="text-[var(--color-terracota)]" />
+                Grupo Las Flores · 3 sucursales
+              </>
+            ) : (
+              <>
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: negocio.colorAcento }}
+                />
+                {negocio.nombre}
+              </>
+            )}
             {puedeElegir && <ChevronDown size={15} className="text-[var(--color-gris-medio)]" />}
           </button>
           {abierto && puedeElegir && (
