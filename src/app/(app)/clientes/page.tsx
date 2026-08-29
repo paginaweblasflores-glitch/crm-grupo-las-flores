@@ -8,13 +8,11 @@ import { puedeRegistrarClientes } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card } from "@/components/ui/Card";
 import { SearchInput } from "@/components/ui/SearchInput";
-import { Badge } from "@/components/ui/Badge";
 import { Table, Thead, Th, Tr, Td } from "@/components/ui/Table";
 import { Paginacion, paginar } from "@/components/ui/Paginacion";
 import {
   clientesIndividualesPorNegocio, corporativosPorNegocio, CLIENTES_INDIVIDUALES, CLIENTES_CORPORATIVOS,
 } from "@/lib/mock/clientes";
-import { resumenDeCliente, ETIQUETA_CLASIFICACION, COLOR_CLASIFICACION } from "@/lib/frecuencia";
 import { exportarCSV } from "@/lib/export-csv";
 import { useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
 import { NuevoClienteForm } from "@/components/clientes/NuevoClienteForm";
@@ -182,27 +180,18 @@ export default function ClientesPage() {
                 <Th>Celular</Th>
                 <Th>Distrito</Th>
                 <Th>Origen</Th>
-                <Th>Frecuencia</Th>
                 <Th>{" "}</Th>
               </Thead>
               <tbody>
-                {individualesPagina.map((c) => {
-                  const resumen = resumenDeCliente(c);
-                  return (
-                    <Tr key={c.id} onClick={() => router.push(`/clientes/${c.id}`)}>
-                      <Td className="font-medium">{c.nombres} {c.apellidos}</Td>
-                      <Td>{c.celular}</Td>
-                      <Td>{c.distrito}</Td>
-                      <Td className="capitalize">{c.origen.replace("-", " ")}</Td>
-                      <Td>
-                        <Badge tono={COLOR_CLASIFICACION[resumen.clasificacion]}>
-                          {ETIQUETA_CLASIFICACION[resumen.clasificacion]}
-                        </Badge>
-                      </Td>
-                      <Td><BotonWhatsApp celular={c.celular} /></Td>
-                    </Tr>
-                  );
-                })}
+                {individualesPagina.map((c) => (
+                  <Tr key={c.id} onClick={() => router.push(`/clientes/${c.id}`)}>
+                    <Td className="font-medium">{c.nombres} {c.apellidos}</Td>
+                    <Td>{c.celular}</Td>
+                    <Td>{c.distrito}</Td>
+                    <Td className="capitalize">{c.origen.replace("-", " ")}</Td>
+                    <Td><BotonWhatsApp celular={c.celular} /></Td>
+                  </Tr>
+                ))}
               </tbody>
             </Table>
           ) : (

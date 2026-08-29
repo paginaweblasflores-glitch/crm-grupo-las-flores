@@ -1,7 +1,6 @@
 import { NegocioId } from "./types";
 import { BASE_DATE } from "./mock/seed";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "./mock/clientes";
-import { HOSPEDAJES } from "./mock/hospedaje";
 import { seguimientosPorNegocio, resumenCumpleanosHistoricoMes } from "./mock/seguimiento";
 import { NEGOCIOS } from "./mock/negocios";
 
@@ -17,18 +16,19 @@ export function clientesNuevos(negocioId: NegocioId, dias: number): number {
 }
 
 const MESES_LABEL = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"];
+const DIAS_SEMANA_CORTO = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]; // orden de Date.getDay()
 
 export interface ActividadItem {
   id: string;
-  tipo: "cliente" | "hospedaje";
+  tipo: "cliente";
   titulo: string;
   detalle: string;
   fecha: string;
 }
 
-// Actividad reciente de relación con el cliente: nuevos registros (el
-// enfoque 100% CRM del sistema) más hospedaje, el único módulo de estancia
-// que queda tras eliminar Reservas y Delivery.
+// Actividad reciente de relación con el cliente: nuevos registros — enfoque
+// 100% CRM del sistema, sin hospedaje (eliminado junto con Reservas y
+// Delivery).
 export function actividadReciente(negocioId: NegocioId, n = 6): ActividadItem[] {
   const clientesInd: ActividadItem[] = clientesIndividualesPorNegocio(negocioId).map((c) => ({
     id: c.id,
@@ -44,14 +44,7 @@ export function actividadReciente(negocioId: NegocioId, n = 6): ActividadItem[] 
     detalle: "Corporativo",
     fecha: c.fechaRegistro,
   }));
-  const hospedajes: ActividadItem[] = HOSPEDAJES.filter((h) => h.negocioId === negocioId).map((h) => ({
-    id: h.id,
-    tipo: "hospedaje",
-    titulo: `Hospedaje de ${h.clienteNombre}`,
-    detalle: `Hab. ${h.habitacion}`,
-    fecha: h.checkIn,
-  }));
-  return [...clientesInd, ...clientesCorp, ...hospedajes]
+  return [...clientesInd, ...clientesCorp]
     .sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
     .slice(0, n);
 }
@@ -83,9 +76,74 @@ export const PERIODOS: { value: Periodo; label: string; dias: number }[] = [
   { value: "anio", label: "Anual", dias: 365 },
 ];
 
-export function enVentana(fechaISO: string, dias: number, offset = 0): boolean {
-  const d = diasDesde(fechaISO);
-  return d >= offset && d < offset + dias;
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+export interface RangoPeriodo { desde: string; hasta: string; desdeAnterior: string; hastaAnterior: string; }
+
+// Rango real de un periodo. "mes"/"anio" son el mes/año de CALENDARIO en
+// curso, desde el día 1 hasta hoy — no una ventana rodante de N días — así
+// el texto ("agosto de 2026", "2026") y el cálculo dicen lo mismo. "anterior"
+// es el mismo corte de fecha en el periodo previo (mismo día del mes/año
+// anterior), para comparar manzanas con manzanas: 25 días de agosto vs 25
+// días de julio, no vs los 31 días completos de julio. "dia"/"semana" se
+// quedan rodantes (hoy exacto / últimos 7 días) — no tienen un "día 1" de
+// calendario que le sirva a alguien operando el día a día.
+export function rangoPeriodo(periodo: Periodo): RangoPeriodo {
+  const hoy = BASE_DATE;
+  if (periodo === "dia") {
+    const ayer = new Date(hoy);
+    ayer.setDate(ayer.getDate() - 1);
+    return { desde: isoDate(hoy), hasta: isoDate(hoy), desdeAnterior: isoDate(ayer), hastaAnterior: isoDate(ayer) };
+  }
+  if (periodo === "semana") {
+    const desde = new Date(hoy);
+    desde.setDate(desde.getDate() - 6);
+    const hastaAnterior = new Date(desde);
+    hastaAnterior.setDate(hastaAnterior.getDate() - 1);
+    const desdeAnterior = new Date(hastaAnterior);
+    desdeAnterior.setDate(desdeAnterior.getDate() - 6);
+    return { desde: isoDate(desde), hasta: isoDate(hoy), desdeAnterior: isoDate(desdeAnterior), hastaAnterior: isoDate(hastaAnterior) };
+  }
+  if (periodo === "mes") {
+    const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const desdeAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+    const hastaAnterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, hoy.getDate());
+    return { desde: isoDate(desde), hasta: isoDate(hoy), desdeAnterior: isoDate(desdeAnterior), hastaAnterior: isoDate(hastaAnterior) };
+  }
+  // "anio"
+  const desde = new Date(hoy.getFullYear(), 0, 1);
+  const desdeAnterior = new Date(hoy.getFullYear() - 1, 0, 1);
+  const hastaAnterior = new Date(hoy.getFullYear() - 1, hoy.getMonth(), hoy.getDate());
+  return { desde: isoDate(desde), hasta: isoDate(hoy), desdeAnterior: isoDate(desdeAnterior), hastaAnterior: isoDate(hastaAnterior) };
+}
+
+function enRango(fechaISO: string, desde: string, hasta: string): boolean {
+  return fechaISO >= desde && fechaISO <= hasta;
+}
+
+// Texto del rango activo — mismo principio de mostrar la fecha explícita,
+// nunca solo "vista mensual": "mes"/"anio" ahora son calendario real
+// ("agosto de 2026" / "2026"), "dia"/"semana" siguen siendo rodantes
+// (fecha exacta / rango de 7 días), como ya estaban.
+export function rangoDelPeriodo(periodo: Periodo): string {
+  if (periodo === "dia") {
+    return BASE_DATE.toLocaleDateString("es-PE", { day: "2-digit", month: "long", year: "numeric" });
+  }
+  if (periodo === "mes") {
+    return BASE_DATE.toLocaleDateString("es-PE", { month: "long", year: "numeric" });
+  }
+  if (periodo === "anio") {
+    return String(BASE_DATE.getFullYear());
+  }
+  const dias = PERIODOS.find((p) => p.value === periodo)!.dias;
+  const desde = new Date(BASE_DATE);
+  desde.setDate(desde.getDate() - (dias - 1));
+  const fmt = (d: Date, conAnio: boolean) =>
+    d.toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: conAnio ? "numeric" : undefined });
+  const mismoAnio = desde.getFullYear() === BASE_DATE.getFullYear();
+  return `${fmt(desde, !mismoAnio)} – ${fmt(BASE_DATE, true)}`;
 }
 
 export function cambioPorcentual(actual: number, anterior: number): number | null {
@@ -93,8 +151,38 @@ export function cambioPorcentual(actual: number, anterior: number): number | nul
   return Math.round(((actual - anterior) / anterior) * 100);
 }
 
-function diasDelPeriodo(periodo: Periodo): number {
-  return PERIODOS.find((p) => p.value === periodo)!.dias;
+// Un solo día es una muestra demasiado chica para que un % signifique algo
+// real (de 1 a 2 clientes ya es "+100%") — se omite el % en Diario en toda
+// la app (tiles, comparativas por negocio), no se calcula "de verdad" para
+// después ocultarlo con texto: directo no se calcula, así ningún consumidor
+// puede mostrarlo por accidente.
+function cambioPorcentualSiAplica(actual: number, anterior: number, periodo: Periodo): number | null {
+  if (periodo === "dia") return null;
+  return cambioPorcentual(actual, anterior);
+}
+
+// Etiqueta explícita del periodo de comparación — "vs. periodo anterior" no
+// dice si es ayer, la semana pasada o julio sin mirar el selector aparte.
+// "dia" no tiene etiqueta propia porque ese periodo ya no muestra
+// comparación (ver cambioPorcentualSiAplica).
+export function etiquetaPeriodoAnterior(periodo: Periodo): string {
+  const hoy = BASE_DATE;
+  if (periodo === "semana") {
+    const hastaAnterior = new Date(hoy);
+    hastaAnterior.setDate(hastaAnterior.getDate() - 7);
+    const desdeAnterior = new Date(hastaAnterior);
+    desdeAnterior.setDate(desdeAnterior.getDate() - 6);
+    const fmt = (d: Date) => d.toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
+    return `la semana anterior (${fmt(desdeAnterior)} – ${fmt(hastaAnterior)})`;
+  }
+  if (periodo === "mes") {
+    const anterior = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+    return anterior.toLocaleDateString("es-PE", { month: "long", year: "numeric" });
+  }
+  if (periodo === "anio") {
+    return `el mismo periodo de ${hoy.getFullYear() - 1}`;
+  }
+  return "";
 }
 
 export interface ResumenPeriodo {
@@ -102,17 +190,16 @@ export interface ResumenPeriodo {
 }
 
 export function resumenPeriodo(negocioId: NegocioId, periodo: Periodo): ResumenPeriodo {
-  const dias = PERIODOS.find((p) => p.value === periodo)!.dias;
+  const { desde, hasta, desdeAnterior, hastaAnterior } = rangoPeriodo(periodo);
+  const contarClientes = (d: string, h: string) =>
+    clientesIndividualesPorNegocio(negocioId).filter((c) => enRango(c.fechaRegistro, d, h)).length;
 
-  const contarClientes = (offset: number) =>
-    clientesIndividualesPorNegocio(negocioId).filter((c) => enVentana(c.fechaRegistro, dias, offset)).length;
-
-  const clientesActual = contarClientes(0);
-  const clientesAnterior = contarClientes(dias);
+  const clientesActual = contarClientes(desde, hasta);
+  const clientesAnterior = contarClientes(desdeAnterior, hastaAnterior);
 
   return {
     clientesNuevos: clientesActual,
-    clientesNuevosCambio: cambioPorcentual(clientesActual, clientesAnterior),
+    clientesNuevosCambio: cambioPorcentualSiAplica(clientesActual, clientesAnterior, periodo),
   };
 }
 
@@ -142,92 +229,65 @@ export function distribucionOrigen(negocioId: NegocioId) {
 // periodo elegido, cada uno con su cambio %, para que si no hubo ninguno en
 // el día/semana elegido, la tarjeta muestre 0 de verdad.
 export function clientesPorTipoPeriodo(negocioId: NegocioId, periodo: Periodo) {
-  const dias = diasDelPeriodo(periodo);
-  const contar = (arr: { fechaRegistro: string }[], offset: number) =>
-    arr.filter((c) => enVentana(c.fechaRegistro, dias, offset)).length;
+  const { desde, hasta, desdeAnterior, hastaAnterior } = rangoPeriodo(periodo);
+  const contar = (arr: { fechaRegistro: string }[], d: string, h: string) =>
+    arr.filter((c) => enRango(c.fechaRegistro, d, h)).length;
 
   const individuales = clientesIndividualesPorNegocio(negocioId);
   const corporativos = corporativosPorNegocio(negocioId);
 
-  const indActual = contar(individuales, 0);
-  const indAnterior = contar(individuales, dias);
-  const corpActual = contar(corporativos, 0);
-  const corpAnterior = contar(corporativos, dias);
+  const indActual = contar(individuales, desde, hasta);
+  const indAnterior = contar(individuales, desdeAnterior, hastaAnterior);
+  const corpActual = contar(corporativos, desde, hasta);
+  const corpAnterior = contar(corporativos, desdeAnterior, hastaAnterior);
 
   return {
-    individuales: indActual, individualesCambio: cambioPorcentual(indActual, indAnterior),
-    corporativos: corpActual, corporativosCambio: cambioPorcentual(corpActual, corpAnterior),
-    total: indActual + corpActual, totalCambio: cambioPorcentual(indActual + corpActual, indAnterior + corpAnterior),
+    individuales: indActual, individualesCambio: cambioPorcentualSiAplica(indActual, indAnterior, periodo),
+    corporativos: corpActual, corporativosCambio: cambioPorcentualSiAplica(corpActual, corpAnterior, periodo),
+    total: indActual + corpActual, totalCambio: cambioPorcentualSiAplica(indActual + corpActual, indAnterior + corpAnterior, periodo),
   };
 }
 
 // --- Clientes: nuevos por periodo, en serie ---------------------------------
 export function serieClientesPorPeriodo(negocioId: NegocioId, periodo: Periodo) {
   if (periodo === "anio") {
+    // Enero a diciembre del año en curso — los meses futuros dan 0 solos
+    // (ningún fechaRegistro puede ser futuro), sin necesitar un guard
+    // explícito.
     const meses: { mes: string; clientes: number }[] = [];
-    for (let i = 11; i >= 0; i--) {
-      const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
-      const label = MESES_LABEL[fecha.getMonth()];
+    for (let mesIdx = 0; mesIdx < 12; mesIdx++) {
       const clientes = clientesIndividualesPorNegocio(negocioId).filter((c) => {
         const f = new Date(c.fechaRegistro);
-        return f.getMonth() === fecha.getMonth() && f.getFullYear() === fecha.getFullYear();
+        return f.getMonth() === mesIdx && f.getFullYear() === BASE_DATE.getFullYear();
       }).length;
-      meses.push({ mes: label, clientes });
+      meses.push({ mes: MESES_LABEL[mesIdx], clientes });
     }
     return meses;
   }
-  const dias = periodo === "mes" ? 30 : 7;
+  if (periodo === "mes") {
+    // Del día 1 del mes en curso hasta hoy — largo variable (ej. 25 puntos
+    // el 25 de agosto), no una ventana fija de 30 días rodantes.
+    const puntos: { mes: string; clientes: number }[] = [];
+    const diasTranscurridos = BASE_DATE.getDate();
+    for (let dia = 1; dia <= diasTranscurridos; dia++) {
+      const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth(), dia);
+      const clave = isoDate(fecha);
+      const label = `${dia} ${MESES_LABEL[fecha.getMonth()].toLowerCase()}`;
+      const clientes = clientesIndividualesPorNegocio(negocioId).filter((c) => c.fechaRegistro === clave).length;
+      puntos.push({ mes: label, clientes });
+    }
+    return puntos;
+  }
+  // "semana" (rodante, últimos 7 días) y "dia" (sin gráfico propio, pero se
+  // calcula con el mismo criterio por si algún llamador lo pide)
   const puntos: { mes: string; clientes: number }[] = [];
-  for (let i = dias - 1; i >= 0; i--) {
+  for (let i = 6; i >= 0; i--) {
     const fecha = new Date(BASE_DATE);
     fecha.setDate(fecha.getDate() - i);
-    const clave = fecha.toISOString().slice(0, 10);
-    const label = fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" });
+    const clave = isoDate(fecha);
+    const label = DIAS_SEMANA_CORTO[fecha.getDay()];
     const clientes = clientesIndividualesPorNegocio(negocioId).filter((c) => c.fechaRegistro === clave).length;
     puntos.push({ mes: label, clientes });
-  }
-  return puntos;
-}
-
-// --- Hospedaje por periodo (Umaru) ------------------------------------------
-function nochesDe(h: { checkIn: string; checkOut: string }): number {
-  return Math.round((new Date(h.checkOut).getTime() - new Date(h.checkIn).getTime()) / 86400000);
-}
-
-export function resumenHospedajePeriodo(periodo: Periodo) {
-  const dias = diasDelPeriodo(periodo);
-  const enPeriodo = (offset: number) => HOSPEDAJES.filter((h) => enVentana(h.checkIn, dias, offset));
-  const actual = enPeriodo(0);
-  const anterior = enPeriodo(dias);
-  return {
-    estadias: actual.length, estadiasCambio: cambioPorcentual(actual.length, anterior.length),
-    noches: actual.reduce((a, h) => a + nochesDe(h), 0),
-  };
-}
-
-export function serieHospedajePorPeriodo(periodo: Periodo) {
-  if (periodo === "anio") {
-    const meses: { mes: string; estadias: number }[] = [];
-    for (let i = 11; i >= 0; i--) {
-      const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
-      const label = MESES_LABEL[fecha.getMonth()];
-      const estadias = HOSPEDAJES.filter((h) => {
-        const f = new Date(h.checkIn);
-        return f.getMonth() === fecha.getMonth() && f.getFullYear() === fecha.getFullYear();
-      }).length;
-      meses.push({ mes: label, estadias });
-    }
-    return meses;
-  }
-  const dias = periodo === "mes" ? 30 : 7;
-  const puntos: { mes: string; estadias: number }[] = [];
-  for (let i = dias - 1; i >= 0; i--) {
-    const fecha = new Date(BASE_DATE);
-    fecha.setDate(fecha.getDate() - i);
-    const clave = fecha.toISOString().slice(0, 10);
-    const label = fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit" });
-    const estadias = HOSPEDAJES.filter((h) => h.checkIn === clave).length;
-    puntos.push({ mes: label, estadias });
   }
   return puntos;
 }
@@ -241,9 +301,8 @@ export interface ResumenCrecimientoGrupo {
   clientesNuevos: number; clientesNuevosCambio: number | null;
   // "Volvió" se mide con la conversión de saludos de cumpleaños
   // (resumenCumpleanosMes) porque es la única señal de "visita" que existe
-  // por igual en los 3 negocios — a diferencia de hospedaje, que solo
-  // existe para Umaru (ver frecuencia.ts). Cubre solo a quienes cumplieron
-  // años este mes y recibieron el saludo, no a toda la cartera — es un
+  // en el sistema (Hospedaje, la otra que hubo, se eliminó — ver Mijael).
+  // Cubre solo a quienes cumplieron
   // proxy honesto, no "todas las visitas del grupo". El denominador es
   // `enviados` (saludos que de verdad salieron), no `totalDelMes` (todos
   // los que cumplen años este mes, incluidos los que aún no llegan a su
@@ -283,19 +342,30 @@ export function resumenCrecimientoGrupo(periodo: Periodo): ResumenCrecimientoGru
 
 export interface PuntoFidelizacion { mes: string; convertidos: number; enviados: number; [key: string]: string | number; }
 
-// Tendencia de 12 meses de "Fidelización" para el grupo (mismo patrón de
-// ventana rodante que serieClientesPorPeriodo/serieMensualMetrica). Cada uno
-// de los 12 meses de la ventana aparece una sola vez, así que basta el
-// número de mes calendario (sin año) para ubicar a quién le tocaba cumplir
-// años ese mes — ver resumenCumpleanosHistoricoMes en mock/seguimiento.ts.
-export function historialFidelizacionGrupo(meses = 12): PuntoFidelizacion[] {
-  const activos = NEGOCIOS.filter((n) => n.operando);
+// Tendencia de 12 meses de "Fidelización", del grupo o de UN negocio (mismo
+// patrón de ventana rodante que serieClientesPorPeriodo/serieMensualMetrica).
+// Cada uno de los 12 meses de la ventana aparece una sola vez, así que basta
+// el número de mes calendario (sin año) para ubicar a quién le tocaba
+// cumplir años ese mes — ver resumenCumpleanosHistoricoMes en
+// mock/seguimiento.ts. `negocioId` por defecto es "todas" (Panel Ejecutivo);
+// el Panel Gerencial la llama con un negocio específico para su propio
+// histórico.
+export function historialFidelizacionGrupo(negocioId: NegocioId = "todas"): PuntoFidelizacion[] {
+  const activos = negocioId === "todas"
+    ? NEGOCIOS.filter((n) => n.operando)
+    : NEGOCIOS.filter((n) => n.id === negocioId);
+  // Enero a diciembre del año en curso, no una ventana rodante de 12 meses —
+  // "Anual" significa lo mismo acá que en Crecimiento (año de calendario).
+  // A diferencia de Crecimiento, un mes futuro NO da 0 solo:
+  // resumenCumpleanosHistoricoMes filtra por mes de NACIMIENTO (sin año, se
+  // repite cada año), así que alguien nacido en diciembre aparecería aunque
+  // diciembre de este año no haya llegado — por eso el guard explícito.
   const out: PuntoFidelizacion[] = [];
-  for (let i = meses - 1; i >= 0; i--) {
-    const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
-    const totales = activos.map((n) => resumenCumpleanosHistoricoMes(n.id, fecha.getMonth() + 1));
+  for (let mesIdx = 0; mesIdx < 12; mesIdx++) {
+    const esFuturo = mesIdx > BASE_DATE.getMonth();
+    const totales = esFuturo ? [] : activos.map((n) => resumenCumpleanosHistoricoMes(n.id, mesIdx + 1));
     out.push({
-      mes: MESES_LABEL[fecha.getMonth()],
+      mes: MESES_LABEL[mesIdx],
       enviados: totales.reduce((a, t) => a + t.enviados, 0),
       convertidos: totales.reduce((a, t) => a + t.convertidos, 0),
     });
@@ -307,14 +377,13 @@ export function historialFidelizacionGrupo(meses = 12): PuntoFidelizacion[] {
 // usa "Comparativo por negocio" (clientesPorTipoPeriodo) — así ambas
 // tarjetas de comparativo por sede se mueven juntas con el mismo selector.
 // En Mensual usa el mes en curso real (resumenCumpleanosMes); en Anual suma
-// los 12 meses del historial (resumenCumpleanosHistoricoMes).
+// enero hasta el mes en curso (mismo año de calendario que Crecimiento).
 export function resumenCumpleanosPeriodo(negocioId: NegocioId, periodo: Periodo): { enviados: number; convertidos: number } {
   if (periodo === "anio") {
     let enviados = 0;
     let convertidos = 0;
-    for (let i = 0; i < 12; i++) {
-      const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
-      const t = resumenCumpleanosHistoricoMes(negocioId, fecha.getMonth() + 1);
+    for (let mes = 1; mes <= BASE_DATE.getMonth() + 1; mes++) {
+      const t = resumenCumpleanosHistoricoMes(negocioId, mes);
       enviados += t.enviados;
       convertidos += t.convertidos;
     }
@@ -324,51 +393,25 @@ export function resumenCumpleanosPeriodo(negocioId: NegocioId, periodo: Periodo)
   return { enviados: r.enviados, convertidos: r.personasQueReservaron };
 }
 
-// --- Panel Gerencial: cuántos clientes tiene cada tienda, en proporción -----
-export function clientesPorNegocioTotales() {
-  const conteos = NEGOCIOS.map((n) => ({
-    negocio: n,
-    clientes: clientesIndividualesPorNegocio(n.id).length + corporativosPorNegocio(n.id).length,
-  }));
-  const total = conteos.reduce((a, c) => a + c.clientes, 0);
-  return conteos.map((c) => ({ ...c, porcentaje: total === 0 ? 0 : Math.round((c.clientes / total) * 100) }));
-}
-
-// --- Módulo Estadísticas: dinámico por métrica ------------------------------
-// Tras eliminar Reservas y Delivery, "ingresos" deja de existir como
-// concepto (enfoque 100% CRM) — solo quedan las métricas que sí tienen una
-// fuente de datos real: Hospedaje (solo Umaru) y Clientes nuevos (los 3
-// negocios). Los paneles anclan a "clientes" por defecto y a veces ni
-// siquiera muestran el selector, pero la infraestructura queda genérica por
-// si se necesita en más lugares.
-export type MetricaEstadistica = "hospedaje" | "clientes";
-
-export const METRICAS_ESTADISTICA: { value: MetricaEstadistica; label: string; unidad: "dinero" | "conteo" }[] = [
-  { value: "hospedaje", label: "Hospedaje", unidad: "conteo" },
-  { value: "clientes", label: "Clientes nuevos", unidad: "conteo" },
-];
-
-// Valor de una métrica para un negocio en un mes calendario específico.
-function valorDelMes(negocioId: NegocioId, metrica: MetricaEstadistica, anio: number, mes: number): number {
+// --- Clientes nuevos, por mes de calendario ---------------------------------
+// Tras eliminar Reservas, Delivery y Hospedaje, "clientes nuevos" es la
+// única métrica que le queda a este módulo — el enfoque 100% CRM no tiene
+// otra fuente de datos real que contar.
+function valorDelMes(negocioId: NegocioId, anio: number, mes: number): number {
   const enElMes = (fechaISO: string) => {
     const f = new Date(fechaISO);
     return f.getFullYear() === anio && f.getMonth() === mes;
   };
-  switch (metrica) {
-    case "hospedaje":
-      return HOSPEDAJES.filter((h) => h.negocioId === negocioId && enElMes(h.checkIn)).length;
-    case "clientes":
-      return clientesIndividualesPorNegocio(negocioId).filter((c) => enElMes(c.fechaRegistro)).length;
-  }
+  return clientesIndividualesPorNegocio(negocioId).filter((c) => enElMes(c.fechaRegistro)).length;
 }
 
 export interface PuntoMensual { mes: string; etiqueta: string; valor: number; [key: string]: string | number; }
 
-// Tendencia mensual de la métrica elegida, últimos `meses` (12 por defecto).
+// Tendencia mensual de clientes nuevos, últimos `meses` (12 por defecto).
 // `etiqueta` incluye el año ("Dic 25") porque la ventana de 12 meses cruza
 // dos años calendario — sin el año, un mes como diciembre puede leerse como
 // "el diciembre que viene" en vez del que ya pasó dentro de la ventana.
-export function serieMensualMetrica(negocioId: NegocioId, metrica: MetricaEstadistica, meses = 12): PuntoMensual[] {
+export function serieMensualMetrica(negocioId: NegocioId, meses = 12): PuntoMensual[] {
   const out: PuntoMensual[] = [];
   for (let i = meses - 1; i >= 0; i--) {
     const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
@@ -376,83 +419,17 @@ export function serieMensualMetrica(negocioId: NegocioId, metrica: MetricaEstadi
     out.push({
       mes: mesLabel,
       etiqueta: `${mesLabel} ${String(fecha.getFullYear()).slice(2)}`,
-      valor: valorDelMes(negocioId, metrica, fecha.getFullYear(), fecha.getMonth()),
+      valor: valorDelMes(negocioId, fecha.getFullYear(), fecha.getMonth()),
     });
   }
   return out;
 }
 
-// El mes con más y con menos actividad de la métrica elegida, de los
-// últimos 12 — para la fila de insights destacados del panel.
-export function mejorYPeorMesMetrica(negocioId: NegocioId, metrica: MetricaEstadistica): { mejor: PuntoMensual | null; peor: PuntoMensual | null } {
-  const conDatos = serieMensualMetrica(negocioId, metrica, 12).filter((p) => p.valor > 0);
-  if (conDatos.length === 0) return { mejor: null, peor: null };
-  return {
-    mejor: conDatos.reduce((a, b) => (b.valor > a.valor ? b : a)),
-    peor: conDatos.reduce((a, b) => (b.valor < a.valor ? b : a)),
-  };
-}
-
-const DIAS_SEMANA_LABEL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]; // orden de Date.getDay()
-
-export interface PuntoDiaSemana { dia: string; valor: number; [key: string]: string | number; }
-
-// Actividad de la métrica elegida, agrupada por día de la semana sobre los
-// últimos `meses` — muestra si el negocio capta más el fin de semana o entre
-// semana. Se devuelve en orden Lunes→Domingo para que el gráfico se lea como
-// una semana normal, no como empieza Date.getDay() (domingo=0).
-export function actividadPorDiaSemanaMetrica(negocioId: NegocioId, metrica: MetricaEstadistica, meses = 12): PuntoDiaSemana[] {
-  const desde = new Date(BASE_DATE);
-  desde.setMonth(desde.getMonth() - meses);
-  const conteos = Array.from({ length: 7 }, () => 0);
-  const sumarPorDia = (fechaISO: string, valor = 1) => {
-    const f = new Date(fechaISO);
-    if (f >= desde && f <= BASE_DATE) conteos[f.getDay()] += valor;
-  };
-
-  switch (metrica) {
-    case "hospedaje":
-      HOSPEDAJES.filter((h) => h.negocioId === negocioId).forEach((h) => sumarPorDia(h.checkIn));
-      break;
-    case "clientes":
-      clientesIndividualesPorNegocio(negocioId).forEach((c) => sumarPorDia(c.fechaRegistro));
-      break;
-  }
-
-  const ordenLunesADomingo = [1, 2, 3, 4, 5, 6, 0];
-  return ordenLunesADomingo.map((dia) => ({ dia: DIAS_SEMANA_LABEL[dia], valor: conteos[dia] }));
-}
-
-// El mejor Y el peor día de la semana de la métrica elegida — Mijael pidió
-// explícitamente poder ver también "los días malos", no solo el mejor.
-export function mejorYPeorDiaSemanaMetrica(negocioId: NegocioId, metrica: MetricaEstadistica): { mejor: PuntoDiaSemana | null; peor: PuntoDiaSemana | null } {
-  const conDatos = actividadPorDiaSemanaMetrica(negocioId, metrica).filter((d) => d.valor > 0);
-  if (conDatos.length === 0) return { mejor: null, peor: null };
-  return {
-    mejor: conDatos.reduce((a, b) => (b.valor > a.valor ? b : a)),
-    peor: conDatos.reduce((a, b) => (b.valor < a.valor ? b : a)),
-  };
-}
-
-// --- Panel Gerencial: desglose por negocio de la métrica elegida -----------
-// Para "Todas las sucursales" — cuánto aporta cada sede real a la métrica
-// elegida, en la misma ventana de 12 meses que el resto de los insights de
-// esa métrica. Mismo patrón de barras que clientesPorNegocioTotales().
+// --- Panel Gerencial: desglose por negocio (tipo genérico compartido) ------
 export interface DesgloseNegocioMetrica {
   negocio: (typeof NEGOCIOS)[number];
   valor: number;
   porcentaje: number;
-}
-
-export function desglosePorNegocioMetrica(metrica: MetricaEstadistica): DesgloseNegocioMetrica[] {
-  const conteos = NEGOCIOS.map((n) => ({
-    negocio: n,
-    valor: serieMensualMetrica(n.id, metrica, 12).reduce((a, p) => a + p.valor, 0),
-  }));
-  const total = conteos.reduce((a, c) => a + c.valor, 0);
-  return conteos
-    .map((c) => ({ ...c, porcentaje: total === 0 ? 0 : Math.round((c.valor / total) * 100) }))
-    .sort((a, b) => b.valor - a.valor);
 }
 
 // --- Panel Gerencial: registros por canal web, desglosados por sede --------

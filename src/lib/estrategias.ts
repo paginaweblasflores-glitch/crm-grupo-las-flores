@@ -7,7 +7,6 @@ import { NegocioId } from "./types";
 import {
   resumenPeriodo, clientesPorTipoPeriodo, distribucionOrigen, resumenCumpleanosMes,
 } from "./metrics";
-import { clientesQueVolvieronEsteMes, distribucionFrecuencia } from "./frecuencia";
 import { campanasPorNegocio } from "./mock/campanas";
 
 export function sugerenciasPara(): string[] {
@@ -43,24 +42,28 @@ export function generarRespuesta(prompt: string, negocioId: NegocioId, negocioNo
     const origen = origenPrincipal(negocioId);
     const campanas = campanasPorNegocio(negocioId);
     const ultima = campanas[campanas.length - 1];
-    const alcanceUltima = ultima ? Math.round((ultima.enviados / ultima.totalClientes) * 100) : null;
+    const alcanceUltima = ultima?.clientesObjetivo?.length
+      ? Math.round(((ultima.contactados?.length ?? 0) / ultima.clientesObjetivo.length) * 100)
+      : null;
     return (
       `Propuesta de campaña para ${negocioNombre}:\n\n` +
-      `1. Canal: ${origen ? `WhatsApp — es donde más te llegan clientes ahora mismo (origen principal: "${origen.nombre}", ${origen.valor} clientes)` : "WhatsApp, por ser el canal más directo"}.\n` +
-      `2. Base: ${mes.clientesNuevos} clientes nuevos este mes son un buen segmento para una oferta de "bienvenida" o "vuelve pronto".\n` +
-      `3. Referencia: tu última campaña (${ultima ? ultima.mes : "sin datos"}) alcanzó ${alcanceUltima ?? "—"}% de la base — apunta a superar ese número.\n\n` +
-      `¿Quieres que arme el texto del mensaje para esa campaña? Dime el motivo (ej. temporada baja, nuevo plato, fin de semana) y te doy 2-3 opciones de copy.`
+      `1. Segmento: ${mes.clientesNuevos} clientes nuevos este mes son una buena base para una oferta de "bienvenida" o "vuelve pronto" — arma la campaña con público "Clientes naturales" o "Todos" según el caso.\n` +
+      `2. Canal: WhatsApp — es el único canal donde el sistema puede abrirte la conversación ya armada con el número y el mensaje cargados${origen ? ` (además, tu origen principal hoy es "${origen.nombre}", ${origen.valor} clientes)` : ""}.\n` +
+      `3. Referencia: tu última campaña ("${ultima?.nombre ?? "sin datos"}") ${alcanceUltima !== null ? `contactó ${alcanceUltima}% de su segmento` : "todavía no tiene contactos registrados"} — apunta a superar ese número.\n\n` +
+      `¿Quieres que arme el texto del mensaje para esa campaña? Dime el motivo (ej. temporada baja, nuevo plato, fin de semana) y te doy 2-3 opciones de copy — luego la creas como borrador en Campañas y la apruebas cuando esté lista.`
     );
   }
 
   if (p.includes("vuelv") || p.includes("retenci") || p.includes("frecuen")) {
-    const volvieron = clientesQueVolvieronEsteMes(negocioId);
-    const distrib = distribucionFrecuencia(negocioId);
-    const inactivos = distrib.find((d) => d.nombre === "Cliente inactivo")?.valor ?? 0;
+    // La conversión de saludo de cumpleaños en visita es la única señal de
+    // "volvió" que existe en el sistema (Hospedaje, la otra que hubo, se
+    // eliminó) — misma cuenta que usa la rama de "cumpleañ" arriba.
+    const c = resumenCumpleanosMes(negocioId);
+    const tasa = c.enviados === 0 ? 0 : Math.round((c.personasQueReservaron / c.enviados) * 100);
     return (
-      `Este mes volvieron ${volvieron} clientes en ${negocioNombre}${inactivos > 0 ? `, y tienes ${inactivos} clientes inactivos (sin visitas en más de 90 días)` : ""}.\n\n` +
-      `Ideas concretas: (1) manda un mensaje directo a los clientes inactivos con un motivo concreto para volver (no un saludo genérico), (2) revisa si los cumpleaños de este mes ya recibieron su saludo — suele ser el gancho más fácil, ` +
-      `(3) si tienes una fecha festiva cerca, arma una campaña dirigida solo a los que no han vuelto en un tiempo. Dime cuál te interesa y te ayudo a armarla.`
+      `La única señal de "volvió" que tiene hoy el CRM es la conversión de saludo de cumpleaños en visita: este mes en ${negocioNombre} se enviaron ${c.enviados} saludos y ${c.personasQueReservaron} terminaron visitando (${tasa}%).\n\n` +
+      `Ideas concretas: (1) si la conversión está por debajo de 20%, agrega un beneficio concreto al saludo (ej. "postre de cortesía") en vez de solo felicitar, (2) revisa si los cumpleaños de este mes ya recibieron su saludo — suele ser el gancho más fácil, ` +
+      `(3) si tienes una fecha festiva cerca, arma una campaña dirigida a reforzar ese mismo gancho. Dime cuál te interesa y te ayudo a armarla.`
     );
   }
 

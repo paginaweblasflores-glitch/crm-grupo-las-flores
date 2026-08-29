@@ -84,20 +84,6 @@ export interface ClienteCorporativo {
   aceptaComunicaciones?: boolean;
 }
 
-export type CanalContacto = "web" | "whatsapp" | "telefono" | "presencial";
-
-export interface Hospedaje {
-  id: string;
-  negocioId: NegocioId; // siempre "umaru"
-  clienteId: string;
-  clienteNombre: string;
-  checkIn: string;
-  checkOut: string;
-  habitacion: string;
-  tarifaNoche: number;
-  canal: CanalContacto;
-}
-
 // --- Seguimiento de cumpleaños (hoja "SEGUIMIENTO") -------------------------
 // Este módulo lo opera Ventas día a día; Gerencial supervisa y aprueba.
 export interface SeguimientoCumple {
@@ -116,17 +102,39 @@ export interface SeguimientoCumple {
   montoConsumo?: number;
 }
 
+// "Campaña" = un mensaje masivo por WhatsApp a un segmento de clientes del
+// negocio — el único canal donde el sistema puede hacer algo real (el link
+// wa.me abre WhatsApp de verdad, con el mensaje precargado). Instagram y
+// Facebook se quitaron: no hay ni una integración real ni un atajo manual
+// como wa.me, así que "campaña" ahí no era más que un dato sin acción detrás.
+//
+// Ciclo de vida: "borrador" (se puede editar nombre/sucursales/público/
+// mensaje) → "aprobada" (Gerencial aprobó — el mensaje queda fijo, se
+// congela la lista de clientes del segmento en `clientesObjetivo`, y se
+// habilita la cola de envío). "contactados" son los clientes en los que YA
+// se hizo clic en su WhatsApp — un registro honesto de intención, no una
+// confirmación de que el mensaje se mandó de verdad (eso solo lo sabe quien
+// lo envía a mano).
+export type EstadoCampana = "borrador" | "aprobada";
+
 export interface Campana {
   id: string;
-  negocioId: NegocioId;
+  // Mismo patrón que `Festividad.alcance`: casi siempre una sola sucursal
+  // (la que estaba activa al crearla), pero se puede armar una campaña que
+  // llegue a 2 sedes puntuales o a "todas" — sin necesitar una pantalla
+  // "Todas las sucursales" aparte. Se elige en el formulario, no en el
+  // selector del Topbar.
+  negocios: "todas" | NegocioId[];
   nombre: string;
-  mes: string;
-  totalClientes: number;
-  enviados: number;
-  canal: "whatsapp" | "instagram" | "facebook";
-  // Campos de las campañas creadas desde el sistema (las históricas del mock no los tienen).
-  mensaje?: string;
-  publico?: "todos" | "natural" | "corporativo";
+  publico: "todos" | "natural" | "corporativo";
+  mensaje: string;
+  estado: EstadoCampana;
+  creadaEn: string; // fecha ISO
+  aprobadaEn?: string; // fecha ISO — solo si estado === "aprobada"
+  clientesObjetivo?: string[]; // ids de clientes de todas las sedes incluidas, congelados al aprobar
+  contactados: string[]; // ids de clientes ya contactados (clic en WhatsApp)
+  // El histórico del mock no tiene cuenta que la creó — solo lo que arma
+  // Gerencial desde el sistema se puede editar/aprobar/eliminar.
   registradoPor?: string;
   festividadId?: string;
 }
@@ -141,15 +149,6 @@ export interface Festividad {
   tipo: TipoFestividad;
   alcance: "todas" | NegocioId[];
   descripcion?: string;
-}
-
-export type FrecuenciaClasificacion = "nuevo" | "ocasional" | "frecuente" | "inactivo";
-
-export interface ResumenCliente {
-  totalVisitas: number;
-  visitas30Dias: number;
-  ultimaVisita: string | null;
-  clasificacion: FrecuenciaClasificacion;
 }
 
 // --- Mensajería / chat simulado (reemplaza salir a WhatsApp) ---------------

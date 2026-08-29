@@ -3,33 +3,28 @@
 import Link from "next/link";
 import { useState, useMemo } from "react";
 import {
-  Users, Gift, PartyPopper, Building2, ArrowRight, MapPin,
-  BedDouble, TrendingUp, TrendingDown, CalendarDays, CalendarX2,
-  UserPlus, Clock, MessageCircle, User,
+  Users, Gift, Building2, ArrowRight, MapPin,
+  UserPlus, Clock, MessageCircle, User, Percent,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { NEGOCIOS, getNegocio } from "@/lib/mock/negocios";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "@/lib/mock/clientes";
 import { proximosCumpleanos } from "@/lib/mock/seguimiento";
 import { BASE_DATE } from "@/lib/mock/seed";
-import { proximaFecha, festividadAlcanzaNegocio } from "@/lib/mock/festividades";
 import {
-  clientesPorNegocioTotales, clientesPorTipoPeriodo, serieClientesPorPeriodo, resumenHospedajePeriodo,
-  PERIODOS, Periodo,
-  mejorYPeorMesMetrica, actividadPorDiaSemanaMetrica, mejorYPeorDiaSemanaMetrica, distribucionOrigen,
-  desglosePorNegocioMetrica, origenWebPorNegocio, ORIGEN_LABEL,
+  clientesPorTipoPeriodo, serieClientesPorPeriodo,
+  PERIODOS, Periodo, rangoDelPeriodo, etiquetaPeriodoAnterior,
+  distribucionOrigen, origenWebPorNegocio, ORIGEN_LABEL,
+  resumenCumpleanosMes, resumenCumpleanosPeriodo, historialFidelizacionGrupo,
 } from "@/lib/metrics";
-import { distribucionFrecuencia, clientesQueVolvieronEsteMes } from "@/lib/frecuencia";
-import { useFestividades, useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
+import { useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Badge } from "@/components/ui/Badge";
 import { BarChartSerie } from "@/components/charts/BarChartSerie";
 import { DonutChart } from "@/components/charts/DonutChart";
 import { EstadisticasVendedores } from "@/components/dashboard/EstadisticasVendedores";
-
-const TIPO_LABEL: Record<string, string> = { religioso: "Religioso", civico: "Cívico", comercial: "Comercial" };
-const MESES_CORTO = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"];
+import { ComparativoCrecimientoPorNegocio, ComparativoFidelizacionPorNegocio } from "@/components/dashboard/ComparativosNegocio";
 
 function tiempoRelativoOFecha(fechaISO: string): string {
   try {
@@ -60,20 +55,28 @@ function origenLabel(origen: string): string {
   return ORIGEN_LABEL[origen] ?? origen;
 }
 
+// Panel Gerencial: los mismos 4 pilares que pidió Mijael — Crecimiento,
+// Fidelización, Rendimiento del equipo, y de dónde vienen más registros —
+// pero con el detalle operativo por negocio que Dirección no necesita
+// (vendedores, ranking, seguimiento en vivo). Regla explícita: un negocio
+// específico (Las Flores/Umaru/Mamina) NUNCA muestra comparativas con los
+// otros 2 — son independientes. Las comparativas (mismo diseño que Panel
+// Ejecutivo, vía ComparativosNegocio.tsx) solo aparecen en "Todas las
+// sucursales".
 export function PanelGerencial() {
   const { negocio, usuarios } = useApp();
   const [periodo, setPeriodo] = useState<Periodo>("semana");
-  const [vistaGrafico, setVistaGrafico] = useState<"semana" | "anual">("semana");
-  const { festividades, listo: listoFestividades } = useFestividades();
   const { items: clientesCreados } = useClientesCreados();
   const { items: corpCreados } = useClientesCorporativosCreados();
+  const esTodas = negocio.id === "todas";
+  const negociosOperando = NEGOCIOS.filter((n) => n.operando);
 
   // Lista de asesores comerciales según el filtro principal activo (Topbar)
   const vendedoresAMostrar = useMemo(() => {
     const equipo = usuarios.filter((u) => u.rolTipo === "ventas");
-    if (negocio.id === "todas") return equipo;
+    if (esTodas) return equipo;
     return equipo.filter((u) => u.negocioId === negocio.id);
-  }, [usuarios, negocio.id]);
+  }, [usuarios, negocio.id, esTodas]);
 
   // Cálculo del último registro de cliente para CADA VENDEDOR de la sede activa
   const ultimosRegistros = useMemo(() => {
@@ -142,44 +145,72 @@ export function PanelGerencial() {
     });
   }, [vendedoresAMostrar, clientesCreados, corpCreados]);
 
+  // --- Crecimiento -----------------------------------------------------
   const clientesPeriodo = clientesPorTipoPeriodo(negocio.id, periodo);
-  const hospedaje = negocio.id === "umaru" ? resumenHospedajePeriodo(periodo) : null;
   const serieClientes = serieClientesPorPeriodo(negocio.id, periodo);
-  const periodoLabel = PERIODOS.find((p) => p.value === periodo)!.label;
-
-  const porTienda = clientesPorNegocioTotales();
   const clientesDelNegocio = clientesIndividualesPorNegocio(negocio.id).length + corporativosPorNegocio(negocio.id).length;
   const corporativosDelNegocio = corporativosPorNegocio(negocio.id).length;
+
+  const comparativoCrecimiento = useMemo(
+    () => (esTodas ? negociosOperando.map((n) => ({ negocio: n, clientes: clientesPorTipoPeriodo(n.id, periodo) })) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [esTodas, periodo]
+  );
+
+  // --- Fidelización ------------------------------------------------------
+  // Misma señal que usa Directorio — conversión de saludo de cumpleaños en
+  // visita — porque es la única señal de "volvió" que existe en el sistema
+  // (Hospedaje, la otra que hubo, se eliminó). Nunca usa el rango rodante de
+  // arriba (Diario/Semanal/Mensual): un saludo de cumpleaños no tiene
+  // granularidad diaria, así que en esos 3 casos se muestra el mes de
+  // calendario real; en Anual, el histórico de 12 meses.
+  const mesActual = BASE_DATE.toLocaleDateString("es-PE", { month: "long", year: "numeric" });
+  const cumpleMes = resumenCumpleanosMes(negocio.id);
+  const historialFidelizacion = useMemo(
+    () => (periodo === "anio" ? historialFidelizacionGrupo(negocio.id) : []),
+    [negocio.id, periodo]
+  );
+  const fidelizacionAnual = useMemo(
+    () => historialFidelizacion.reduce(
+      (a, p) => ({ enviados: a.enviados + p.enviados, convertidos: a.convertidos + p.convertidos }),
+      { enviados: 0, convertidos: 0 }
+    ),
+    [historialFidelizacion]
+  );
+  const cumpleanosConvertidos = periodo === "anio" ? fidelizacionAnual.convertidos : cumpleMes.personasQueReservaron;
+  const cumpleanosEnviados = periodo === "anio" ? fidelizacionAnual.enviados : cumpleMes.enviados;
+  const conversionCumpleanos = cumpleanosEnviados > 0 ? Math.round((cumpleanosConvertidos / cumpleanosEnviados) * 100) : 0;
+  // "Anual" es el año de calendario en curso (enero a hoy), no una ventana
+  // rodante de 12 meses — mismo criterio que "mes" acá abajo y que usa
+  // Directorio, para que "Anual" signifique lo mismo en toda la página.
+  const vistaFidelizacion = periodo === "anio" ? String(BASE_DATE.getFullYear()) : mesActual;
   const cumpleanosDelNegocio = proximosCumpleanos(negocio.id, BASE_DATE, 30).length;
+  // Las 3 tarjetas de cumpleaños solo se muestran en Mensual/Anual (ver más
+  // abajo) — en Diario/Semanal no hay nada que mostrar en esta sección, así
+  // que el título tampoco se muestra (sin esto quedaría flotando sin nada
+  // debajo).
+  const mostrarSeccionFidelizacion = periodo === "mes" || periodo === "anio";
 
-  const festividadesDelNegocio = festividades.filter((f) => festividadAlcanzaNegocio(f, negocio.id));
-  const proximasFestividades = listoFestividades
-    ? festividadesDelNegocio
-        .map((f) => ({ f, ...proximaFecha(f.mesDia, BASE_DATE) }))
-        .sort((a, b) => a.diffDias - b.diffDias)
-        .slice(0, 3)
-    : [];
+  const comparativoFidelizacion = useMemo(
+    () => (esTodas ? negociosOperando.map((n) => ({ negocio: n, cumple: resumenCumpleanosPeriodo(n.id, periodo) })) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [esTodas, periodo]
+  );
 
-  // "Mejor/peor mes y día" quedan fijos a Clientes nuevos siempre — no hay
-  // filtro para esto, mismo principio que antes con Ingresos: un rótulo no
-  // debe significar algo distinto según qué pestaña esté abierta. Clientes
-  // nuevos es la métrica que sí existe por igual en los 3 negocios (a
-  // diferencia de Hospedaje, que solo aplica a Umaru).
-  const { mejor: mejorMes, peor: peorMes } = mejorYPeorMesMetrica(negocio.id, "clientes");
-  const { mejor: mejorDia, peor: peorDia } = mejorYPeorDiaSemanaMetrica(negocio.id, "clientes");
-  const porDiaSemana = actividadPorDiaSemanaMetrica(negocio.id, "clientes");
-  const desgloseNegocio = negocio.id === "todas" ? desglosePorNegocioMetrica("clientes") : [];
-  const desgloseWeb = negocio.id === "todas" ? origenWebPorNegocio() : [];
-  const volvieron = clientesQueVolvieronEsteMes(negocio.id);
+  // --- De dónde vienen más registros --------------------------------------
   const origenClientes = distribucionOrigen(negocio.id);
-  const frecuencia = distribucionFrecuencia(negocio.id);
+  const desgloseWeb = esTodas ? origenWebPorNegocio() : [];
 
   return (
     <div className="space-y-6" id="reporte">
+      {/* ================= CRECIMIENTO ================= */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-[var(--color-gris)]">Actividad del periodo</h2>
-          <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">{negocio.nombre} · vista {periodoLabel.toLowerCase()}, comparado con el periodo anterior</p>
+          <h2 className="text-sm font-semibold text-[var(--color-gris)]">Crecimiento</h2>
+          {/* "Comparado con X" ya no va acá — las tarjetas de abajo ya dicen
+              "vs. julio de 2026" cada una, repetirlo en el subtítulo era
+              redundante. El subtítulo solo dice qué periodo se está viendo. */}
+          <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">{negocio.nombre} · {rangoDelPeriodo(periodo)}</p>
         </div>
         <div className="flex bg-[var(--color-crema)] rounded-xl p-1 no-imprimir">
           {PERIODOS.map((p) => (
@@ -202,7 +233,7 @@ export function PanelGerencial() {
           value={clientesPeriodo.individuales}
           icon={<UserPlus size={18} />}
           tono="terracota"
-          trend={cambioTexto(clientesPeriodo.individualesCambio)}
+          trend={cambioTexto(clientesPeriodo.individualesCambio, periodo)}
           trendUp={(clientesPeriodo.individualesCambio ?? 0) >= 0}
         />
         <StatTile
@@ -210,43 +241,108 @@ export function PanelGerencial() {
           value={clientesPeriodo.corporativos}
           icon={<Building2 size={18} />}
           tono="azul"
-          trend={cambioTexto(clientesPeriodo.corporativosCambio)}
+          trend={cambioTexto(clientesPeriodo.corporativosCambio, periodo)}
           trendUp={(clientesPeriodo.corporativosCambio ?? 0) >= 0}
         />
-        {hospedaje && (
-          <StatTile
-            label="Estadías"
-            value={hospedaje.estadias}
-            icon={<BedDouble size={18} />}
-            tono="verde"
-            trend={cambioTexto(hospedaje.estadiasCambio)}
-            trendUp={(hospedaje.estadiasCambio ?? 0) >= 0}
-          />
-        )}
-      </div>
-
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--color-gris)]">Tu base de clientes</h2>
-        <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">{negocio.nombre}</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatTile label="Clientes totales" value={clientesDelNegocio} icon={<Users size={18} />} tono="terracota" trend={negocio.nombre} />
+        <StatTile label="Clientes totales" value={clientesDelNegocio} icon={<Users size={18} />} tono="naranja" trend={negocio.nombre} />
         <StatTile label="Clientes corporativos" value={corporativosDelNegocio} icon={<Building2 size={18} />} tono="azul" trend={`de ${clientesDelNegocio} clientes`} />
-        <StatTile label="Próximos cumpleaños" value={cumpleanosDelNegocio} icon={<Gift size={18} />} tono="verde" trend="en los próximos 30 días" />
-        <StatTile label="Días festivos" value={festividadesDelNegocio.length} icon={<PartyPopper size={18} />} tono="naranja" trend="aplican a este negocio" />
       </div>
 
-      {/* Sección: Último Registro de Cliente POR VENDEDOR */}
+      {/* Un solo día no da para graficar una tendencia — mismo criterio que
+          ya se usa en Dirección para no mostrar el desglose diario en vistas
+          demasiado granulares. */}
+      {periodo !== "dia" && (
+        <Card>
+          <CardHeader title="Clientes nuevos — tendencia" subtitle={`${rangoDelPeriodo(periodo)} · ${negocio.nombre}`} />
+          <BarChartSerie
+            data={serieClientes}
+            xKey="mes"
+            series={[{ key: "clientes", nombre: "Clientes nuevos", color: "#8C3A25" }]}
+            todasLasEtiquetas={periodo === "mes"}
+          />
+        </Card>
+      )}
+
+      {esTodas && <ComparativoCrecimientoPorNegocio items={comparativoCrecimiento} vistaDescripcion={rangoDelPeriodo(periodo)} />}
+
+      {/* ================= FIDELIZACIÓN ================= */}
+      {mostrarSeccionFidelizacion && (
+        <div>
+          <h2 className="text-sm font-semibold text-[var(--color-gris)]">Fidelización</h2>
+          {/* El subtítulo describe las 3 tarjetas de cumpleaños — solo tiene
+              sentido mostrarlo cuando ellas también se muestran (Mensual/
+              Anual). */}
+          {(periodo === "mes" || periodo === "anio") && (
+            <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">
+              De los clientes que cumplieron años en {vistaFidelizacion} y recibieron el saludo, cuántos terminaron visitando — {negocio.nombre}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Un saludo de cumpleaños no tiene granularidad diaria/semanal — el
+          dato real es "el mes en curso" o "el año en curso", nunca "hoy" ni
+          "esta semana". En Diario/Semanal estas tarjetas mostrarían el mismo
+          número sin moverse con el filtro, igual de confuso que el bug que
+          ya se corrigió en el gráfico de Crecimiento — mejor ocultar las 3
+          juntas ahí (incluida "Próximos cumpleaños", para no dejarla sola y
+          huérfana sin sus 2 hermanas) y mostrarlas solo donde el dato es
+          real. */}
+      {(periodo === "mes" || periodo === "anio") && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatTile
+            label="Cumpleaños convertidos en visita"
+            value={cumpleanosConvertidos}
+            icon={<Gift size={18} />}
+            tono="verde"
+            trend={`de ${cumpleanosEnviados} saludos enviados en ${vistaFidelizacion}`}
+            trendUp
+          />
+          <StatTile
+            label="Tasa de conversión"
+            value={`${conversionCumpleanos}%`}
+            icon={<Percent size={18} />}
+            tono="azul"
+            trend={`saludo de cumpleaños → visita, en ${vistaFidelizacion}`}
+          />
+          <StatTile label="Próximos cumpleaños" value={cumpleanosDelNegocio} icon={<Gift size={18} />} tono="naranja" trend="en los próximos 30 días" />
+        </div>
+      )}
+
+      {periodo === "anio" && (
+        <Card>
+          <CardHeader
+            title={esTodas ? "Fidelización del grupo — por mes" : "Fidelización — por mes"}
+            subtitle={`Cumpleaños convertidos en visita · ${negocio.nombre} · ${vistaFidelizacion}`}
+          />
+          <BarChartSerie
+            data={historialFidelizacion}
+            xKey="mes"
+            series={[{ key: "convertidos", nombre: "Cumpleaños convertidos en visita", color: "#3e6b4f" }]}
+          />
+        </Card>
+      )}
+
+      {esTodas && (periodo === "mes" || periodo === "anio") && (
+        <ComparativoFidelizacionPorNegocio items={comparativoFidelizacion} vistaDescripcion={vistaFidelizacion} />
+      )}
+
+      {/* ================= RENDIMIENTO DEL EQUIPO ================= */}
+      {/* El título de acá arriba describe la tarjeta "Último Registro" que
+          sigue inmediatamente abajo (para qué le sirve a Mijael: ver qué
+          cliente se registró más reciente y qué asesor lo atendió) — no
+          "Rendimiento del equipo", que ya es el título propio de
+          EstadisticasVendedores más abajo y quedaba redundante. */}
+      <div>
+        <h2 className="text-sm font-semibold text-[var(--color-gris)]">Registro de últimos clientes</h2>
+        <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">{negocio.nombre} · último cliente registrado, por asesor</p>
+      </div>
+
       <Card>
         <CardHeader
-          title={
-            negocio.id === "todas"
-              ? "Último Registro de Cliente por Asesor(a)"
-              : `Último Registro de Cliente · Asesores de ${negocio.nombre}`
-          }
+          title={esTodas ? "Último Registro de Cliente por Asesor(a)" : `Último Registro de Cliente · Asesores de ${negocio.nombre}`}
           subtitle={
-            negocio.id === "todas"
+            esTodas
               ? "Seguimiento en tiempo real de captación por cada vendedor · Todas las sucursales del Grupo"
               : `Seguimiento en tiempo real de captación por los vendedores de ${negocio.nombre}`
           }
@@ -281,7 +377,7 @@ export function PanelGerencial() {
                 <div
                   key={v.id}
                   className={`rounded-2xl border p-4 flex flex-col justify-between transition-all bg-white ${
-                    esSedeActiva && negocio.id !== "todas"
+                    esSedeActiva && !esTodas
                       ? "border-[var(--color-terracota)] ring-1 ring-[var(--color-terracota)]/20 shadow-sm"
                       : "border-[var(--color-gris-claro)]/40 hover:border-[var(--color-terracota)]/40 hover:shadow-md"
                   }`}
@@ -384,20 +480,29 @@ export function PanelGerencial() {
         )}
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      {/* Un solo día de ranking es demasiado ruidoso para decidir nada — se
+          oculta en vez de mostrar un "Mayor Captadora" que puede cambiar por
+          1 solo registro. Mismo criterio que el resto del panel: sin dato
+          suficiente para esa granularidad, se oculta en vez de mostrar algo
+          engañoso. Usa el mismo selector de arriba — el componente ya no
+          tiene filtro propio de sede ni de periodo. */}
+      {periodo !== "dia" && <EstadisticasVendedores periodo={periodo} />}
+
+      {/* ================= DE DÓNDE VIENEN MÁS REGISTROS ================= */}
+      <div>
+        <h2 className="text-sm font-semibold text-[var(--color-gris)]">De dónde vienen más registros</h2>
+        <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">{negocio.nombre}</p>
+      </div>
+
+      {esTodas ? (
         <Card>
-          <CardHeader title="Clientes por tienda" subtitle="A diferencia de las demás tarjetas de este panel, aquí siempre se ven los 3 negocios juntos" />
-          <div className="space-y-4">
-            {porTienda.map(({ negocio: n, clientes, porcentaje }) => (
+          <CardHeader title="Web por sede" subtitle="Clientes que se registraron por la web de cada negocio (vs. presencial en el CRM)" />
+          <div className="space-y-4 mt-1">
+            {desgloseWeb.map(({ negocio: n, valor, porcentaje }) => (
               <div key={n.id}>
                 <div className="flex items-center justify-between text-sm mb-1.5">
-                  <span className="font-medium text-[var(--color-gris)] flex items-center gap-1.5">
-                    {n.nombre}
-                    {n.id === negocio.id && (
-                      <Badge tono="terracota"><MapPin size={10} /> Activo</Badge>
-                    )}
-                  </span>
-                  <span className="text-[var(--color-gris-medio)]">{clientes} clientes · {porcentaje}%</span>
+                  <span className="font-medium text-[var(--color-gris)]">{n.nombre}</span>
+                  <span className="text-[var(--color-gris-medio)]">{valor.toLocaleString("es-PE")} clientes · {porcentaje}%</span>
                 </div>
                 <div className="h-2 rounded-full bg-[var(--color-crema-oscuro)] overflow-hidden">
                   <div
@@ -409,189 +514,20 @@ export function PanelGerencial() {
             ))}
           </div>
         </Card>
-
-        <Card>
-          <CardHeader
-            title="Próximas festividades"
-            action={
-              <Link href="/dias-festivos" className="flex items-center gap-1 text-xs font-semibold text-[var(--color-terracota)] hover:underline">
-                Ver todas <ArrowRight size={12} />
-              </Link>
-            }
-          />
-          <div className="space-y-2.5">
-            {proximasFestividades.length === 0 && (
-              <p className="text-sm text-[var(--color-gris-medio)] py-4 text-center">Sin festividades registradas.</p>
-            )}
-            {proximasFestividades.map(({ f, fecha, diffDias }) => (
-              <div key={f.id} className="flex items-center gap-3 rounded-xl border border-[var(--color-gris-claro)]/30 p-3">
-                <div className="w-12 h-12 rounded-lg bg-[var(--color-crema)] flex flex-col items-center justify-center shrink-0">
-                  <span className="text-[9px] font-bold uppercase text-[var(--color-terracota)]">{MESES_CORTO[fecha.getMonth()]}</span>
-                  <span className="text-sm font-bold text-[var(--color-gris)] leading-none">{fecha.getDate()}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[var(--color-gris)] truncate">{f.nombre}</p>
-                  <p className="text-xs text-[var(--color-gris-medio)]">
-                    {TIPO_LABEL[f.tipo]} · {f.alcance === "todas" ? "Todas" : f.alcance.map((id) => NEGOCIOS.find((n) => n.id === id)?.nombre ?? id).join(", ")}
-                  </p>
-                </div>
-                <Badge tono={diffDias <= 7 ? "naranja" : "gris"}>{diffDias === 0 ? "Hoy" : `En ${diffDias} días`}</Badge>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      {negocio.id === "todas" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <Card>
-            <CardHeader title="Desglose por negocio" subtitle="Clientes nuevos que aporta cada sede · últimos 12 meses — quién va ganando" />
-            <div className="space-y-4 mt-1">
-              {desgloseNegocio.map(({ negocio: n, valor, porcentaje }, idx) => (
-                <div key={n.id}>
-                  <div className="flex items-center justify-between text-sm mb-1.5">
-                    <span className="font-medium text-[var(--color-gris)] flex items-center gap-1.5">
-                      {idx === 0 && valor > 0 && <span title="Líder en registros">🏆</span>}
-                      {n.nombre}
-                    </span>
-                    <span className="text-[var(--color-gris-medio)]">{valor.toLocaleString("es-PE")} clientes · {porcentaje}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-[var(--color-crema-oscuro)] overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{ width: `${porcentaje}%`, backgroundColor: n.colorAcento }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader title="Web por sede" subtitle="Clientes que se registraron por la web de cada negocio (vs. presencial en el CRM)" />
-            <div className="space-y-4 mt-1">
-              {desgloseWeb.map(({ negocio: n, valor, porcentaje }) => (
-                <div key={n.id}>
-                  <div className="flex items-center justify-between text-sm mb-1.5">
-                    <span className="font-medium text-[var(--color-gris)]">{n.nombre}</span>
-                    <span className="text-[var(--color-gris-medio)]">{valor.toLocaleString("es-PE")} clientes · {porcentaje}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-[var(--color-crema-oscuro)] overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{ width: `${porcentaje}%`, backgroundColor: n.colorAcento }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Sección Solicitada: Estadísticas y Rendimiento de Vendedores */}
-      <EstadisticasVendedores mostrarFiltroNegocio={false} />
-
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--color-gris)]">Relación con el cliente</h2>
-        <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">{negocio.nombre} · de dónde vienen y qué tan seguido vuelven</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      ) : (
         <Card>
           <CardHeader title="De dónde vienen los clientes" subtitle={negocio.nombre} />
           <DonutChart data={origenClientes} />
         </Card>
-        <Card>
-          <CardHeader
-            title="Qué tan seguido vuelven"
-            subtitle={negocio.nombre}
-            action={<Badge tono="azul">{volvieron} volvieron este mes</Badge>}
-          />
-          <DonutChart data={frecuencia} />
-        </Card>
-      </div>
-
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--color-gris)]">Mejores y peores momentos</h2>
-        <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">{negocio.nombre} · por clientes nuevos captados, últimos 12 meses</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatTile
-          label="Mejor mes"
-          value={mejorMes ? mejorMes.etiqueta : "—"}
-          icon={<TrendingUp size={18} />}
-          tono="verde"
-          trend={mejorMes ? `${mejorMes.valor.toLocaleString("es-PE")} clientes nuevos` : "sin datos todavía"}
-          trendUp
-        />
-        <StatTile
-          label="Mes más flojo"
-          value={peorMes ? peorMes.etiqueta : "—"}
-          icon={<TrendingDown size={18} />}
-          tono="naranja"
-          trend={peorMes ? `${peorMes.valor.toLocaleString("es-PE")} clientes nuevos` : "sin datos todavía"}
-          trendUp={false}
-        />
-        <StatTile
-          label="Mejor día de la semana"
-          value={mejorDia ? mejorDia.dia : "—"}
-          icon={<CalendarDays size={18} />}
-          tono="terracota"
-          trend={mejorDia ? `${mejorDia.valor.toLocaleString("es-PE")} clientes en 12 meses` : "sin datos todavía"}
-          trendUp
-        />
-        <StatTile
-          label="Día más flojo"
-          value={peorDia ? peorDia.dia : "—"}
-          icon={<CalendarX2 size={18} />}
-          tono="azul"
-          trend={peorDia ? `${peorDia.valor.toLocaleString("es-PE")} clientes en 12 meses` : "sin datos todavía"}
-          trendUp={false}
-        />
-      </div>
-
-      <Card>
-        <CardHeader
-          title={vistaGrafico === "semana" ? "Clientes nuevos" : "Clientes nuevos por día de la semana"}
-          subtitle={
-            vistaGrafico === "semana"
-              ? `Vista ${periodoLabel.toLowerCase()} · ${negocio.nombre}`
-              : "Últimos 12 meses — incluye los días flojos, no solo los buenos"
-          }
-        />
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-4 no-imprimir">
-          <div className="flex bg-[var(--color-crema)] rounded-xl p-1">
-            <button
-              onClick={() => setVistaGrafico("semana")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                vistaGrafico === "semana" ? "bg-white text-[var(--color-terracota)] shadow-sm" : "text-[var(--color-gris-medio)] hover:text-[var(--color-gris)]"
-              }`}
-            >
-              Esta semana
-            </button>
-            <button
-              onClick={() => setVistaGrafico("anual")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                vistaGrafico === "anual" ? "bg-white text-[var(--color-terracota)] shadow-sm" : "text-[var(--color-gris-medio)] hover:text-[var(--color-gris)]"
-              }`}
-            >
-              Patrón por día (12 meses)
-            </button>
-          </div>
-        </div>
-        {vistaGrafico === "semana" ? (
-          <BarChartSerie data={serieClientes} xKey="mes" series={[{ key: "clientes", nombre: "Clientes nuevos", color: "#8C3A25" }]} />
-        ) : (
-          <BarChartSerie data={porDiaSemana} xKey="dia" series={[{ key: "valor", nombre: "Clientes nuevos", color: "#8C3A25" }]} />
-        )}
-      </Card>
+      )}
     </div>
   );
 }
 
-function cambioTexto(valor: number | null): string | undefined {
+function cambioTexto(valor: number | null, periodo: Periodo): string | undefined {
+  // `valor` ya viene en null para Diario (ver cambioPorcentualSiAplica en
+  // metrics.ts — una muestra de 1 día es demasiado chica para que un %
+  // signifique algo real), así que este chequeo alcanza para los 2 casos.
   if (valor === null) return undefined;
-  return `${valor >= 0 ? "+" : ""}${valor}% vs. periodo anterior`;
+  return `${valor >= 0 ? "+" : ""}${valor}% vs. ${etiquetaPeriodoAnterior(periodo)}`;
 }

@@ -5,9 +5,10 @@
 //   crecimiento del grupo. Cero acciones, cero acceso a módulos operativos.
 // - Gerencial (Mijael): control operativo total de los 3 negocios — hace todo
 //   lo que hace Ventas, además gestiona campañas, usuarios (crear/editar/
-//   eliminar cuentas de Ventas) y días festivos. El módulo "Mi Equipo" es
-//   donde ve el detalle y compara la actividad de su equipo entre los 3
-//   negocios — separado de Usuarios, que es solo gestión de cuentas.
+//   eliminar cuentas de Ventas) y días festivos. El detalle y comparativo de
+//   actividad de su equipo lo ve en Panel Principal (Rendimiento del Equipo
+//   Comercial) — existió un módulo "Mi Equipo" aparte, pero terminó siendo
+//   una copia exacta de ese mismo bloque, así que se eliminó.
 // - Ventas (el equipo de cada negocio): registra clientes, lleva el
 //   seguimiento de cumpleaños con el chat integrado, y ve (sin editar) las
 //   campañas de su negocio. No entra a Usuarios/Estrategias/Días Festivos.
@@ -19,51 +20,43 @@ export type NivelAcceso = "completo" | "resumen" | "no";
 export type ModuloId =
   | "dashboard"
   | "clientes"
-  | "hospedaje"
   | "cumpleanos"
   | "campanas"
   | "estrategias"
   | "mensajeria"
   | "usuarios"
-  | "diasFestivos"
-  | "equipo";
+  | "diasFestivos";
 
 export const PERMISOS: Record<RolTipo, Record<ModuloId, NivelAcceso>> = {
   direccion: {
     dashboard: "resumen",
     clientes: "no",
-    hospedaje: "no",
     cumpleanos: "no",
     campanas: "no",
     estrategias: "no",
     mensajeria: "no",
     usuarios: "no",
     diasFestivos: "no",
-    equipo: "no",
   },
   gerencial: {
     dashboard: "completo",
     clientes: "completo",
-    hospedaje: "completo",
     cumpleanos: "completo",
     campanas: "completo",
     estrategias: "completo",
     mensajeria: "completo",
     usuarios: "completo",
     diasFestivos: "completo",
-    equipo: "completo",
   },
   ventas: {
     dashboard: "completo",
     clientes: "completo",
-    hospedaje: "completo",
     cumpleanos: "completo",
     campanas: "resumen",
     estrategias: "no",
     mensajeria: "completo",
     usuarios: "no",
     diasFestivos: "no",
-    equipo: "no",
   },
 };
 

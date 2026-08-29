@@ -3,23 +3,26 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Trophy, Users, Star, Clock,
+  Trophy, Clock,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { NegocioId, Usuario } from "@/lib/types";
 import { NEGOCIOS, getNegocio } from "@/lib/mock/negocios";
 import { CLIENTES_INDIVIDUALES, CLIENTES_CORPORATIVOS } from "@/lib/mock/clientes";
 import { useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
-import { enVentana } from "@/lib/metrics";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { StatTile } from "@/components/ui/StatTile";
+import { rangoPeriodo, rangoDelPeriodo, Periodo } from "@/lib/metrics";
+import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
 
-// "semana" queda declarado por si algún llamador externo todavía lo usa,
-// pero el selector visible de este componente solo ofrece mes/año/todo —
-// Mijael pidió explícitamente "al mes cuánto registró".
-export type PeriodoFiltro = "semana" | "mes" | "anio" | "todo";
-const DIAS_POR_PERIODO: Partial<Record<PeriodoFiltro, number>> = { semana: 7, mes: 30, anio: 365 };
+interface ClienteRegistrado {
+  id: string;
+  nombre: string;
+  tipo: "Natural" | "Corporativo";
+  fechaRegistro: string;
+  celular: string;
+  negocioId: NegocioId;
+}
 
 interface AsesorEstadistica {
   usuario: Usuario;
@@ -28,14 +31,8 @@ interface AsesorEstadistica {
   clientesNaturales: number;
   clientesCorporativos: number;
   totalClientes: number;
-  ultimoCliente: {
-    id: string;
-    nombre: string;
-    tipo: "Natural" | "Corporativo";
-    fechaRegistro: string;
-    celular: string;
-    negocioId: NegocioId;
-  } | null;
+  todosMisClientes: ClienteRegistrado[];
+  ultimoCliente: ClienteRegistrado | null;
 }
 
 function tiempoRelativoOFecha(fechaISO: string): string {
@@ -64,16 +61,21 @@ function tiempoRelativoOFecha(fechaISO: string): string {
 
 export function EstadisticasVendedores({
   negocioIdFijo,
-  mostrarFiltroNegocio = false,
+  periodo,
 }: {
   negocioIdFijo?: NegocioId;
-  mostrarFiltroNegocio?: boolean;
+  // La sede siempre viene del selector del Topbar (o de `negocioIdFijo` si
+  // el padre fija una sede fija) — nunca de un filtro propio de este
+  // componente: cada sede, y "Todas las sucursales", ya tiene su lugar ahí,
+  // uno solo para toda la página. El periodo tampoco tiene filtro propio:
+  // siempre lo controla el padre con el mismo selector Diario/Semanal/
+  // Mensual/Anual de Panel Principal — un único filtro de periodo, igual en
+  // toda la app, no una variante local "Este mes/Este año/Todo".
+  periodo: Periodo;
 }) {
-  const { usuarios, negocios, negocio } = useApp();
+  const { usuarios, negocio } = useApp();
   const sedeActiva = negocioIdFijo ?? negocio.id;
   const [filtroSede, setFiltroSede] = useState<string>(sedeActiva === "todas" ? "todos" : sedeActiva);
-  // "Al mes cuánto registró" — Mijael pidió el ranking mensual, no histórico.
-  const [filtroPeriodo, setFiltroPeriodo] = useState<PeriodoFiltro>("mes");
 
   // Ajusta filtroSede cuando cambia la sede activa (negocioIdFijo o el
   // negocio del Topbar) sin usar un efecto — llamar setState dentro de un
@@ -94,18 +96,21 @@ export function EstadisticasVendedores({
   }, [usuarios]);
 
   // Consolidación de datos combinando mock y almacenamiento local, filtrados
-  // por el periodo elegido (por fecha de registro).
-  const dias = DIAS_POR_PERIODO[filtroPeriodo];
-  const enPeriodo = (fechaRegistro: string) => dias === undefined || enVentana(fechaRegistro, dias, 0);
+  // por el periodo elegido (por fecha de registro) — mismo rango de
+  // calendario real que el resto del panel (rangoPeriodo en metrics.ts).
+  const enPeriodo = (fechaRegistro: string) => {
+    const { desde, hasta } = rangoPeriodo(periodo);
+    return fechaRegistro >= desde && fechaRegistro <= hasta;
+  };
   const todosClientesInd = useMemo(
     () => [...CLIENTES_INDIVIDUALES, ...clientesCreados].filter((c) => enPeriodo(c.fechaRegistro)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [clientesCreados, filtroPeriodo]
+    [clientesCreados, periodo]
   );
   const todosClientesCorp = useMemo(
     () => [...CLIENTES_CORPORATIVOS, ...corpCreados].filter((c) => enPeriodo(c.fechaRegistro)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [corpCreados, filtroPeriodo]
+    [corpCreados, periodo]
   );
 
   // Cálculo de estadísticas por cada asesor — enfoque 100% CRM: captación de
@@ -152,6 +157,7 @@ export function EstadisticasVendedores({
           clientesNaturales: clientesInd.length,
           clientesCorporativos: clientesCorp.length,
           totalClientes: todosMisClientes.length,
+          todosMisClientes,
           ultimoCliente,
         };
       });
@@ -175,83 +181,33 @@ export function EstadisticasVendedores({
 
   const maxClientes = Math.max(...estadisticas.map((e) => e.totalClientes), 1);
 
+  // Historial completo de un asesor (todos los clientes que registró, no
+  // solo el último) — se abre al hacer clic en su fila. Respeta el mismo
+  // periodo activo que el resto de la tabla, para que el modal nunca
+  // muestre un número distinto al que dice la fila que lo abrió.
+  const [asesorHistorial, setAsesorHistorial] = useState<AsesorEstadistica | null>(null);
+
   return (
     <div className="space-y-5">
-      {/* Controles de Filtro y Cabecera de Estadísticas */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="text-sm font-bold text-[var(--color-gris)] flex items-center gap-2">
-            <Trophy size={16} className="text-[var(--color-naranja)]" />
-            Rendimiento del Equipo Comercial
-          </h2>
-          <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">
-            Captación de clientes y última actividad por asesor
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap no-imprimir">
-          {/* Filtro por Sede */}
-          {mostrarFiltroNegocio && (
-            <div className="flex bg-[var(--color-crema)] rounded-xl p-1 text-xs">
-              <button
-                onClick={() => setFiltroSede("todos")}
-                className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
-                  filtroSede === "todos" ? "bg-white text-[var(--color-terracota)] shadow-sm" : "text-[var(--color-gris-medio)]"
-                }`}
-              >
-                Todas las sucursales
-              </button>
-              {negocios.filter((n) => n.id !== "todas").map((n) => (
-                <button
-                  key={n.id}
-                  onClick={() => setFiltroSede(n.id)}
-                  className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
-                    filtroSede === n.id ? "bg-white text-[var(--color-terracota)] shadow-sm" : "text-[var(--color-gris-medio)]"
-                  }`}
-                >
-                  {n.nombre.replace("Restaurante ", "").replace("Hotel ", "")}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Filtro por Periodo */}
-          <div className="flex bg-[var(--color-crema)] rounded-xl p-1 text-xs">
-            {([["mes", "Este mes"], ["anio", "Este año"], ["todo", "Todo"]] as [PeriodoFiltro, string][]).map(([valor, etiqueta]) => (
-              <button
-                key={valor}
-                onClick={() => setFiltroPeriodo(valor)}
-                className={`px-3 py-1 rounded-lg font-semibold transition-colors ${
-                  filtroPeriodo === valor ? "bg-white text-[var(--color-terracota)] shadow-sm" : "text-[var(--color-gris-medio)]"
-                }`}
-              >
-                {etiqueta}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* La sede y el periodo ya no tienen filtro propio acá — los controla
+          el selector del Topbar y el selector de periodo del padre (el
+          mismo Diario/Semanal/Mensual/Anual de Panel Principal), uno solo
+          para toda la página. */}
+      <div>
+        <h2 className="text-sm font-bold text-[var(--color-gris)] flex items-center gap-2">
+          <Trophy size={16} className="text-[var(--color-naranja)]" />
+          Rendimiento del Equipo Comercial
+        </h2>
+        <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">
+          Captación de clientes y última actividad por asesor · {rangoDelPeriodo(periodo)}
+        </p>
       </div>
 
-      {/* Tarjetas de Resumen y Destacados */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <StatTile
-          label="Mayor Captadora"
-          value={topCaptador ? topCaptador.usuario.nombre : "—"}
-          icon={<Star size={18} />}
-          tono="verde"
-          trend={topCaptador ? `${topCaptador.totalClientes} clientes captados` : undefined}
-          trendUp
-        />
-        <StatTile
-          label="Total clientes captados"
-          value={totalClientesCaptados}
-          icon={<Users size={18} />}
-          tono="azul"
-          trend={`${estadisticas.length} asesores activos · cartera unificada del grupo`}
-        />
-      </div>
-
-      {/* Tabla / Ranking Detallado de Asesores */}
+      {/* Las 2 tarjetas de resumen que había acá (Mayor Captadora / Total
+          clientes captados) se quitaron por redundantes — la tabla de abajo
+          ya muestra al líder (fila 1, con 🌟) y "X asesores en evaluación"
+          en su propio encabezado; el total ya no hacía falta como tarjeta
+          aparte. */}
       <Card padding="p-0">
         <div className="px-5 py-4 border-b border-[var(--color-gris-claro)]/40 flex items-center justify-between flex-wrap gap-2">
           <div>
@@ -259,7 +215,7 @@ export function EstadisticasVendedores({
               Ranking y Desempeño Individual de Asesores
             </h3>
             <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">
-              Haz clic en cualquier cliente para inspeccionar su ficha en detalle
+              Haz clic en un asesor para ver su historial completo, o en un cliente para ir directo a su ficha
             </p>
           </div>
           <Badge tono="gris">
@@ -284,7 +240,11 @@ export function EstadisticasVendedores({
                 const esPrimeroClientes = topCaptador?.usuario.id === e.usuario.id;
 
                 return (
-                  <tr key={e.usuario.id} className="hover:bg-[var(--color-crema)]/30 transition-colors">
+                  <tr
+                    key={e.usuario.id}
+                    onClick={() => setAsesorHistorial(e)}
+                    className="hover:bg-[var(--color-crema)]/30 transition-colors cursor-pointer"
+                  >
                     {/* Posición y Asesor */}
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-3">
@@ -356,6 +316,7 @@ export function EstadisticasVendedores({
                         <div className="space-y-0.5">
                           <Link
                             href={`/clientes/${e.ultimoCliente.id}`}
+                            onClick={(ev) => ev.stopPropagation()}
                             className="font-bold text-xs text-[var(--color-gris)] hover:text-[var(--color-terracota)] hover:underline truncate block max-w-[180px]"
                           >
                             {e.ultimoCliente.nombre}
@@ -379,6 +340,43 @@ export function EstadisticasVendedores({
           </table>
         </div>
       </Card>
+
+      {asesorHistorial && (
+        <Modal
+          titulo={`Historial de ${asesorHistorial.usuario.nombre}`}
+          subtitulo={`${asesorHistorial.negocioNombre} · ${asesorHistorial.totalClientes} clientes registrados · ${rangoDelPeriodo(periodo)}`}
+          onCerrar={() => setAsesorHistorial(null)}
+        >
+          {asesorHistorial.todosMisClientes.length === 0 ? (
+            <p className="text-sm text-[var(--color-gris-medio)] py-8 text-center px-5">
+              Sin clientes registrados en este periodo.
+            </p>
+          ) : (
+            <ul className="divide-y divide-[var(--color-gris-claro)]/20">
+              {asesorHistorial.todosMisClientes.map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                  <div className="min-w-0">
+                    <Link
+                      href={`/clientes/${c.id}`}
+                      onClick={() => setAsesorHistorial(null)}
+                      className="font-semibold text-sm text-[var(--color-gris)] hover:text-[var(--color-terracota)] hover:underline truncate block"
+                    >
+                      {c.nombre}
+                    </Link>
+                    <p className="text-xs text-[var(--color-gris-medio)]">{c.celular}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <Badge tono={c.tipo === "Corporativo" ? "verde" : "azul"}>{c.tipo}</Badge>
+                    <p className="text-[11px] text-[var(--color-gris-medio)] mt-1">
+                      {new Date(c.fechaRegistro).toLocaleDateString("es-PE", { day: "2-digit", month: "short" })}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Modal>
+      )}
     </div>
   );
 }

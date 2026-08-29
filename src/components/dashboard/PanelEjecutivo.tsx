@@ -10,8 +10,8 @@ import {
 } from "@/lib/metrics";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
-import { Badge } from "@/components/ui/Badge";
 import { BarChartSerie } from "@/components/charts/BarChartSerie";
+import { ComparativoCrecimientoPorNegocio, ComparativoFidelizacionPorNegocio } from "@/components/dashboard/ComparativosNegocio";
 
 // Directorio no opera el día a día — solo le sirve la cadencia mensual/anual,
 // no Diario/Semanal (esa granularidad es para roles operativos).
@@ -61,12 +61,19 @@ export function PanelEjecutivo() {
   const mesActual = BASE_DATE.toLocaleDateString("es-PE", { month: "long", year: "numeric" });
   const mesAnterior = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - 1, 1)
     .toLocaleDateString("es-PE", { month: "long", year: "numeric" });
-  const vistaDescripcion = periodo === "anio" ? "los últimos 12 meses" : mesActual;
-  const comparacionDescripcion = periodo === "anio" ? "los 12 meses anteriores" : mesAnterior;
+  // "Anual" es el año de calendario en curso (enero a hoy), no una ventana
+  // rodante de 12 meses — mismo criterio que ya usa "mes" acá abajo, y el
+  // mismo que ahora usa el Panel Gerencial para que "Anual" signifique lo
+  // mismo en toda la app.
+  const vistaDescripcion = periodo === "anio" ? String(BASE_DATE.getFullYear()) : mesActual;
+  // "el mismo periodo de 2025" y no solo "2025" — Anual es un año parcial
+  // (enero a hoy), así que comparar contra el año anterior completo sería
+  // engañoso; esto dice explícitamente que es la misma ventana, un año atrás.
+  const comparacionDescripcion = periodo === "anio" ? `el mismo periodo de ${BASE_DATE.getFullYear() - 1}` : mesAnterior;
 
   // "Fidelización" se mide con la conversión de saludos de cumpleaños — es la
-  // única señal de "volvió" que existe por igual en los 3 negocios (hospedaje
-  // solo aplica a Umaru, ver metrics.ts). No es "toda la cartera volvió", es
+  // única señal de "volvió" que existe en el sistema (Hospedaje, la otra
+  // que hubo, se eliminó). No es "toda la cartera volvió", es
   // "de quienes cumplieron años en la ventana activa, cuántos terminaron
   // visitando". Igual que Crecimiento, responde al filtro Mensual/Anual: en
   // Mensual usa el mes en curso real (resumenCumpleanosMes, vía `resumen`);
@@ -85,31 +92,15 @@ export function PanelEjecutivo() {
     ? Math.round((cumpleanosConvertidos / cumpleanosEnviados) * 100)
     : 0;
 
-  // De mayor a menor clientes nuevos captados — para que "quién va ganando"
-  // se lea de un vistazo, mismo patrón que el 🏆 del Panel Gerencial.
-  const comparativoOrdenado = useMemo(
-    () => [...clientesPorNegocio].sort((a, b) => (b.clientes.individuales + b.clientes.corporativos) - (a.clientes.individuales + a.clientes.corporativos)),
-    [clientesPorNegocio]
-  );
-
   // Mismo dato que las 2 tarjetas de "Fidelización" (arriba), pero
   // desglosado por sede — cada saludo y su posible regreso son de la MISMA
   // sede (no hay manera de "regresar a otro negocio" en estos datos), así
   // que esto es "cuánto convierte cada sede", no "a dónde se fue el
   // cliente". Responde al mismo filtro Mensual/Anual que "Comparativo por
-  // negocio" (resumenCumpleanosPeriodo). Se ordena por TASA de conversión
-  // (no por cantidad bruta) — así una sede chica que convierte bien no
-  // queda tapada por una más grande que solo manda más saludos. Sin
-  // saludos enviados (Mamina, por ahora) no entra al ranking — no hay nada
-  // que medir todavía, no es un 0% real.
+  // negocio" (resumenCumpleanosPeriodo). El orden por tasa de conversión y
+  // el 🏆 los calcula ComparativoFidelizacionPorNegocio.
   const cumpleanosPorNegocio = useMemo(
-    () => negociosOperando
-      .map((n) => {
-        const cumple = resumenCumpleanosPeriodo(n.id, periodo);
-        const tasa = cumple.enviados > 0 ? cumple.convertidos / cumple.enviados : -1;
-        return { negocio: n, cumple, tasa };
-      })
-      .sort((a, b) => b.tasa - a.tasa),
+    () => negociosOperando.map((n) => ({ negocio: n, cumple: resumenCumpleanosPeriodo(n.id, periodo) })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [periodo]
   );
@@ -182,37 +173,7 @@ export function PanelEjecutivo() {
           tiles, no después de Fidelización, para que cada pilar de la
           misión (captación / retención) se lea de corrido: resumen del
           grupo → detalle por sede, antes de pasar al siguiente pilar. */}
-      <Card>
-        <CardHeader
-          title="Comparativo por negocio"
-          subtitle={`Quién está captando más clientes de cada sede · ${vistaDescripcion}`}
-        />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {comparativoOrdenado.map(({ negocio, clientes: c }, idx) => (
-            <div key={negocio.id} className="rounded-xl border border-[var(--color-gris-claro)]/40 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="flex items-center gap-2 font-semibold text-[var(--color-gris)]">
-                  <PuestoBadge posicion={idx} />
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: negocio.colorAcento }} />
-                  {negocio.nombre}
-                  {idx === 0 && (c.individuales + c.corporativos) > 0 && <span title="Líder en captación">🏆</span>}
-                </span>
-                <Badge tono="gris">{negocio.tipo === "hotel" ? "Hotel" : "Restaurante"}</Badge>
-              </div>
-              <dl className="grid grid-cols-2 gap-y-2.5 text-sm">
-                <dt className="text-[var(--color-gris-medio)]">Clientes individuales</dt>
-                <dd className="text-right font-semibold text-[var(--color-gris)]">
-                  {c.individuales} <Cambio valor={c.individualesCambio} />
-                </dd>
-                <dt className="text-[var(--color-gris-medio)]">Clientes corporativos</dt>
-                <dd className="text-right font-semibold text-[var(--color-gris)]">
-                  {c.corporativos} <Cambio valor={c.corporativosCambio} />
-                </dd>
-              </dl>
-            </div>
-          ))}
-        </div>
-      </Card>
+      <ComparativoCrecimientoPorNegocio items={clientesPorNegocio} vistaDescripcion={vistaDescripcion} />
 
       <div>
         <h2 className="text-sm font-semibold text-[var(--color-gris)]">Fidelización</h2>
@@ -254,64 +215,7 @@ export function PanelEjecutivo() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader
-          title="Cumpleaños → visita, por negocio"
-          subtitle={`Conversión de saludo de cumpleaños en visita, en cada sede · ${vistaDescripcion}`}
-        />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {cumpleanosPorNegocio.map(({ negocio, cumple }, idx) => (
-            <div key={negocio.id} className="rounded-xl border border-[var(--color-gris-claro)]/40 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="flex items-center gap-2 font-semibold text-[var(--color-gris)]">
-                  <PuestoBadge posicion={idx} />
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: negocio.colorAcento }} />
-                  {negocio.nombre}
-                  {idx === 0 && cumple.convertidos > 0 && <span title="Mayor tasa de conversión">🏆</span>}
-                </span>
-              </div>
-              {cumple.enviados === 0 ? (
-                <p className="text-xs text-[var(--color-gris-medio)]">Sin saludos de cumpleaños enviados todavía en {negocio.nombre}.</p>
-              ) : (
-                <p className="text-sm text-[var(--color-gris)]">
-                  De <span className="font-semibold">{cumple.enviados}</span> mensajes enviados, confirmaron el regreso{" "}
-                  <span className="font-semibold text-[var(--color-verde)]">{cumple.convertidos}</span>
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      </Card>
+      <ComparativoFidelizacionPorNegocio items={cumpleanosPorNegocio} vistaDescripcion={vistaDescripcion} />
     </div>
-  );
-}
-
-// Puesto 1/2/3 explícito en las tarjetas de comparativo — el orden de las
-// tarjetas ya cambia solo (están ordenadas por el número real), pero un
-// número visible deja claro que es un ranking que se mueve, no un orden fijo
-// que coincide con quedar primero por casualidad.
-function PuestoBadge({ posicion }: { posicion: number }) {
-  return (
-    <span
-      className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
-        posicion === 0
-          ? "bg-amber-100 text-amber-800 border border-amber-300"
-          : posicion === 1
-          ? "bg-slate-100 text-slate-700 border border-slate-300"
-          : "bg-orange-50 text-orange-700 border border-orange-200"
-      }`}
-    >
-      {posicion + 1}
-    </span>
-  );
-}
-
-function Cambio({ valor }: { valor: number | null }) {
-  if (valor === null) return null;
-  const positivo = valor >= 0;
-  return (
-    <span className={`text-[10px] font-bold ${positivo ? "text-[var(--color-verde)]" : "text-[var(--color-rojo)]"}`}>
-      {positivo ? "↑" : "↓"}{Math.abs(valor)}%
-    </span>
   );
 }

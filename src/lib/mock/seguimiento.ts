@@ -1,11 +1,22 @@
 import { SeguimientoCumple, NegocioId } from "@/lib/types";
 import { CLIENTES_INDIVIDUALES } from "./clientes";
-import { randBool, randInt, BASE_DATE, mulberry32 } from "./seed";
+import { BASE_DATE, mulberry32 } from "./seed";
 
 function esDeEsteMes(fechaISO: string): boolean {
   const [, mes] = fechaISO.split("-").map(Number);
   return mes === BASE_DATE.getMonth() + 1;
 }
+
+// PRNG propio para el seguimiento del mes en curso — aislado del PRNG
+// compartido de seed.ts. Este archivo se importa tanto desde el Panel
+// Ejecutivo (Directorio) como desde el Panel Gerencial, y cada uno arma un
+// árbol de imports distinto — con el PRNG compartido, el orden en que otros
+// módulos mock consumían `rand()` antes de llegar acá cambiaba qué "saludo
+// enviado"/"visto"/etc. le tocaba a cada cliente según qué panel cargaba
+// primero (mismo problema, ya resuelto más abajo, para el histórico de 12
+// meses). Con una semilla propia, SEGUIMIENTOS da siempre el mismo
+// resultado sin importar desde qué panel se entre primero.
+const randSeguimientoMes = mulberry32(20260828);
 
 function generarSeguimiento(negocioId: NegocioId): SeguimientoCumple[] {
   // El seguimiento del mes se arma con quienes cumplen años este mes —
@@ -15,14 +26,14 @@ function generarSeguimiento(negocioId: NegocioId): SeguimientoCumple[] {
     (c) => c.negocioId === negocioId && esDeEsteMes(c.fechaNacimiento)
   );
   return clientes.map((cliente, i) => {
-    const saludoEnviado = randBool(0.85);
-    const visto = saludoEnviado && randBool(0.75);
+    const saludoEnviado = randSeguimientoMes() < 0.85;
+    const visto = saludoEnviado && randSeguimientoMes() < 0.75;
     const respuesta: SeguimientoCumple["respuesta"] = !saludoEnviado
       ? "pendiente"
       : visto
-        ? (randBool(0.4) ? "si" : "no")
+        ? (randSeguimientoMes() < 0.4 ? "si" : "no")
         : "pendiente";
-    const reservacion: SeguimientoCumple["reservacion"] = respuesta === "si" ? (randBool(0.55) ? "si" : "no") : "pendiente";
+    const reservacion: SeguimientoCumple["reservacion"] = respuesta === "si" ? (randSeguimientoMes() < 0.55 ? "si" : "no") : "pendiente";
     return {
       id: `${negocioId}-seg-${i + 1}`,
       negocioId,
@@ -35,8 +46,8 @@ function generarSeguimiento(negocioId: NegocioId): SeguimientoCumple[] {
       visto,
       respuesta,
       reservacion,
-      adelantoReserva: reservacion === "si" ? randInt(20, 60) : undefined,
-      montoConsumo: reservacion === "si" ? randInt(80, 320) : undefined,
+      adelantoReserva: reservacion === "si" ? Math.floor(randSeguimientoMes() * 41) + 20 : undefined,
+      montoConsumo: reservacion === "si" ? Math.floor(randSeguimientoMes() * 241) + 80 : undefined,
     };
   });
 }
@@ -79,6 +90,14 @@ const NEGOCIO_SEED_OFFSET: Partial<Record<NegocioId, number>> = { "las-flores": 
 // combinación es siempre el mismo sin importar desde dónde ni en qué orden
 // se pida — el total y la suma por negocio siempre cuadran.
 export function resumenCumpleanosHistoricoMes(negocioId: NegocioId, mes: number): { enviados: number; convertidos: number } {
+  // "todas" suma Las Flores + Umaru (Mamina siempre da 0 por el guard de
+  // abajo) — necesario para que el Panel Gerencial pueda pedir el histórico
+  // agregado del grupo con el mismo negocioId que usa en el resto del panel.
+  if (negocioId === "todas") {
+    const a = resumenCumpleanosHistoricoMes("las-flores", mes);
+    const b = resumenCumpleanosHistoricoMes("umaru", mes);
+    return { enviados: a.enviados + b.enviados, convertidos: a.convertidos + b.convertidos };
+  }
   const offset = NEGOCIO_SEED_OFFSET[negocioId];
   if (offset === undefined) return { enviados: 0, convertidos: 0 };
   const clientes = CLIENTES_INDIVIDUALES.filter((c) => {

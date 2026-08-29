@@ -32,7 +32,7 @@ export function DashboardNegocio({ negocioId, operando }: { negocioId: NegocioId
   const conversionSaludos = cumpleMes.totalDelMes > 0
     ? Math.round((cumpleMes.personasQueReservaron / cumpleMes.totalDelMes) * 100)
     : 0;
-  const serieClientes = serieMensualMetrica(negocioId, "clientes", 6);
+  const serieClientes = serieMensualMetrica(negocioId, 6);
 
   return (
     <div className="space-y-6">
@@ -59,7 +59,7 @@ export function DashboardNegocio({ negocioId, operando }: { negocioId: NegocioId
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <Card>
-          <CardHeader title="Actividad reciente" subtitle="Últimos clientes registrados y hospedajes" />
+          <CardHeader title="Actividad reciente" subtitle="Últimos clientes registrados" />
           <ActividadFeed items={actividadReciente(negocioId, 7)} />
         </Card>
 

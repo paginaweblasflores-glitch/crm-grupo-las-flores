@@ -1,10 +1,9 @@
-import { UserPlus, BedDouble } from "lucide-react";
+import { UserPlus } from "lucide-react";
 import { ActividadItem } from "@/lib/metrics";
 
-const ICONOS = { cliente: UserPlus, hospedaje: BedDouble };
+const ICONOS = { cliente: UserPlus };
 const TONOS = {
   cliente: "bg-[var(--color-terracota)]/10 text-[var(--color-terracota)]",
-  hospedaje: "bg-[var(--color-azul-claro)] text-[var(--color-azul)]",
 };
 
 export function ActividadFeed({ items }: { items: ActividadItem[] }) {

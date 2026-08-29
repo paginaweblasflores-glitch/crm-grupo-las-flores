@@ -11,7 +11,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useFestividades } from "@/lib/store";
-import { proximaFecha } from "@/lib/mock/festividades";
+import { proximaFecha, festividadAlcanzaNegocio } from "@/lib/mock/festividades";
 import { BASE_DATE } from "@/lib/mock/seed";
 import { NEGOCIOS } from "@/lib/mock/negocios";
 import { requerido, Errores } from "@/lib/validacion";
@@ -53,9 +53,18 @@ export default function DiasFestivosPage() {
 
   if (!listo) return null;
 
+  // Cada negocio es independiente — "Aniversario Hotel Umaru" no debe verse
+  // parado en Restaurante Las Flores. Las de "todas" (Navidad, Año Nuevo,
+  // etc.) sí aplican a cualquier negocio que esté viendo la lista.
+  //
+  // Orden fijo de calendario (enero arriba, diciembre abajo) — no "la más
+  // próxima primero": esa vista cambiaba de orden todos los días según la
+  // fecha de hoy, lo que hacía difícil ubicar una fecha de un vistazo. El
+  // "En X días" de cada tarjeta sigue mostrando cuánto falta.
   const ordenadas = [...festividades]
+    .filter((f) => festividadAlcanzaNegocio(f, negocio.id))
     .map((f) => ({ f, ...proximaFecha(f.mesDia, BASE_DATE) }))
-    .sort((a, b) => a.diffDias - b.diffDias);
+    .sort((a, b) => a.f.mesDia.localeCompare(b.f.mesDia));
 
   return (
     <>
@@ -87,7 +96,7 @@ export default function DiasFestivosPage() {
 
         <Card padding="p-0 pt-5">
           <div className="px-5">
-            <CardHeader title="Todas las fechas" subtitle={`${ordenadas.length} registradas — ordenadas por la más próxima`} />
+            <CardHeader title="Todas las fechas" subtitle={`${ordenadas.length} registradas — de enero a diciembre`} />
           </div>
           <div className="divide-y divide-[var(--color-gris-claro)]/20">
             {ordenadas.map(({ f, fecha, diffDias }) => (
