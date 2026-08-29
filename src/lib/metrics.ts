@@ -343,8 +343,8 @@ export function resumenCrecimientoGrupo(periodo: Periodo): ResumenCrecimientoGru
 export interface PuntoFidelizacion { mes: string; convertidos: number; enviados: number; [key: string]: string | number; }
 
 // Tendencia de 12 meses de "Fidelización", del grupo o de UN negocio (mismo
-// patrón de ventana rodante que serieClientesPorPeriodo/serieMensualMetrica).
-// Cada uno de los 12 meses de la ventana aparece una sola vez, así que basta
+// patrón de ventana rodante que serieClientesPorPeriodo). Cada uno de los
+// 12 meses de la ventana aparece una sola vez, así que basta
 // el número de mes calendario (sin año) para ubicar a quién le tocaba
 // cumplir años ese mes — ver resumenCumpleanosHistoricoMes en
 // mock/seguimiento.ts. `negocioId` por defecto es "todas" (Panel Ejecutivo);
@@ -391,38 +391,6 @@ export function resumenCumpleanosPeriodo(negocioId: NegocioId, periodo: Periodo)
   }
   const r = resumenCumpleanosMes(negocioId);
   return { enviados: r.enviados, convertidos: r.personasQueReservaron };
-}
-
-// --- Clientes nuevos, por mes de calendario ---------------------------------
-// Tras eliminar Reservas, Delivery y Hospedaje, "clientes nuevos" es la
-// única métrica que le queda a este módulo — el enfoque 100% CRM no tiene
-// otra fuente de datos real que contar.
-function valorDelMes(negocioId: NegocioId, anio: number, mes: number): number {
-  const enElMes = (fechaISO: string) => {
-    const f = new Date(fechaISO);
-    return f.getFullYear() === anio && f.getMonth() === mes;
-  };
-  return clientesIndividualesPorNegocio(negocioId).filter((c) => enElMes(c.fechaRegistro)).length;
-}
-
-export interface PuntoMensual { mes: string; etiqueta: string; valor: number; [key: string]: string | number; }
-
-// Tendencia mensual de clientes nuevos, últimos `meses` (12 por defecto).
-// `etiqueta` incluye el año ("Dic 25") porque la ventana de 12 meses cruza
-// dos años calendario — sin el año, un mes como diciembre puede leerse como
-// "el diciembre que viene" en vez del que ya pasó dentro de la ventana.
-export function serieMensualMetrica(negocioId: NegocioId, meses = 12): PuntoMensual[] {
-  const out: PuntoMensual[] = [];
-  for (let i = meses - 1; i >= 0; i--) {
-    const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth() - i, 1);
-    const mesLabel = MESES_LABEL[fecha.getMonth()];
-    out.push({
-      mes: mesLabel,
-      etiqueta: `${mesLabel} ${String(fecha.getFullYear()).slice(2)}`,
-      valor: valorDelMes(negocioId, fecha.getFullYear(), fecha.getMonth()),
-    });
-  }
-  return out;
 }
 
 // --- Panel Gerencial: desglose por negocio (tipo genérico compartido) ------
