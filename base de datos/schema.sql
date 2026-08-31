@@ -59,10 +59,10 @@ create table clientes_individuales (
   apellidos text not null,
   fecha_nacimiento date not null,
   celular text not null unique,
-  -- Procedencia en cascada País → Departamento → Provincia → Distrito.
-  -- Solo país es obligatorio de verdad; el resto queda en '' cuando no
-  -- aplica (cliente fuera de Perú, o de Ayacucho/Huamanga dentro de Perú).
-  pais text not null default 'Perú',
+  -- Procedencia en cascada Departamento → Provincia → Distrito. Sin campo de
+  -- país: el negocio solo atiende clientes de Perú (decisión de Mijael).
+  -- Solo departamento es obligatorio de verdad; el resto queda en '' cuando
+  -- no aplica (cliente fuera de Ayacucho/Huamanga).
   departamento text not null default '',
   provincia text not null default '',
   distrito text not null default '',
@@ -92,7 +92,6 @@ create table clientes_corporativos (
   fecha_aniversario date,
   nombre_representante text not null,
   cargo_representante text not null default 'Gerente General',
-  pais text not null default 'Perú',
   departamento text not null default '',
   provincia text not null default '',
   distrito text not null default '',

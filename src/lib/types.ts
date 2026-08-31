@@ -47,11 +47,12 @@ export interface ClienteIndividual {
   apellidos: string;
   fechaNacimiento: string; // ISO
   celular: string;
-  // Procedencia — cascada País → Departamento → Provincia → Distrito. Solo
-  // el país es obligatorio: fuera de Perú (o de Ayacucho/Huamanga dentro de
-  // Perú) no se pide más detalle, así que estos tres quedan en "" cuando no
+  // Procedencia — cascada Departamento → Provincia → Distrito (Ayacucho/
+  // Huamanga). Solo el departamento es obligatorio: fuera de Huamanga (o de
+  // Ayacucho) no se pide más detalle, así que estos quedan en "" cuando no
   // aplican (nunca undefined, para no romper el texto donde se muestran).
-  pais: string;
+  // Sin campo de país — el negocio solo atiende clientes de Perú, decisión
+  // de Mijael (los pocos casos de otros países no ameritan el campo).
   departamento: string;
   provincia: string;
   distrito: string;
@@ -85,7 +86,6 @@ export interface ClienteCorporativo {
   fechaAniversario: string;
   nombreRepresentante: string;
   cargoRepresentante: string;
-  pais: string;
   departamento: string;
   provincia: string;
   distrito: string;

@@ -77,7 +77,7 @@ export function PanelGerencial() {
         fechaRegistro: c.fechaRegistro,
         creadoEn: c.creadoEn,
         origen: c.origen || "crm",
-        pais: c.pais, departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
+        departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
       }));
 
       const corporativos = corporativosPorNegocio(clientesCorporativos, v.negocioId).filter((c) => matchVendedor(c.registradoPor)).map((c) => ({
@@ -89,7 +89,7 @@ export function PanelGerencial() {
         fechaRegistro: c.fechaRegistro,
         creadoEn: c.creadoEn,
         origen: "corporativo",
-        pais: c.pais, departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
+        departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
       }));
 
       let todos = [...individuales, ...corporativos].sort(
@@ -107,7 +107,7 @@ export function PanelGerencial() {
           fechaRegistro: c.fechaRegistro,
           creadoEn: c.creadoEn,
           origen: c.origen || "crm",
-          pais: c.pais, departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
+          departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
         }));
       }
 

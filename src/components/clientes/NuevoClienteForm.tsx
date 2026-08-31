@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { X, User, Building2 } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { DISTRITOS_AYACUCHO, DEPARTAMENTOS_PERU, PROVINCIAS_AYACUCHO, PAISES } from "@/lib/mock/nombres";
+import { DISTRITOS_AYACUCHO, DEPARTAMENTOS_PERU, PROVINCIAS_AYACUCHO } from "@/lib/mock/nombres";
 import { ClienteIndividual, ClienteCorporativo, NegocioId, Genero } from "@/lib/types";
 import {
   requerido, celularPeru, emailOpcional, fechaPasada, limitarDigitos,
@@ -80,38 +80,36 @@ export function NuevoClienteForm({
   );
 }
 
-// --- Procedencia: País → Departamento → Provincia → Distrito ---------------
-// El negocio es local de Huamanga, así que la cascada empieza ya resuelta en
-// los valores por defecto (Perú / Ayacucho / Huamanga) — quien registra no
-// tiene que tocar nada si el cliente es de acá. En cuanto alguien elige un
-// valor distinto del default en un nivel, ya no tiene sentido pedir (ni
-// guardar) el siguiente nivel — no tenemos provincias de Lima ni distritos
-// de Chile — así que el "efectivo" de un campo oculto por la cascada es "",
-// calculado acá mismo en cada render (nunca con un efecto que limpie
-// estado): si el campo vuelve a mostrarse, recupera lo último que se había
-// escrito ahí en vez de reiniciarse al valor por defecto.
-function useUbicacion(inicial?: { pais: string; departamento: string; provincia: string; distrito: string }) {
-  const [pais, setPais] = useState<string>(inicial?.pais || PAISES[0]);
+// --- Procedencia: Departamento → Provincia → Distrito -----------------------
+// Sin campo de país — el negocio solo atiende clientes de Perú (decisión de
+// Mijael, los pocos casos de otros países no ameritan el campo). El negocio
+// es local de Huamanga, así que la cascada empieza ya resuelta en los
+// valores por defecto (Ayacucho / Huamanga) — quien registra no tiene que
+// tocar nada si el cliente es de acá. En cuanto alguien elige un valor
+// distinto del default en un nivel, ya no tiene sentido pedir (ni guardar)
+// el siguiente nivel — no tenemos distritos de Lima — así que el "efectivo"
+// de un campo oculto por la cascada es "", calculado acá mismo en cada
+// render (nunca con un efecto que limpie estado): si el campo vuelve a
+// mostrarse, recupera lo último que se había escrito ahí en vez de
+// reiniciarse al valor por defecto.
+function useUbicacion(inicial?: { departamento: string; provincia: string; distrito: string }) {
   const [departamento, setDepartamento] = useState<string>(inicial?.departamento || DEPARTAMENTOS_PERU[0]);
   const [provincia, setProvincia] = useState<string>(inicial?.provincia || PROVINCIAS_AYACUCHO[0]);
   const [distrito, setDistrito] = useState<string>(inicial?.distrito || DISTRITOS_AYACUCHO[0]);
 
-  const departamentoEfectivo = pais === "Perú" ? departamento : "";
-  const provinciaEfectiva = departamentoEfectivo === "Ayacucho" ? provincia : "";
+  const provinciaEfectiva = departamento === "Ayacucho" ? provincia : "";
   const distritoEfectivo = provinciaEfectiva === "Huamanga" ? distrito : "";
 
   return {
-    pais, setPais,
-    departamento: departamentoEfectivo, setDepartamento,
+    departamento, setDepartamento,
     provincia: provinciaEfectiva, setProvincia,
     distrito: distritoEfectivo, setDistrito,
   };
 }
 
 function CamposUbicacion({
-  pais, setPais, departamento, setDepartamento, provincia, setProvincia, distrito, setDistrito, errores,
+  departamento, setDepartamento, provincia, setProvincia, distrito, setDistrito, errores,
 }: {
-  pais: string; setPais: (v: string) => void;
   departamento: string; setDepartamento: (v: string) => void;
   provincia: string; setProvincia: (v: string) => void;
   distrito: string; setDistrito: (v: string) => void;
@@ -119,25 +117,19 @@ function CamposUbicacion({
 }) {
   return (
     <>
-      <SelectConOtro label="País" opciones={PAISES} value={pais} onChange={setPais} requerido error={errores.pais} />
-      {pais === "Perú" && (
-        <SelectConOtro label="Departamento" opciones={DEPARTAMENTOS_PERU} value={departamento} onChange={setDepartamento} requerido error={errores.departamento} />
-      )}
-      {pais === "Perú" && departamento === "Ayacucho" && (
+      <SelectConOtro label="Departamento" opciones={DEPARTAMENTOS_PERU} value={departamento} onChange={setDepartamento} requerido error={errores.departamento} />
+      {departamento === "Ayacucho" && (
         <SelectConOtro label="Provincia" opciones={PROVINCIAS_AYACUCHO} value={provincia} onChange={setProvincia} requerido error={errores.provincia} />
       )}
-      {pais === "Perú" && departamento === "Ayacucho" && provincia === "Huamanga" && (
+      {departamento === "Ayacucho" && provincia === "Huamanga" && (
         <SelectConOtro label="Distrito" opciones={DISTRITOS_AYACUCHO} value={distrito} onChange={setDistrito} requerido error={errores.distrito} />
       )}
     </>
   );
 }
 
-function validarUbicacion(pais: string, departamento: string, provincia: string, distrito: string): Errores {
+function validarUbicacion(departamento: string, provincia: string, distrito: string): Errores {
   const err: Errores = {};
-  const ePais = requerido(pais, "El país");
-  if (ePais) err.pais = ePais;
-  if (pais !== "Perú") return err;
   const eDepto = requerido(departamento, "El departamento");
   if (eDepto) err.departamento = eDepto;
   if (departamento !== "Ayacucho") return err;
@@ -179,7 +171,7 @@ function FormIndividual({
     if (eEmail) err.email = eEmail;
     const eFecha = fechaPasada(fechaNacimiento, "La fecha de nacimiento");
     if (eFecha) err.fechaNacimiento = eFecha;
-    Object.assign(err, validarUbicacion(ubicacion.pais, ubicacion.departamento, ubicacion.provincia, ubicacion.distrito));
+    Object.assign(err, validarUbicacion(ubicacion.departamento, ubicacion.provincia, ubicacion.distrito));
     return err;
   }
 
@@ -208,7 +200,6 @@ function FormIndividual({
       apellidos: apellidos.trim(),
       fechaNacimiento,
       celular,
-      pais: ubicacion.pais,
       departamento: ubicacion.departamento,
       provincia: ubicacion.provincia,
       distrito: ubicacion.distrito,
@@ -298,7 +289,7 @@ function FormCorporativo({
     const eCelular = celularPeru(celular);
     if (eCelular) err.celular = eCelular;
     else if (celular !== editar?.celular && celularExiste(celular)) err.celular = "Ese celular ya pertenece a un cliente registrado en el grupo.";
-    Object.assign(err, validarUbicacion(ubicacion.pais, ubicacion.departamento, ubicacion.provincia, ubicacion.distrito));
+    Object.assign(err, validarUbicacion(ubicacion.departamento, ubicacion.provincia, ubicacion.distrito));
     return err;
   }
 
@@ -323,7 +314,6 @@ function FormCorporativo({
       fechaAniversario: fechaAniversario || "",
       nombreRepresentante: nombreRepresentante.trim(),
       cargoRepresentante,
-      pais: ubicacion.pais,
       departamento: ubicacion.departamento,
       provincia: ubicacion.provincia,
       distrito: ubicacion.distrito,

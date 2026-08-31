@@ -83,7 +83,6 @@ export function mapClienteIndividual(r: Record<string, unknown>): ClienteIndivid
     apellidos: capitalizar(r.apellidos as string),
     fechaNacimiento: r.fecha_nacimiento as string,
     celular: r.celular as string,
-    pais: r.pais as string,
     departamento: r.departamento as string,
     provincia: r.provincia as string,
     distrito: r.distrito as string,
@@ -111,7 +110,6 @@ export function mapClienteCorporativo(r: Record<string, unknown>): ClienteCorpor
     fechaAniversario: (r.fecha_aniversario as string) ?? "",
     nombreRepresentante: capitalizar(r.nombre_representante as string),
     cargoRepresentante: r.cargo_representante as string,
-    pais: r.pais as string,
     departamento: r.departamento as string,
     provincia: r.provincia as string,
     distrito: r.distrito as string,
@@ -274,7 +272,7 @@ export async function dbEliminarUsuario(id: string): Promise<void> {
 export async function dbCrearClienteIndividual(c: ClienteIndividual): Promise<ClienteIndividual> {
   const { data, error } = await supabase.from("clientes_individuales").insert({
     negocio_id: c.negocioId, numero: c.numero, fecha_registro: c.fechaRegistro, nombres: c.nombres,
-    apellidos: c.apellidos, fecha_nacimiento: c.fechaNacimiento, celular: c.celular, pais: c.pais,
+    apellidos: c.apellidos, fecha_nacimiento: c.fechaNacimiento, celular: c.celular,
     departamento: c.departamento, provincia: c.provincia, distrito: c.distrito, origen: c.origen,
     registrado_por: c.registradoPor ?? null, tipo_documento: c.tipoDocumento ?? null,
     numero_documento: c.numeroDocumento ?? null, email: c.email ?? null, genero: c.genero ?? null,
@@ -288,7 +286,7 @@ export async function dbCrearClienteCorporativo(c: ClienteCorporativo): Promise<
   const { data, error } = await supabase.from("clientes_corporativos").insert({
     negocio_id: c.negocioId, numero: c.numero, fecha_registro: c.fechaRegistro, razon_social: c.razonSocial,
     ruc: c.ruc, direccion: c.direccion, celular: c.celular, fecha_aniversario: c.fechaAniversario || null,
-    nombre_representante: c.nombreRepresentante, cargo_representante: c.cargoRepresentante, pais: c.pais,
+    nombre_representante: c.nombreRepresentante, cargo_representante: c.cargoRepresentante,
     departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
     registrado_por: c.registradoPor ?? null, acepta_comunicaciones: c.aceptaComunicaciones ?? true,
   }).select().single();
@@ -302,7 +300,6 @@ export async function dbActualizarClienteIndividual(id: string, patch: Partial<C
   if (patch.apellidos !== undefined) row.apellidos = patch.apellidos;
   if (patch.fechaNacimiento !== undefined) row.fecha_nacimiento = patch.fechaNacimiento;
   if (patch.celular !== undefined) row.celular = patch.celular;
-  if (patch.pais !== undefined) row.pais = patch.pais;
   if (patch.departamento !== undefined) row.departamento = patch.departamento;
   if (patch.provincia !== undefined) row.provincia = patch.provincia;
   if (patch.distrito !== undefined) row.distrito = patch.distrito;
@@ -329,7 +326,6 @@ export async function dbActualizarClienteCorporativo(id: string, patch: Partial<
   if (patch.fechaAniversario !== undefined) row.fecha_aniversario = patch.fechaAniversario || null;
   if (patch.nombreRepresentante !== undefined) row.nombre_representante = patch.nombreRepresentante;
   if (patch.cargoRepresentante !== undefined) row.cargo_representante = patch.cargoRepresentante;
-  if (patch.pais !== undefined) row.pais = patch.pais;
   if (patch.departamento !== undefined) row.departamento = patch.departamento;
   if (patch.provincia !== undefined) row.provincia = patch.provincia;
   if (patch.distrito !== undefined) row.distrito = patch.distrito;

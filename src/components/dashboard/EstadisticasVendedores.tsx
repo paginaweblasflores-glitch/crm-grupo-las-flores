@@ -21,7 +21,6 @@ interface ClienteRegistrado {
   creadoEn?: string;
   celular: string;
   negocioId: NegocioId;
-  pais: string;
   departamento: string;
   provincia: string;
   distrito: string;
@@ -115,7 +114,7 @@ export function EstadisticasVendedores({
             creadoEn: c.creadoEn,
             celular: c.celular,
             negocioId: c.negocioId,
-            pais: c.pais, departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
+            departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
           })),
           ...clientesCorp.map((c) => ({
             id: c.id,
@@ -125,7 +124,7 @@ export function EstadisticasVendedores({
             creadoEn: c.creadoEn,
             celular: c.celular,
             negocioId: c.negocioId,
-            pais: c.pais, departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
+            departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
           })),
         ].sort((a, b) => new Date(b.creadoEn ?? b.fechaRegistro).getTime() - new Date(a.creadoEn ?? a.fechaRegistro).getTime());
 

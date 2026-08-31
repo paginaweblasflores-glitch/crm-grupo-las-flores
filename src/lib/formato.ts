@@ -3,17 +3,19 @@
 // asesores, para no repetir la misma lógica en cada archivo.
 
 // Procedencia más específica disponible — distrito+provincia si el cliente
-// llegó hasta ahí en la cascada País → Departamento → Provincia → Distrito,
-// si no el nivel más específico que sí tenga (nunca queda vacío: todo
-// cliente tiene al menos país).
-export function procedenciaDe(c: { pais: string; departamento: string; provincia: string; distrito: string }): string {
+// llegó hasta ahí en la cascada Departamento → Provincia → Distrito, si no
+// el nivel más específico que sí tenga. El negocio solo atiende Perú (sin
+// campo de país), así que el departamento nunca debería faltar de verdad —
+// el fallback a "Perú" es solo defensivo, por si un registro viejo llegara
+// sin ninguno de los tres.
+export function procedenciaDe(c: { departamento: string; provincia: string; distrito: string }): string {
   if (c.distrito) return `${c.distrito}, ${c.provincia}`;
   if (c.provincia) return `${c.provincia}, ${c.departamento}`;
   if (c.departamento) return `${c.departamento}, Perú`;
-  return c.pais;
+  return "Perú";
 }
 
-// Para tablas con una columna por campo (País | Departamento | Provincia |
+// Para tablas con una columna por campo (Departamento | Provincia |
 // Distrito) en vez de un solo texto combinado — un campo que no aplica (ej.
 // Distrito de un cliente que solo llegó hasta Departamento) se ve como "—",
 // no como una celda vacía sin explicación.

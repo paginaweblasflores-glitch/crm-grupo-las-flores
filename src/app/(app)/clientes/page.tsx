@@ -55,7 +55,7 @@ export default function ClientesPage() {
     const q = busqueda.trim().toLowerCase();
     if (!q) return individuales;
     return individuales.filter((c) =>
-      `${c.nombres} ${c.apellidos} ${c.celular} ${c.distrito} ${c.pais} ${c.registradoPor ?? ""}`.toLowerCase().includes(q)
+      `${c.nombres} ${c.apellidos} ${c.celular} ${c.distrito} ${c.registradoPor ?? ""}`.toLowerCase().includes(q)
     );
   }, [individuales, busqueda]);
 
@@ -63,7 +63,7 @@ export default function ClientesPage() {
     const q = busqueda.trim().toLowerCase();
     if (!q) return corporativos;
     return corporativos.filter((c) =>
-      `${c.razonSocial} ${c.ruc} ${c.celular} ${c.distrito} ${c.pais} ${c.registradoPor ?? ""}`.toLowerCase().includes(q)
+      `${c.razonSocial} ${c.ruc} ${c.celular} ${c.distrito} ${c.registradoPor ?? ""}`.toLowerCase().includes(q)
     );
   }, [corporativos, busqueda]);
 
@@ -91,19 +91,19 @@ export default function ClientesPage() {
     if (tab === "individual") {
       exportarCSV(
         `clientes-individuales-${negocio.id}`,
-        ["N°", "Fecha registro", "Nombres", "Apellidos", "Fecha nacimiento", "Celular", "País", "Departamento", "Provincia", "Distrito", "Origen"],
+        ["N°", "Fecha registro", "Nombres", "Apellidos", "Fecha nacimiento", "Celular", "Departamento", "Provincia", "Distrito", "Origen"],
         individualesFiltrados.map((c) => [
           c.numero, c.fechaRegistro, c.nombres, c.apellidos, c.fechaNacimiento, c.celular,
-          c.pais, c.departamento, c.provincia, c.distrito, c.origen,
+          c.departamento, c.provincia, c.distrito, c.origen,
         ])
       );
     } else {
       exportarCSV(
         `clientes-corporativos-${negocio.id}`,
-        ["N°", "Razón social", "RUC", "Dirección", "Celular", "Representante", "País", "Departamento", "Provincia", "Distrito"],
+        ["N°", "Razón social", "RUC", "Dirección", "Celular", "Representante", "Departamento", "Provincia", "Distrito"],
         corporativosFiltrados.map((c) => [
           c.numero, c.razonSocial, c.ruc, c.direccion, c.celular, c.nombreRepresentante,
-          c.pais, c.departamento, c.provincia, c.distrito,
+          c.departamento, c.provincia, c.distrito,
         ])
       );
     }
@@ -176,7 +176,6 @@ export default function ClientesPage() {
               <Thead>
                 <Th>Nombre</Th>
                 <Th>Celular</Th>
-                <Th>País</Th>
                 <Th>Departamento</Th>
                 <Th>Provincia</Th>
                 <Th>Distrito</Th>
@@ -187,7 +186,6 @@ export default function ClientesPage() {
                   <Tr key={c.id} onClick={() => router.push(`/clientes/${c.id}`)}>
                     <Td className="font-medium">{c.nombres} {c.apellidos}</Td>
                     <Td>{c.celular}</Td>
-                    <Td>{valorOGuion(c.pais)}</Td>
                     <Td>{valorOGuion(c.departamento)}</Td>
                     <Td>{valorOGuion(c.provincia)}</Td>
                     <Td>{valorOGuion(c.distrito)}</Td>
@@ -224,7 +222,6 @@ export default function ClientesPage() {
                 <Th>Representante</Th>
                 <Th>Cargo</Th>
                 <Th>Celular</Th>
-                <Th>País</Th>
                 <Th>Departamento</Th>
                 <Th>Provincia</Th>
                 <Th>Distrito</Th>
@@ -239,7 +236,6 @@ export default function ClientesPage() {
                     <Td>{c.nombreRepresentante}</Td>
                     <Td>{c.cargoRepresentante}</Td>
                     <Td>{c.celular}</Td>
-                    <Td>{valorOGuion(c.pais)}</Td>
                     <Td>{valorOGuion(c.departamento)}</Td>
                     <Td>{valorOGuion(c.provincia)}</Td>
                     <Td>{valorOGuion(c.distrito)}</Td>

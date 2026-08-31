@@ -36,12 +36,12 @@ export const RAZONES_SOCIALES = [
   "Municipalidad Distrital de Jesús Nazareno",
 ] as const;
 
-// Procedencia del cliente — cascada País → Departamento → Provincia →
-// Distrito (ver NuevoClienteForm). Listas cortas a propósito: el negocio es
-// local de Huamanga, así que casi todos los clientes caen en los valores por
-// defecto (Perú / Ayacucho / Huamanga); estas son solo las opciones más
-// comunes fuera de eso — cualquier otra se escribe a mano con "Otro".
-export const PAISES = ["Perú", "Chile", "Argentina", "Bolivia", "Estados Unidos", "España"] as const;
+// Procedencia del cliente — cascada Departamento → Provincia → Distrito (ver
+// NuevoClienteForm). Sin nivel de país: el negocio solo atiende clientes de
+// Perú (decisión de Mijael). Listas cortas a propósito: el negocio es local
+// de Huamanga, así que casi todos los clientes caen en los valores por
+// defecto (Ayacucho / Huamanga); estas son solo las opciones más comunes
+// fuera de eso — cualquier otra se escribe a mano con "Otro".
 
 export const DEPARTAMENTOS_PERU = [
   "Ayacucho", "Lima", "Huancavelica", "Apurímac", "Ica", "Cusco", "Junín",
