@@ -7,6 +7,7 @@ import { useApp } from "@/lib/app-context";
 import { useData } from "@/lib/data-context";
 import { NegocioId, Usuario } from "@/lib/types";
 import { NEGOCIOS, getNegocio } from "@/lib/mock/negocios";
+import { BASE_DATE } from "@/lib/mock/seed";
 import { rangoPeriodo, rangoDelPeriodo, Periodo } from "@/lib/metrics";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -26,6 +27,18 @@ interface ClienteRegistrado {
   provincia: string;
   distrito: string;
 }
+
+const MESES_LABEL = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"];
+
+// Colores del gráfico Anual "por negocio" — a pedido, distintos de los
+// colorAcento de marca que usa el resto del sistema (esos son para
+// identificar cada sede en tarjetas/badges; acá se pidieron específicos
+// para que las 3 barras se distingan bien una de otra en un mismo gráfico).
+const COLOR_ANUAL_POR_NEGOCIO: Record<string, string> = {
+  "las-flores": "#3E6B4F", // verde
+  umaru: "#8B5E34",        // marrón
+  mamina: "#2C2420",       // oscuro
+};
 
 interface AsesorEstadistica {
   usuario: Usuario;
@@ -161,6 +174,35 @@ export function EstadisticasVendedores({
   }, [estadisticas]);
 
   const maxClientes = Math.max(...estadisticas.map((e) => e.totalClientes), 1);
+
+  // Vista Anual, viendo "todas las sucursales" a la vez: en vez de un solo
+  // total del año por asesor (que ya se ve en la tabla de arriba), acá se
+  // desglosa mes a mes — enero a mes actual — con una serie POR NEGOCIO
+  // (no por individual/corporativo, esa vista es la del gráfico de
+  // Mensual). Cuenta TODOS los clientes de ese negocio ese mes, sin
+  // importar qué cuenta puntual los registró — así sigue siendo correcto
+  // aunque un negocio llegue a tener más de un vendedor en el futuro.
+  const negociosOperando = NEGOCIOS.filter((n) => n.operando);
+  const desempenoMensualPorNegocio = useMemo(() => {
+    if (periodo !== "anio" || filtroSede !== "todos") return [];
+    const anioActual = BASE_DATE.getFullYear();
+    const mesActual = BASE_DATE.getMonth();
+    const contarMes = (arr: { fechaRegistro: string; negocioId: NegocioId }[], negocioId: NegocioId, mes: number) =>
+      arr.filter((c) => {
+        const f = new Date(c.fechaRegistro);
+        return c.negocioId === negocioId && f.getMonth() === mes && f.getFullYear() === anioActual;
+      }).length;
+    const filas: Record<string, string | number>[] = [];
+    for (let mes = 0; mes <= mesActual; mes++) {
+      const fila: Record<string, string | number> = { mes: MESES_LABEL[mes] };
+      for (const neg of negociosOperando) {
+        fila[neg.id] = contarMes(clientesIndividuales, neg.id, mes) + contarMes(clientesCorporativos, neg.id, mes);
+      }
+      filas.push(fila);
+    }
+    return filas;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodo, filtroSede, clientesIndividuales, clientesCorporativos]);
 
   // Historial completo de un asesor (todos los clientes que registró, no
   // solo el último) — se abre al hacer clic en su fila. Respeta el mismo
@@ -319,11 +361,27 @@ export function EstadisticasVendedores({
 
       {/* Un día/semana es muy poca muestra para un gráfico comparativo con
           sentido (mismo criterio que ya usa el resto del sistema) — solo
-          se arma en Mensual/Anual. Se construye a partir de la misma lista
-          `estadisticasOrdenadas` de la tabla de arriba (deriva de TODOS los
-          usuarios con rolTipo "ventas"), así que un asesor nuevo que Mijael
-          cree aparece acá también, sin tocar código. */}
-      {(periodo === "mes" || periodo === "anio") && estadisticasOrdenadas.length > 0 && (
+          se arma en Mensual/Anual. En Anual, viendo "todas las sucursales",
+          el gráfico cambia: en vez de un solo total del año por asesor
+          (individuales/corporativos, que ya no dice mucho sobre 12 meses
+          de una sola vez), muestra el desglose mes a mes con una barra por
+          NEGOCIO — así se ve la tendencia real del año, no solo un total
+          plano. Fuera de ese caso (Mensual, o Anual pero viendo una sola
+          sede), se queda con el comparativo por asesor de siempre. */}
+      {periodo === "anio" && filtroSede === "todos" && desempenoMensualPorNegocio.length > 0 ? (
+        <Card>
+          <CardHeader title="Desempeño mensual por negocio" subtitle={`Clientes captados por mes · ${rangoDelPeriodo(periodo)}`} />
+          <BarChartSerie
+            data={desempenoMensualPorNegocio}
+            xKey="mes"
+            series={negociosOperando.map((n) => ({
+              key: n.id,
+              nombre: n.nombre,
+              color: COLOR_ANUAL_POR_NEGOCIO[n.id] ?? n.colorAcento,
+            }))}
+          />
+        </Card>
+      ) : (periodo === "mes" || periodo === "anio") && estadisticasOrdenadas.length > 0 && (
         <Card>
           <CardHeader title="Comparativo de rendimiento" subtitle={`Clientes captados por asesor · ${rangoDelPeriodo(periodo)}`} />
           <BarChartSerie
