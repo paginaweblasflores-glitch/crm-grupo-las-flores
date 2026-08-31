@@ -8,9 +8,10 @@ import { useData } from "@/lib/data-context";
 import { NegocioId, Usuario } from "@/lib/types";
 import { NEGOCIOS, getNegocio } from "@/lib/mock/negocios";
 import { rangoPeriodo, rangoDelPeriodo, Periodo } from "@/lib/metrics";
-import { Card } from "@/components/ui/Card";
+import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { BarChartSerie } from "@/components/charts/BarChartSerie";
 import { procedenciaDe } from "@/lib/formato";
 
 interface ClienteRegistrado {
@@ -182,6 +183,30 @@ export function EstadisticasVendedores({
           Captación de clientes y última actividad por asesor · {rangoDelPeriodo(periodo)}
         </p>
       </div>
+
+      {/* Un día/semana es muy poca muestra para un gráfico comparativo con
+          sentido (mismo criterio que ya usa el resto del sistema) — solo
+          se arma en Mensual/Anual. Se construye a partir de la misma lista
+          `estadisticasOrdenadas` de abajo (deriva de TODOS los usuarios con
+          rolTipo "ventas"), así que un asesor nuevo que Mijael cree
+          aparece acá también, sin tocar código. */}
+      {(periodo === "mes" || periodo === "anio") && estadisticasOrdenadas.length > 0 && (
+        <Card>
+          <CardHeader title="Comparativo de rendimiento" subtitle={`Clientes captados por asesor · ${rangoDelPeriodo(periodo)}`} />
+          <BarChartSerie
+            data={estadisticasOrdenadas.map((e) => ({
+              asesor: e.usuario.nombre.replace("Ventas ", ""),
+              individuales: e.clientesNaturales,
+              corporativos: e.clientesCorporativos,
+            }))}
+            xKey="asesor"
+            series={[
+              { key: "individuales", nombre: "Individuales", color: "#8C3A25" },
+              { key: "corporativos", nombre: "Corporativos", color: "#5C7C8C" },
+            ]}
+          />
+        </Card>
+      )}
 
       {/* Las 2 tarjetas de resumen que había acá (Mayor Captadora / Total
           clientes captados) se quitaron por redundantes — la tabla de abajo
