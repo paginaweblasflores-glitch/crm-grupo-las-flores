@@ -153,7 +153,7 @@ function FormIndividual({
   const [celular, setCelular] = useState(editar?.celular ?? "");
   const [email, setEmail] = useState(editar?.email ?? "");
   const [fechaNacimiento, setFechaNacimiento] = useState(editar?.fechaNacimiento ?? "");
-  const [genero, setGenero] = useState<Genero | "">(editar?.genero ?? "");
+  const [genero, setGenero] = useState<Genero | "">(editar?.genero ?? "Masculino");
   const ubicacion = useUbicacion(editar);
   const [aceptaComunicaciones, setAceptaComunicaciones] = useState(editar?.aceptaComunicaciones ?? true);
   const [errores, setErrores] = useState<Errores>({});
