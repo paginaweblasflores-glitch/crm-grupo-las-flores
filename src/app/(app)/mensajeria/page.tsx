@@ -196,7 +196,7 @@ function MensajeriaInner() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-medium text-[var(--color-gris)] truncate">{c.nombres} {c.apellidos}</p>
-                        {hora && <span className="text-[10px] text-[var(--color-gris-medio)] shrink-0">{formatearFechaMensaje(hora)}</span>}
+                        {hora && <span className="text-[10px] text-[var(--color-gris-medio)] shrink-0">{formatearFechaLista(hora)}</span>}
                       </div>
                       <p className="text-xs text-[var(--color-gris-medio)] truncate mt-0.5">{c.celular}</p>
                     </button>
@@ -375,11 +375,44 @@ function ChatPanel({
   );
 }
 
+// Diferencia en días de CALENDARIO (no en bloques de 24 horas) — "ayer"
+// significa el día calendario anterior, no "entre 24 y 48 horas atrás". Esto
+// se recalcula cada vez que se abre la página contra la fecha real de hoy,
+// así que un mensaje de hoy pasa a decir "Ayer" solo mañana, sin que nadie
+// tenga que tocar nada.
+function diasDeDiferencia(fecha: Date, ahora: Date): number {
+  const inicioFecha = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+  const inicioAhora = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  return Math.round((inicioAhora.getTime() - inicioFecha.getTime()) / 86400000);
+}
+
+// Para la lista de conversaciones (como WhatsApp/Telegram): hoy solo la
+// hora, ayer dice "Ayer", esta semana el día ("Lunes"), más atrás la fecha
+// completa — nunca dos formatos a la vez, igual que en la app real.
+function formatearFechaLista(hora: string): string {
+  const fecha = new Date(hora);
+  const dias = diasDeDiferencia(fecha, new Date());
+  if (dias <= 0) return fecha.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+  if (dias === 1) return "Ayer";
+  if (dias < 7) {
+    const dia = fecha.toLocaleDateString("es-PE", { weekday: "long" });
+    return dia.charAt(0).toUpperCase() + dia.slice(1);
+  }
+  return fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+// Para cada mensaje dentro de una conversación abierta: siempre incluye la
+// hora (ahí sí hace falta saber a qué hora, no solo qué día), con la misma
+// escala relativa que la lista.
 function formatearFechaMensaje(hora: string): string {
   const fecha = new Date(hora);
-  const hoy = new Date();
-  const esHoy = fecha.toDateString() === hoy.toDateString();
-  if (esHoy) return fecha.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
-  return fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "short" }) + " · " +
-    fecha.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+  const dias = diasDeDiferencia(fecha, new Date());
+  const horaTexto = fecha.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+  if (dias <= 0) return horaTexto;
+  if (dias === 1) return `Ayer, ${horaTexto}`;
+  if (dias < 7) {
+    const dia = fecha.toLocaleDateString("es-PE", { weekday: "long" });
+    return `${dia.charAt(0).toUpperCase() + dia.slice(1)}, ${horaTexto}`;
+  }
+  return fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "short" }) + " · " + horaTexto;
 }
