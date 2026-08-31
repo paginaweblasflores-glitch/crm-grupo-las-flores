@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Gift, MessageCircle, CheckCircle2, Settings2, Pencil, RotateCcw, ChevronLeft, ChevronRight, Clock, Lock } from "lucide-react";
@@ -204,6 +204,15 @@ function AutoEnvioCumpleanos({
   actualizarSeguimiento: (id: string, patch: Partial<SeguimientoCumple>) => Promise<void>;
 }) {
   const [, forceTick] = useState(0);
+  // Guarda de la sesión: qué seguimientos ya se mandaron a crear/actualizar
+  // desde este montaje del componente, para no volver a mandarlos si el
+  // efecto se dispara dos veces seguidas ANTES de que `reales` (el estado
+  // real de Supabase) alcance a reflejar el primer envío — sin esto, un
+  // cliente sin fila de seguimiento propia todavía (el caso normal de "recién
+  // registrado, cumple hoy") podía terminar con DOS filas en la base de
+  // datos, una por cada disparo, porque ambos veían el mismo estado
+  // "seguimiento virtual, sin crear todavía" al mismo tiempo.
+  const enProceso = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const id = setInterval(() => forceTick((n) => n + 1), 60000);
@@ -217,6 +226,8 @@ function AutoEnvioCumpleanos({
     seguimientos.forEach((s) => {
       if (!esHoy(s.fechaCumple)) return;
       if (s.saludoEnviado) return;
+      if (enProceso.current.has(s.id)) return;
+      enProceso.current.add(s.id);
       const horaProgramada = s.horaPersonalizada || config.hora;
       const [h, m] = horaProgramada.split(":").map(Number);
       if (h * 60 + (m || 0) > minutosAhora) return;
