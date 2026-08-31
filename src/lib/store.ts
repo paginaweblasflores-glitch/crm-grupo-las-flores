@@ -6,8 +6,10 @@
 // Supabase (ver src/lib/data-context.tsx). Acá solo queda lo que es
 // deliberadamente simulado y no tiene sentido en una tabla real todavía:
 // el chat de Mensajería (simulacro de la futura API de WhatsApp), el chat
-// de Estrategias (simulacro del asistente de IA), las credenciales de esas
-// dos futuras integraciones, y una preferencia de UI (modo automático).
+// de Estrategias, las credenciales de la API de WhatsApp (pendiente de
+// conectar) y una clave PROPIA opcional de Gemini (Estrategias ya está
+// conectado de verdad vía src/app/api/estrategias/route.ts — esto es solo
+// para quien quiera usar su propia cuota en vez de la del sistema).
 //
 // El patrón "leer localStorage en un useEffect al montar" dispara la regla
 // set-state-in-effect en todos los hooks de este archivo — es intencional:
@@ -220,21 +222,4 @@ export function useConfigWhatsAppAPI() {
   }, []);
 
   return { config, guardar, desconectar, listo };
-}
-
-export function useModoAutomatico() {
-  const [modo, setModoState] = useState(false);
-  const [listo, setListo] = useState(false);
-
-  useEffect(() => {
-    setModoState(readLS<boolean>("crm-chat-modo-automatico", false));
-    setListo(true);
-  }, []);
-
-  const setModo = useCallback((v: boolean) => {
-    setModoState(v);
-    writeLS("crm-chat-modo-automatico", v);
-  }, []);
-
-  return { modo, setModo, listo };
 }

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Send, Lock, MessageCircle, Bot, User, CalendarClock, MessagesSquare } from "lucide-react";
+import { Send, Lock, MessageCircle, CalendarClock, MessagesSquare } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { accesoA } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
@@ -15,17 +15,10 @@ import { clientesIndividualesPorNegocio } from "@/lib/mock/clientes";
 import { seguimientosPorNegocio } from "@/lib/mock/seguimiento";
 import { campanasPorNegocio } from "@/lib/mock/campanas";
 import { plantillaCumpleanos, semillaConversacion, semillaCampanasCliente } from "@/lib/mensajes";
-import { useChat, useModoAutomatico, leerChatGuardado } from "@/lib/store";
+import { useChat, leerChatGuardado } from "@/lib/store";
 import { useData } from "@/lib/data-context";
 import { seguimientosConNuevos } from "@/lib/seguimiento-helpers";
 import { Campana, SeguimientoCumple } from "@/lib/types";
-
-const RESPUESTAS_AUTO = [
-  "¡Hola! Muchas gracias por el saludo 🌸",
-  "Qué lindo detalle, gracias. ¿Tienen mesa disponible este fin de semana?",
-  "Justo estaba pensando en ir a celebrar ahí, gracias por escribir.",
-  "Genial, ¿el descuento aplica si somos un grupo grande?",
-];
 
 // Mismo criterio simple que la tabla de Cumpleaños: Estado lo pone el
 // sistema solo (Enviado, en cuanto se manda el saludo), Reservación la marca
@@ -285,7 +278,6 @@ function ChatPanel({
     return [...deCumpleanos, ...deCampanas].sort((a, b) => a.hora.localeCompare(b.hora));
   }, [seguimiento, negocioNombre, clienteId, campanas]);
   const { mensajes, enviar, listo } = useChat(clienteId, semilla);
-  const { modo, setModo, listo: listoModo } = useModoAutomatico();
   const [texto, setTexto] = useState("");
 
   // Se avisa al padre DESPUÉS de que este chat ya terminó de renderizar con
@@ -300,18 +292,12 @@ function ChatPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mensajes]);
 
-  if (!listo || !listoModo) return null;
+  if (!listo) return null;
 
   function enviarMensaje() {
     if (!texto.trim()) return;
     enviar(texto.trim(), "negocio");
     setTexto("");
-    if (modo) {
-      setTimeout(() => {
-        const respuesta = RESPUESTAS_AUTO[Math.floor(Math.random() * RESPUESTAS_AUTO.length)];
-        enviar(respuesta, "cliente");
-      }, 1200);
-    }
   }
 
   return (
@@ -321,15 +307,6 @@ function ChatPanel({
           <p className="text-sm font-semibold text-[var(--color-gris)]">{clienteNombre}</p>
           <p className="text-[11px] text-[var(--color-gris-medio)]">Conversación simulada — no sale de WhatsApp real</p>
         </div>
-        <button
-          onClick={() => setModo(!modo)}
-          className={`flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-1.5 transition-colors ${
-            modo ? "bg-[var(--color-verde)] text-white" : "bg-[var(--color-crema-oscuro)] text-[var(--color-gris-medio)]"
-          }`}
-        >
-          {modo ? <Bot size={13} /> : <User size={13} />}
-          {modo ? "Automático (API)" : "Manual"}
-        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-[var(--color-crema)]/40">
