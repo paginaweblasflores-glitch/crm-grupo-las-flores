@@ -222,8 +222,17 @@ function AutoEnvioCumpleanos({
       if (h * 60 + (m || 0) > minutosAhora) return;
       const plantilla = s.mensajePersonalizado || config.mensaje;
       const texto = interpolarPlantilla(plantilla, s.nombre.split(" ")[0], negocioNombre);
-      const enviadoEn = new Date().toISOString();
-      agregarMensajeChatDirecto(s.clienteId, texto, "negocio", `${s.id}-auto-saludo`);
+      // La hora "real" del saludo es la HORA PROGRAMADA (ej. 9:00 en punto),
+      // no el instante en que este efecto revisó y encontró que ya tocaba
+      // mandarlo — eso podía ser cualquier momento después de las 9:00,
+      // según cuándo alguien tuviera el sistema abierto. El estándar es
+      // 9:00 para todos salvo personalización, y así se va a comportar de
+      // verdad cuando esto se conecte a la API real de WhatsApp (un envío
+      // programado, no reactivo a que alguien abra la página).
+      const enviado = new Date(ahora);
+      enviado.setHours(h, m || 0, 0, 0);
+      const enviadoEn = enviado.toISOString();
+      agregarMensajeChatDirecto(s.clienteId, texto, "negocio", `${s.id}-auto-saludo`, enviadoEn);
       void guardarSeguimiento(s, { saludoEnviado: true, saludoEnviadoEn: enviadoEn }, reales, crearSeguimiento, actualizarSeguimiento);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

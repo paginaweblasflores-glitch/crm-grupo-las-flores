@@ -42,16 +42,24 @@ function writeLS<T>(key: string, value: T) {
 // pasar un id fijo y repetible (ej. `${seguimiento.id}-auto-saludo`) — si ya
 // existe un mensaje con ese id en el chat, no se vuelve a escribir. Sin esto,
 // dos disparos del mismo efecto duplicaban el saludo en el chat del cliente.
+//
+// `hora` es opcional (por defecto el momento real en que se llama) — el
+// saludo automático de cumpleaños la pasa explícita, calculada desde la HORA
+// PROGRAMADA (ej. 9:00), no desde el instante en que alguien tenía la
+// pestaña de Cumpleaños abierta cuando el efecto revisó y mandó el saludo
+// (que podía ser cualquier hora después de las 9:00, según cuándo abriera
+// el sistema Gerencial o Ventas).
 export function agregarMensajeChatDirecto(
   clienteId: string,
   texto: string,
   de: "negocio" | "cliente" = "negocio",
-  idEstable?: string
+  idEstable?: string,
+  hora?: string
 ) {
   const key = `crm-chat-${clienteId}`;
   const actuales = readLS<Mensaje[]>(key, []);
   if (idEstable && actuales.some((m) => m.id === idEstable)) return;
-  const next = [...actuales, { id: idEstable ?? `${Date.now()}-${de}-${clienteId}`, de, texto, hora: new Date().toISOString() }];
+  const next = [...actuales, { id: idEstable ?? `${Date.now()}-${de}-${clienteId}`, de, texto, hora: hora ?? new Date().toISOString() }];
   writeLS(key, next);
 }
 
