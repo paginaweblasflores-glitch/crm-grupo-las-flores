@@ -137,7 +137,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-[11px] text-[var(--color-gris-medio)] mt-6">
-          CRM Corporativo · Grupo Las Flores © 2026
+          CRM Corporativo · Consorcio Las Flores © 2026
         </p>
       </div>
     </div>
