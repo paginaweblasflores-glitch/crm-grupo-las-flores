@@ -6,9 +6,22 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/app-context";
 import { Eye, EyeOff, ChevronDown, ArrowRight } from "lucide-react";
 
+// Orden fijo de la lista del login — la jerarquía del organigrama, no
+// alfabético ni "más reciente primero" (ese es el orden que usan las
+// tablas del sistema, ver useData(), pero acá confundiría más de lo que
+// ayuda: alguien que abre el selector espera encontrar su cuenta siempre
+// en el mismo lugar, sin que dependa de cuándo se creó cada una).
+const ORDEN_ROL: Record<string, number> = { direccion: 0, gerencial: 1, administracion: 2, ventas: 3 };
+const ORDEN_NEGOCIO: Record<string, number> = { "las-flores": 0, umaru: 1, mamina: 2 };
+
 export default function LoginPage() {
   const { iniciarSesion, usuarios } = useApp();
   const router = useRouter();
+  const usuariosOrdenados = [...usuarios].sort((a, b) => {
+    const rol = (ORDEN_ROL[a.rolTipo] ?? 99) - (ORDEN_ROL[b.rolTipo] ?? 99);
+    if (rol !== 0) return rol;
+    return (ORDEN_NEGOCIO[a.negocioId] ?? 99) - (ORDEN_NEGOCIO[b.negocioId] ?? 99);
+  });
   const [usuario, setUsuario] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [verContrasena, setVerContrasena] = useState(false);
@@ -70,7 +83,7 @@ export default function LoginPage() {
                 className="w-full px-3.5 py-3 rounded-xl border border-[var(--color-gris-claro)] text-sm font-medium text-[var(--color-gris)] bg-white focus:outline-none focus:border-[var(--color-terracota)] focus:ring-2 focus:ring-[var(--color-terracota)]/20 transition-all appearance-none cursor-pointer pr-10 shadow-sm"
               >
                 <option value="" disabled>Selecciona tu usuario...</option>
-                {usuarios.map((u) => (
+                {usuariosOrdenados.map((u) => (
                   <option key={u.id} value={u.usuario}>
                     {u.nombre}
                   </option>
