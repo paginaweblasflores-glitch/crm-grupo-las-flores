@@ -11,6 +11,22 @@ import {
   Campana, Festividad, SeguimientoCumple,
 } from "./types";
 
+// Normaliza un nombre de persona a "Cada Palabra Capitalizada" sin importar
+// cómo lo haya tecleado quien registró al cliente (todo minúscula, todo
+// mayúscula, mezclado) — así la tabla de Clientes, la Ficha 360°, los
+// mensajes de WhatsApp, etc. se ven siempre uniformes, sin tener que tocar
+// cada pantalla que muestra un nombre por separado. Se aplica acá (al leer
+// de Supabase), no al guardar, para que también deje parejos los datos que
+// ya existían con distinta capitalización antes de este cambio.
+function capitalizar(texto: string): string {
+  return texto
+    .trim()
+    .toLocaleLowerCase("es-PE")
+    .split(/\s+/)
+    .map((palabra) => (palabra ? palabra.charAt(0).toLocaleUpperCase("es-PE") + palabra.slice(1) : palabra))
+    .join(" ");
+}
+
 // ============================================================================
 // Mappers — fila de Supabase (snake_case) → tipo de la app (camelCase)
 // ============================================================================
@@ -49,8 +65,8 @@ export function mapClienteIndividual(r: Record<string, unknown>): ClienteIndivid
     numero: r.numero as number,
     fechaRegistro: r.fecha_registro as string,
     creadoEn: (r.creado_en as string) ?? undefined,
-    nombres: r.nombres as string,
-    apellidos: r.apellidos as string,
+    nombres: capitalizar(r.nombres as string),
+    apellidos: capitalizar(r.apellidos as string),
     fechaNacimiento: r.fecha_nacimiento as string,
     celular: r.celular as string,
     pais: r.pais as string,
@@ -79,7 +95,7 @@ export function mapClienteCorporativo(r: Record<string, unknown>): ClienteCorpor
     direccion: r.direccion as string,
     celular: r.celular as string,
     fechaAniversario: (r.fecha_aniversario as string) ?? "",
-    nombreRepresentante: r.nombre_representante as string,
+    nombreRepresentante: capitalizar(r.nombre_representante as string),
     cargoRepresentante: r.cargo_representante as string,
     pais: r.pais as string,
     departamento: r.departamento as string,
