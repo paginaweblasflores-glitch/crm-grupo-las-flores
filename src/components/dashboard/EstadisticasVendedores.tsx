@@ -2,9 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  Trophy, Clock,
-} from "lucide-react";
+import { Trophy } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { useData } from "@/lib/data-context";
 import { NegocioId, Usuario } from "@/lib/types";
@@ -13,7 +11,7 @@ import { rangoPeriodo, rangoDelPeriodo, Periodo } from "@/lib/metrics";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
-import { tiempoRelativoOFecha, procedenciaDe } from "@/lib/formato";
+import { procedenciaDe } from "@/lib/formato";
 
 interface ClienteRegistrado {
   id: string;
@@ -214,7 +212,7 @@ export function EstadisticasVendedores({
                 <th className="py-3 px-4">Sede Asignada</th>
                 <th className="py-3 px-4 text-center">Clientes Captados</th>
                 <th className="py-3 px-4 text-center">Participación</th>
-                <th className="py-3 px-4">Último Registro de Cliente</th>
+                <th className="py-3 px-4">Registro</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-gris-claro)]/20 font-medium text-[var(--color-gris)]">
@@ -293,22 +291,17 @@ export function EstadisticasVendedores({
                       </div>
                     </td>
 
-                    {/* Cuándo fue el Último Registro de Cliente */}
+                    {/* Registro — enlace directo a la lista completa de clientes
+                        de este asesor (mismo modal que abre la fila entera,
+                        pero como acción explícita acá) */}
                     <td className="py-3.5 px-4">
                       {e.ultimoCliente ? (
-                        <div className="space-y-0.5">
-                          <Link
-                            href={`/clientes/${e.ultimoCliente.id}`}
-                            onClick={(ev) => ev.stopPropagation()}
-                            className="font-bold text-xs text-[var(--color-gris)] hover:text-[var(--color-terracota)] hover:underline truncate block max-w-[180px]"
-                          >
-                            {e.ultimoCliente.nombre}
-                          </Link>
-                          <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-terracota)] font-medium">
-                            <Clock size={11} className="shrink-0" />
-                            <span>{tiempoRelativoOFecha(e.ultimoCliente.creadoEn ?? e.ultimoCliente.fechaRegistro)}</span>
-                          </div>
-                        </div>
+                        <button
+                          onClick={(ev) => { ev.stopPropagation(); setAsesorHistorial(e); }}
+                          className="text-xs font-semibold text-[var(--color-terracota)] hover:underline"
+                        >
+                          Clientes Registrados
+                        </button>
                       ) : (
                         <span className="text-[11px] text-[var(--color-gris-medio)] italic">
                           Sin registros aún
