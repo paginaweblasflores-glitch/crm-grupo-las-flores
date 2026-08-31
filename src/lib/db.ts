@@ -27,6 +27,20 @@ function capitalizar(texto: string): string {
     .join(" ");
 }
 
+// Mismo criterio que capitalizar(), pero para razón social — una empresa sí
+// puede traer una sigla legal al final (S.A.C., E.I.R.L., etc.) que debe
+// quedar en mayúscula fija, no "Capitalizada" como una palabra cualquiera
+// (capitalizar() sola dejaría "S.A.C." como "S.a.c.").
+const SIGLAS_LEGALES = ["S.A.C.", "S.A.A.", "E.I.R.L.", "S.R.L.", "S.C.R.L.", "S.A."];
+
+function capitalizarRazonSocial(texto: string): string {
+  let out = capitalizar(texto);
+  for (const sigla of SIGLAS_LEGALES) {
+    out = out.replace(new RegExp(sigla.replace(/\./g, "\\."), "gi"), sigla);
+  }
+  return out;
+}
+
 // ============================================================================
 // Mappers — fila de Supabase (snake_case) → tipo de la app (camelCase)
 // ============================================================================
@@ -90,7 +104,7 @@ export function mapClienteCorporativo(r: Record<string, unknown>): ClienteCorpor
     numero: r.numero as number,
     fechaRegistro: r.fecha_registro as string,
     creadoEn: (r.creado_en as string) ?? undefined,
-    razonSocial: r.razon_social as string,
+    razonSocial: capitalizarRazonSocial(r.razon_social as string),
     ruc: r.ruc as string,
     direccion: r.direccion as string,
     celular: r.celular as string,
