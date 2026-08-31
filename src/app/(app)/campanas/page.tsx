@@ -7,16 +7,16 @@ import {
   CheckCircle2, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { accesoA, puedeGestionarCampanas } from "@/lib/permissions";
+import { accesoA, puedeCrearCampanas, puedeAprobarCampanas, puedeCambiarNegocio } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge, type Tono } from "@/components/ui/Badge";
-import { campanasPorNegocio, campanaAlcanzaNegocio } from "@/lib/mock/campanas";
-import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "@/lib/mock/clientes";
+import { campanaAlcanzaNegocio } from "@/lib/mock/campanas";
 import { NEGOCIOS, getNegocio } from "@/lib/mock/negocios";
-import { useCampanasCreadas, useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
+import { useConfigWhatsAppAPI, agregarMensajeChatDirecto } from "@/lib/store";
+import { useData } from "@/lib/data-context";
 import { requerido, Errores } from "@/lib/validacion";
 import { Campana, NegocioId } from "@/lib/types";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
@@ -52,9 +52,11 @@ function CampanasInner() {
   const nombreSugerido = searchParams.get("nombre");
   const [formAbierto, setFormAbierto] = useState(Boolean(festividadId));
   const [editando, setEditando] = useState<Campana | null>(null);
-  const { items: creadas, add: agregarCampana, update: editarCampana, remove: eliminarCampana } = useCampanasCreadas();
-  const { items: clientesCreados } = useClientesCreados();
-  const { items: corpCreados } = useClientesCorporativosCreados();
+  const {
+    campanas: todasLasCampanas, clientesIndividuales, clientesCorporativos,
+    crearCampana, actualizarCampana, eliminarCampana,
+  } = useData();
+  const { config: configWhatsApp, listo: listoConfigWhatsApp } = useConfigWhatsAppAPI();
 
   // "Todas las sucursales" no es un negocio real donde se pueda crear una
   // campaña — se redirige a Panel Principal. Una campaña que llega a varias
@@ -66,33 +68,29 @@ function CampanasInner() {
     if (fueraDeAlcance) router.replace("/dashboard");
   }, [fueraDeAlcance, router]);
 
-  // Base de clientes viva de LOS 3 negocios (mock + registrados desde el
-  // sistema) — hace falta completa, no solo la del negocio activo, porque
-  // una campaña puede incluir clientes de otras sedes.
+  // Base de clientes viva de LOS 3 negocios — hace falta completa, no solo
+  // la del negocio activo, porque una campaña puede incluir clientes de
+  // otras sedes.
   const individualesPorNegocio = useMemo(() => {
     const mapa = new Map<NegocioId, { id: string }[]>();
     NEGOCIOS.forEach((n) => {
-      mapa.set(n.id, [...clientesIndividualesPorNegocio(n.id), ...clientesCreados.filter((c) => c.negocioId === n.id)]);
+      mapa.set(n.id, clientesIndividuales.filter((c) => c.negocioId === n.id));
     });
     return mapa;
-  }, [clientesCreados]);
+  }, [clientesIndividuales]);
   const corporativosPorNeg = useMemo(() => {
     const mapa = new Map<NegocioId, { id: string }[]>();
     NEGOCIOS.forEach((n) => {
-      mapa.set(n.id, [...corporativosPorNegocio(n.id), ...corpCreados.filter((c) => c.negocioId === n.id)]);
+      mapa.set(n.id, clientesCorporativos.filter((c) => c.negocioId === n.id));
     });
     return mapa;
-  }, [corpCreados]);
+  }, [clientesCorporativos]);
   const clientesPorId = useMemo(() => {
     const mapa = new Map<string, ClienteResuelto>();
-    NEGOCIOS.forEach((n) => {
-      const individuales = [...clientesIndividualesPorNegocio(n.id), ...clientesCreados.filter((c) => c.negocioId === n.id)];
-      const corporativos = [...corporativosPorNegocio(n.id), ...corpCreados.filter((c) => c.negocioId === n.id)];
-      individuales.forEach((c) => mapa.set(c.id, { nombre: `${c.nombres} ${c.apellidos}`.trim(), celular: c.celular, tipo: "Natural", negocioId: n.id }));
-      corporativos.forEach((c) => mapa.set(c.id, { nombre: c.razonSocial, celular: c.celular, tipo: "Corporativo", negocioId: n.id }));
-    });
+    clientesIndividuales.forEach((c) => mapa.set(c.id, { nombre: `${c.nombres} ${c.apellidos}`.trim(), celular: c.celular, tipo: "Natural", negocioId: c.negocioId }));
+    clientesCorporativos.forEach((c) => mapa.set(c.id, { nombre: c.razonSocial, celular: c.celular, tipo: "Corporativo", negocioId: c.negocioId }));
     return mapa;
-  }, [clientesCreados, corpCreados]);
+  }, [clientesIndividuales, clientesCorporativos]);
 
   function idsParaPublicoYSucursales(publico: Campana["publico"], negocios: Campana["negocios"]): string[] {
     const sedes = negocios === "todas" ? NEGOCIOS.map((n) => n.id) : negocios;
@@ -107,11 +105,27 @@ function CampanasInner() {
   // Aprobar congela el segmento al momento de aprobar — así el % de
   // contactados de una campaña no se mueve solo porque después se registró
   // un cliente nuevo que nunca recibió el mensaje.
+  //
+  // El envío masivo real (automático, sin abrir WhatsApp uno por uno) solo
+  // existe con la API de WhatsApp Business — pagada, no conectada todavía
+  // (ver decisión de Mijael). Mientras tanto, "Aprobar y enviar" SIMULA que
+  // ya se mandó a todo el segmento (marca el 100% como contactado al
+  // instante) — igual que el resto del sistema, no se oculta que es
+  // simulado: se avisa en el texto de la tarjeta. El botón de WhatsApp por
+  // cliente sigue ahí y sigue siendo real, para cuando alguien quiera
+  // contactar a una persona puntual de verdad.
+  //
+  // Cada cliente del segmento recibe además el mensaje de la campaña en su
+  // chat de Mensajería (agregarMensajeChatDirecto) — así el envío masivo no
+  // solo mueve el % de la tarjeta, se ve reflejado como conversación real en
+  // el otro módulo, igual que ya pasa con el saludo de cumpleaños.
   function aprobarCampana(c: Campana) {
     const objetivo = idsParaPublicoYSucursales(c.publico, c.negocios);
-    editarCampana((x) => x.id === c.id, (x) => ({
-      ...x, estado: "aprobada", aprobadaEn: new Date().toISOString().slice(0, 10), clientesObjetivo: objetivo,
-    }));
+    objetivo.forEach((clienteId) => agregarMensajeChatDirecto(clienteId, c.mensaje, "negocio"));
+    void actualizarCampana(c.id, {
+      estado: "aprobada", aprobadaEn: new Date().toISOString().slice(0, 10),
+      clientesObjetivo: objetivo, contactados: objetivo,
+    });
   }
 
   // "Contactado" = se hizo clic en su WhatsApp desde acá — un registro
@@ -119,15 +133,19 @@ function CampanasInner() {
   // verdad (eso solo lo sabe quien lo envía a mano). Lo puede marcar
   // cualquiera que vea el módulo, no solo Gerencial — contactar clientes es
   // el trabajo diario de Ventas, igual que ya hace uno por uno en Clientes.
+  // Mismo reflejo en Mensajería que el envío masivo, pero solo la primera
+  // vez que se marca a ese cliente — para no duplicar el mensaje si alguien
+  // vuelve a hacer clic en un cliente que ya estaba contactado.
   function marcarContactado(c: Campana, clienteId: string) {
-    editarCampana((x) => x.id === c.id, (x) =>
-      x.contactados.includes(clienteId) ? x : { ...x, contactados: [...x.contactados, clienteId] }
-    );
+    if (c.contactados.includes(clienteId)) return;
+    agregarMensajeChatDirecto(clienteId, c.mensaje, "negocio");
+    void actualizarCampana(c.id, { contactados: [...c.contactados, clienteId] });
   }
 
-  if (!usuario || fueraDeAlcance) return null;
+  if (!usuario || fueraDeAlcance || !listoConfigWhatsApp) return null;
   const nivel = accesoA(usuario.rolTipo, "campanas");
-  const puedeGestionar = puedeGestionarCampanas(usuario.rolTipo);
+  const puedeCrear = puedeCrearCampanas(usuario.rolTipo);
+  const puedeAprobar = puedeAprobarCampanas(usuario.rolTipo);
 
   if (nivel === "no") {
     return (
@@ -138,7 +156,7 @@ function CampanasInner() {
             <EmptyState
               icon={<Lock size={22} />}
               title="Este módulo no está disponible para tu rol"
-              description="Campañas las gestiona Gerencial — tu equipo puede verlas y enviarlas, no crearlas ni aprobarlas."
+              description="Campañas las arma y envía cada negocio (Ventas y Gerencial) — tu rol no tiene acceso a este módulo."
             />
           </Card>
         </main>
@@ -157,7 +175,7 @@ function CampanasInner() {
     );
   }
 
-  const campanas = [...campanasPorNegocio(negocio.id), ...creadas.filter((c) => campanaAlcanzaNegocio(c, negocio.id))];
+  const campanas = todasLasCampanas.filter((c) => campanaAlcanzaNegocio(c, negocio.id));
   const borradoresPendientes = campanas.filter((c) => c.estado === "borrador").length;
   const totalContactados = campanas.reduce((a, c) => a + c.contactados.length, 0);
 
@@ -183,14 +201,15 @@ function CampanasInner() {
         {(formAbierto || editando) && (
           <CampanaForm
             negocioActivo={negocio.id}
+            puedeElegirSucursales={puedeCambiarNegocio(usuario.rolTipo)}
             registradoPor={usuario.id}
             campana={editando}
             nombreInicial={!editando ? nombreSugerido ?? undefined : undefined}
             festividadId={!editando ? festividadId ?? undefined : undefined}
             onCancelar={() => { setFormAbierto(false); setEditando(null); }}
             onGuardar={(c) => {
-              if (editando) editarCampana((x) => x.id === c.id, () => c);
-              else agregarCampana(c);
+              if (editando) void actualizarCampana(editando.id, c);
+              else void crearCampana(c);
               setFormAbierto(false);
               setEditando(null);
             }}
@@ -199,15 +218,24 @@ function CampanasInner() {
 
         <div>
           <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-            <CardHeader title="Campañas" subtitle="Mensajes masivos por WhatsApp — crea, aprueba y envía uno por uno" />
-            {puedeGestionar && !formAbierto && !editando && (
-              <button
-                onClick={() => setFormAbierto(true)}
-                className="flex items-center gap-2 bg-[var(--color-terracota)] text-white text-sm font-semibold rounded-xl px-4 py-2.5 hover:opacity-90 transition-opacity whitespace-nowrap shrink-0"
-              >
-                <Plus size={15} /> Nueva campaña
-              </button>
-            )}
+            <CardHeader
+              title="Campañas"
+              subtitle={
+                configWhatsApp
+                  ? `Conectado — WhatsApp Business ${configWhatsApp.numeroTelefono} (el envío sigue simulado hasta terminar la integración)`
+                  : "Mensajes masivos por WhatsApp — al aprobar se simula el envío a todo el segmento (API de WhatsApp Business todavía no conectada)"
+              }
+            />
+            <div className="flex items-center gap-2 shrink-0">
+              {puedeCrear && !formAbierto && !editando && (
+                <button
+                  onClick={() => setFormAbierto(true)}
+                  className="flex items-center gap-2 bg-[var(--color-terracota)] text-white text-sm font-semibold rounded-xl px-4 py-2.5 hover:opacity-90 transition-opacity whitespace-nowrap"
+                >
+                  <Plus size={15} /> Nueva campaña
+                </button>
+              )}
+            </div>
           </div>
 
           {campanasOrdenadas.length === 0 ? (
@@ -221,10 +249,11 @@ function CampanasInner() {
                   <CampanaCard
                     campana={c}
                     clientesPorId={clientesPorId}
-                    puedeGestionar={puedeGestionar}
+                    puedeCrear={puedeCrear}
+                    puedeAprobar={puedeAprobar}
                     onEditar={() => setEditando(c)}
                     onAprobar={() => aprobarCampana(c)}
-                    onEliminar={() => eliminarCampana((x) => x.id === c.id)}
+                    onEliminar={() => void eliminarCampana(c.id)}
                     onMarcarContactado={(clienteId) => marcarContactado(c, clienteId)}
                   />
                 </Card>
@@ -238,11 +267,12 @@ function CampanasInner() {
 }
 
 function CampanaCard({
-  campana: c, clientesPorId, puedeGestionar, onEditar, onAprobar, onEliminar, onMarcarContactado,
+  campana: c, clientesPorId, puedeCrear, puedeAprobar, onEditar, onAprobar, onEliminar, onMarcarContactado,
 }: {
   campana: Campana;
   clientesPorId: Map<string, ClienteResuelto>;
-  puedeGestionar: boolean;
+  puedeCrear: boolean;
+  puedeAprobar: boolean;
   onEditar: () => void;
   onAprobar: () => void;
   onEliminar: () => void;
@@ -273,27 +303,29 @@ function CampanaCard({
           <p className="text-xs text-[var(--color-gris-medio)] mt-0.5 line-clamp-2 max-w-xl">{c.mensaje}</p>
         </div>
 
-        {esPropia && puedeGestionar && (
+        {esPropia && (puedeCrear || puedeAprobar) && (
           <div className="flex items-center gap-1.5 shrink-0">
-            {c.estado === "borrador" && (
-              <>
-                <button
-                  onClick={onEditar}
-                  className="flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-1.5 text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] transition-colors"
-                >
-                  <Pencil size={13} /> Editar
-                </button>
-                <button
-                  onClick={onAprobar}
-                  className="flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-1.5 bg-[var(--color-verde)] text-white hover:opacity-90 transition-opacity"
-                >
-                  <CheckCircle2 size={13} /> Aprobar y enviar
-                </button>
-              </>
+            {c.estado === "borrador" && puedeCrear && (
+              <button
+                onClick={onEditar}
+                className="flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-1.5 text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] transition-colors"
+              >
+                <Pencil size={13} /> Editar
+              </button>
             )}
-            <button onClick={onEliminar} className="p-1.5 rounded-lg hover:bg-[var(--color-rojo-claro)] text-[var(--color-rojo)]">
-              <Trash2 size={13} />
-            </button>
+            {c.estado === "borrador" && puedeAprobar && (
+              <button
+                onClick={onAprobar}
+                className="flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-1.5 bg-[var(--color-verde)] text-white hover:opacity-90 transition-opacity"
+              >
+                <CheckCircle2 size={13} /> Aprobar y enviar
+              </button>
+            )}
+            {puedeCrear && (
+              <button onClick={onEliminar} className="p-1.5 rounded-lg hover:bg-[var(--color-rojo-claro)] text-[var(--color-rojo)]">
+                <Trash2 size={13} />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -303,7 +335,7 @@ function CampanaCard({
           <div className="flex items-center justify-between gap-3 mb-1.5">
             <div className="flex-1">
               <div className="flex items-center justify-between text-[11px] text-[var(--color-gris-medio)] mb-1 font-semibold">
-                <span>{c.contactados.length}/{objetivo.length} contactados</span>
+                <span>{c.contactados.length}/{objetivo.length} contactados{esPropia ? " (simulado)" : ""}</span>
                 <span>{pct}%</span>
               </div>
               <div className="h-1.5 rounded-full bg-[var(--color-crema-oscuro)] overflow-hidden">
@@ -314,7 +346,7 @@ function CampanaCard({
               onClick={() => setExpandido((v) => !v)}
               className="flex items-center gap-1 text-xs font-semibold text-[var(--color-terracota)] hover:underline shrink-0"
             >
-              {esPropia ? "Ver y enviar" : "Ver clientes"}
+              Ver clientes
               {expandido ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </button>
           </div>
@@ -330,7 +362,7 @@ function CampanaCard({
                   <li key={id} className="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-white">
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-[var(--color-gris)] truncate">{cliente.nombre}</p>
-                      <p className="text-[11px] text-[var(--color-gris-medio)] flex items-center gap-1.5">
+                      <p className="text-[11px] text-[var(--color-gris-medio)] flex items-center gap-1.5 flex-wrap">
                         {cliente.celular}
                         {multiSede && negocioCliente && (
                           <span className="inline-flex items-center gap-1">
@@ -338,22 +370,23 @@ function CampanaCard({
                             {negocioCliente.nombre}
                           </span>
                         )}
+                        {esPropia && contactado && <Badge tono="verde">Contactado (simulado)</Badge>}
                       </p>
                     </div>
                     {esPropia ? (
+                      // Este botón es real (aunque el envío masivo de arriba
+                      // sea simulado): abre WhatsApp de verdad con el
+                      // mensaje precargado, para contactar a esta persona
+                      // en concreto.
                       <a
                         href={enlaceWhatsApp(cliente.celular, c.mensaje)}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => onMarcarContactado(id)}
-                        className={`shrink-0 flex items-center gap-1.5 text-[11px] font-semibold rounded-lg px-2.5 py-1.5 transition-colors ${
-                          contactado
-                            ? "bg-[var(--color-verde-claro)] text-[var(--color-verde)]"
-                            : "bg-[var(--color-verde)] text-white hover:opacity-90"
-                        }`}
+                        className="shrink-0 flex items-center gap-1.5 text-[11px] font-semibold rounded-lg px-2.5 py-1.5 bg-[var(--color-verde)] text-white hover:opacity-90 transition-opacity"
                       >
                         <MessageCircle size={12} />
-                        {contactado ? "Contactado" : "Enviar"}
+                        Enviar
                       </a>
                     ) : (
                       <Badge tono={contactado ? "verde" : "gris"}>{contactado ? "Contactado" : "No contactado"}</Badge>
@@ -370,9 +403,9 @@ function CampanaCard({
 }
 
 function CampanaForm({
-  negocioActivo, registradoPor, campana, nombreInicial, festividadId, onGuardar, onCancelar,
+  negocioActivo, puedeElegirSucursales, registradoPor, campana, nombreInicial, festividadId, onGuardar, onCancelar,
 }: {
-  negocioActivo: NegocioId; registradoPor: string; campana: Campana | null;
+  negocioActivo: NegocioId; puedeElegirSucursales: boolean; registradoPor: string; campana: Campana | null;
   nombreInicial?: string; festividadId?: string;
   onGuardar: (c: Campana) => void; onCancelar: () => void;
 }) {
@@ -380,8 +413,9 @@ function CampanaForm({
   const [publico, setPublico] = useState<Campana["publico"]>(campana?.publico ?? "todos");
   const [mensaje, setMensaje] = useState(campana?.mensaje ?? "");
   const [todasLasSucursales, setTodasLasSucursales] = useState(campana ? campana.negocios === "todas" : false);
-  // Por defecto, solo la sede donde está parado Gerencial — agrega más si
-  // quiere que la campaña llegue a otras sucursales.
+  // Por defecto, solo la sede activa — Gerencial puede agregar más si
+  // quiere que la campaña llegue a otras sucursales (ver
+  // `puedeElegirSucursales`; Ventas solo opera la suya).
   const [sucursalesElegidas, setSucursalesElegidas] = useState<NegocioId[]>(
     campana && campana.negocios !== "todas" ? campana.negocios : [negocioActivo]
   );
@@ -446,29 +480,39 @@ function CampanaForm({
         </Campo>
         <div className="sm:col-span-2">
           <label className="block text-xs font-semibold text-[var(--color-gris-medio)] mb-1.5">Sucursales</label>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setTodasLasSucursales(true)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${todasLasSucursales ? "bg-[var(--color-terracota)] text-white" : "bg-white border border-[var(--color-gris-claro)]/50 text-[var(--color-gris-medio)]"}`}
-            >
-              Todas las sucursales
-            </button>
-            {NEGOCIOS.map((n) => (
+          {puedeElegirSucursales ? (
+            <div className="flex flex-wrap gap-2">
               <button
-                key={n.id}
                 type="button"
-                disabled={!n.operando}
-                onClick={() => { setTodasLasSucursales(false); toggleSucursal(n.id); }}
-                title={!n.operando ? "Todavía no opera" : undefined}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                  !todasLasSucursales && sucursalesElegidas.includes(n.id) ? "bg-[var(--color-terracota)] text-white" : "bg-white border border-[var(--color-gris-claro)]/50 text-[var(--color-gris-medio)]"
-                }`}
+                onClick={() => setTodasLasSucursales(true)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${todasLasSucursales ? "bg-[var(--color-terracota)] text-white" : "bg-white border border-[var(--color-gris-claro)]/50 text-[var(--color-gris-medio)]"}`}
               >
-                {n.nombre}
+                Todas las sucursales
               </button>
-            ))}
-          </div>
+              {NEGOCIOS.map((n) => (
+                <button
+                  key={n.id}
+                  type="button"
+                  disabled={!n.operando}
+                  onClick={() => { setTodasLasSucursales(false); toggleSucursal(n.id); }}
+                  title={!n.operando ? "Todavía no opera" : undefined}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                    !todasLasSucursales && sucursalesElegidas.includes(n.id) ? "bg-[var(--color-terracota)] text-white" : "bg-white border border-[var(--color-gris-claro)]/50 text-[var(--color-gris-medio)]"
+                  }`}
+                >
+                  {n.nombre}
+                </button>
+              ))}
+            </div>
+          ) : (
+            // Ventas no cambia de negocio activamente (solo opera el suyo) —
+            // acá solo se muestra a qué sucursales llega, de solo lectura,
+            // para no perder de vista una campaña de grupo que armó
+            // Gerencial si Ventas la abre para editar el mensaje.
+            <p className="text-xs text-[var(--color-gris-medio)] bg-[var(--color-crema)] rounded-lg px-3 py-2">
+              {etiquetaSucursales(todasLasSucursales ? "todas" : sucursalesElegidas)}
+            </p>
+          )}
           {errores.sucursales && <p className="text-[11px] text-[var(--color-rojo)] mt-1 font-medium">{errores.sucursales}</p>}
         </div>
         <div className="sm:col-span-2">

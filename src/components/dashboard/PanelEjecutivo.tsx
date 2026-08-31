@@ -12,6 +12,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { BarChartSerie } from "@/components/charts/BarChartSerie";
 import { ComparativoCrecimientoPorNegocio, ComparativoFidelizacionPorNegocio } from "@/components/dashboard/ComparativosNegocio";
+import { useData } from "@/lib/data-context";
 
 // Directorio no opera el día a día — solo le sirve la cadencia mensual/anual,
 // no Diario/Semanal (esa granularidad es para roles operativos).
@@ -41,17 +42,22 @@ function sumarSeries(series: { mes: string; clientes: number }[][]) {
 export function PanelEjecutivo() {
   const [periodo, setPeriodo] = useState<Periodo>("mes");
   const negociosOperando = NEGOCIOS.filter((n) => n.operando);
+  const { clientesIndividuales, clientesCorporativos, seguimientos } = useData();
+  const datos = useMemo(
+    () => ({ clientesIndividuales, clientesCorporativos, seguimientos }),
+    [clientesIndividuales, clientesCorporativos, seguimientos]
+  );
 
-  const resumen = resumenCrecimientoGrupo(periodo);
+  const resumen = resumenCrecimientoGrupo(datos, periodo);
   const clientesPorNegocio = useMemo(
-    () => negociosOperando.map((n) => ({ negocio: n, clientes: clientesPorTipoPeriodo(n.id, periodo) })),
+    () => negociosOperando.map((n) => ({ negocio: n, clientes: clientesPorTipoPeriodo(datos, n.id, periodo) })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [periodo]
+    [periodo, datos]
   );
   const serieCombinada = useMemo(
-    () => sumarSeries(negociosOperando.map((n) => serieClientesPorPeriodo(n.id, periodo))),
+    () => sumarSeries(negociosOperando.map((n) => serieClientesPorPeriodo(datos, n.id, periodo))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [periodo]
+    [periodo, datos]
   );
   // "Mensual"/"Anual" son cadencias, no fechas — un socio que lee "vista
   // mensual" no sabe si es julio o agosto sin mirar el calendario aparte.
@@ -78,7 +84,7 @@ export function PanelEjecutivo() {
   // visitando". Igual que Crecimiento, responde al filtro Mensual/Anual: en
   // Mensual usa el mes en curso real (resumenCumpleanosMes, vía `resumen`);
   // en Anual suma los 12 meses del historial (historialFidelizacionGrupo).
-  const historialFidelizacion = useMemo(() => historialFidelizacionGrupo(), []);
+  const historialFidelizacion = useMemo(() => historialFidelizacionGrupo(datos), [datos]);
   const fidelizacionAnual = useMemo(
     () => historialFidelizacion.reduce(
       (a, p) => ({ enviados: a.enviados + p.enviados, convertidos: a.convertidos + p.convertidos }),
@@ -100,9 +106,9 @@ export function PanelEjecutivo() {
   // negocio" (resumenCumpleanosPeriodo). El orden por tasa de conversión y
   // el 🏆 los calcula ComparativoFidelizacionPorNegocio.
   const cumpleanosPorNegocio = useMemo(
-    () => negociosOperando.map((n) => ({ negocio: n, cumple: resumenCumpleanosPeriodo(n.id, periodo) })),
+    () => negociosOperando.map((n) => ({ negocio: n, cumple: resumenCumpleanosPeriodo(datos, n.id, periodo) })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [periodo]
+    [periodo, datos]
   );
 
   return (

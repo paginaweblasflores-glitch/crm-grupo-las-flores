@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Gift, MessageCircle, CheckCircle2, Settings2, Pencil, RotateCcw, ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { Gift, MessageCircle, CheckCircle2, Settings2, Pencil, RotateCcw, ChevronLeft, ChevronRight, Clock, Lock } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { puedeAutorizar } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
@@ -16,27 +16,49 @@ import { seguimientosPorNegocio } from "@/lib/mock/seguimiento";
 import { clientesIndividualesPorNegocio } from "@/lib/mock/clientes";
 import { BASE_DATE } from "@/lib/mock/seed";
 import { resumenCumpleanosMes } from "@/lib/metrics";
+import { agregarMensajeChatDirecto } from "@/lib/store";
+import { useData } from "@/lib/data-context";
+import { PLANTILLA_CUMPLEANOS_DEFECTO, HORA_ENVIO_DEFECTO, interpolarPlantilla } from "@/lib/mensajes";
 import {
-  useSeguimientoOverrides, useAprobacionCumpleanos, useConfigSaludoCumpleanos, useClientesCreados,
-  agregarMensajeChatDirecto, SeguimientoOverride,
-} from "@/lib/store";
-import { interpolarPlantilla } from "@/lib/mensajes";
-import {
-  seguimientosConNuevos, proximosCumpleanosDe, clientesPorDia, esHoy,
+  seguimientosConNuevos, seguimientoDefectoPara, proximosCumpleanosDe, clientesPorDia, esHoy,
 } from "@/lib/seguimiento-helpers";
-import { ClienteIndividual } from "@/lib/types";
+import { ClienteIndividual, SeguimientoCumple } from "@/lib/types";
 
 const MESES_LABEL = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
+interface ConfigSaludo { mensaje: string; hora: string }
+
+// Cualquier edición sobre un seguimiento (marcar enviado, reservación,
+// personalizar mensaje/hora) puede caer en dos casos: la fila ya existe de
+// verdad en Supabase (UPDATE normal), o todavía es una fila "de vista"
+// armada al vuelo por seguimientoDefectoPara para un cliente que aún no
+// tenía seguimiento propio (hay que crearla primero). Este helper decide
+// cuál toca, sin que cada llamador tenga que saberlo.
+async function guardarSeguimiento(
+  s: SeguimientoCumple,
+  patch: Partial<SeguimientoCumple>,
+  reales: SeguimientoCumple[],
+  crearSeguimiento: (s: SeguimientoCumple) => Promise<SeguimientoCumple>,
+  actualizarSeguimiento: (id: string, patch: Partial<SeguimientoCumple>) => Promise<void>
+): Promise<void> {
+  const yaExiste = reales.some((r) => r.id === s.id);
+  if (yaExiste) {
+    await actualizarSeguimiento(s.id, patch);
+  } else {
+    await crearSeguimiento({ ...s, ...patch });
+  }
+}
+
 export default function CumpleanosPage() {
   const { usuario, negocio } = useApp();
   const router = useRouter();
-  const { items: creados } = useClientesCreados();
-  const overridesStore = useSeguimientoOverrides();
-  const configStore = useConfigSaludoCumpleanos(negocio.id);
+  const {
+    clientesIndividuales, clientesCorporativos, seguimientos: seguimientosReales, configsSaludo, aprobaciones, listo: datosListos,
+    crearSeguimiento, actualizarSeguimiento, guardarConfigSaludo, aprobarMes,
+  } = useData();
 
   // "Todas las sucursales" no es un negocio real — se redirige a Panel Principal.
   const fueraDeAlcance = negocio.id === "todas";
@@ -45,7 +67,7 @@ export default function CumpleanosPage() {
     if (fueraDeAlcance) router.replace("/dashboard");
   }, [fueraDeAlcance, router]);
 
-  if (!usuario || fueraDeAlcance) return null;
+  if (!usuario || fueraDeAlcance || !datosListos) return null;
   const esAdmin = puedeAutorizar(usuario.rolTipo);
   const editable = usuario.rolTipo === "ventas" || usuario.rolTipo === "gerencial";
 
@@ -60,12 +82,23 @@ export default function CumpleanosPage() {
     );
   }
 
-  const clientesCreadosNegocio = creados.filter((c) => c.negocioId === negocio.id);
-  const todosLosClientes = [...clientesIndividualesPorNegocio(negocio.id), ...clientesCreadosNegocio];
+  const todosLosClientes = clientesIndividualesPorNegocio(clientesIndividuales, negocio.id);
   const hoy = proximosCumpleanosDe(todosLosClientes, BASE_DATE, 0);
   const proximos = proximosCumpleanosDe(todosLosClientes, BASE_DATE, 10).filter((p) => p.diffDias > 0);
-  const seguimientos = seguimientosConNuevos(seguimientosPorNegocio(negocio.id), clientesCreadosNegocio, negocio.id);
-  const resumenMes = resumenCumpleanosMes(negocio.id);
+  const seguimientos = seguimientosConNuevos(seguimientosPorNegocio(seguimientosReales, negocio.id), todosLosClientes, negocio.id);
+  const resumenMes = resumenCumpleanosMes({ clientesIndividuales, clientesCorporativos, seguimientos: seguimientosReales }, negocio.id);
+
+  const config: ConfigSaludo = configsSaludo.find((c) => c.negocioId === negocio.id)
+    ?? { mensaje: PLANTILLA_CUMPLEANOS_DEFECTO, hora: HORA_ENVIO_DEFECTO };
+  const guardarConfig = (c: ConfigSaludo) => void guardarConfigSaludo(negocio.id, c.mensaje, c.hora);
+
+  const anio = BASE_DATE.getFullYear();
+  const mesActual = BASE_DATE.getMonth() + 1;
+  const aprobado = aprobaciones.some((a) => a.negocioId === negocio.id && a.anio === anio && a.mes === mesActual && a.aprobado);
+  const aprobar = () => void aprobarMes(negocio.id, anio, mesActual);
+
+  const guardar = (s: SeguimientoCumple, patch: Partial<SeguimientoCumple>) =>
+    guardarSeguimiento(s, patch, seguimientosReales, crearSeguimiento, actualizarSeguimiento);
 
   return (
     <>
@@ -74,11 +107,11 @@ export default function CumpleanosPage() {
         <AutoEnvioCumpleanos
           negocioNombre={negocio.nombre}
           seguimientos={seguimientos}
-          config={configStore.config}
-          listoConfig={configStore.listo}
-          overrides={overridesStore.overrides}
-          setOverride={overridesStore.set}
-          listoOverrides={overridesStore.listo}
+          config={config}
+          aprobado={aprobado}
+          reales={seguimientosReales}
+          crearSeguimiento={crearSeguimiento}
+          actualizarSeguimiento={actualizarSeguimiento}
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -86,14 +119,18 @@ export default function CumpleanosPage() {
           <StatTile label="Próximos 10 días" value={proximos.length} icon={<Gift size={18} />} tono="naranja" />
         </div>
 
-        {esAdmin && <AprobacionMes negocioId={negocio.id} totalDelMes={resumenMes.totalDelMes} />}
+        <AprobacionMes
+          totalDelMes={resumenMes.totalDelMes}
+          aprobado={aprobado}
+          aprobar={aprobar}
+          puedeAprobar={esAdmin}
+        />
 
         <ConfiguracionSaludoGeneral
           negocioNombre={negocio.nombre}
           editable={editable}
-          config={configStore.config}
-          guardarConfig={configStore.guardar}
-          listo={configStore.listo}
+          config={config}
+          guardarConfig={guardarConfig}
         />
 
         <CalendarioCumpleanos
@@ -101,11 +138,8 @@ export default function CumpleanosPage() {
           seguimientos={seguimientos}
           negocioNombre={negocio.nombre}
           editable={editable}
-          config={configStore.config}
-          listoConfig={configStore.listo}
-          overrides={overridesStore.overrides}
-          setOverride={overridesStore.set}
-          listoOverrides={overridesStore.listo}
+          config={config}
+          onGuardar={guardar}
         />
 
         <Card>
@@ -135,12 +169,9 @@ export default function CumpleanosPage() {
 
         <Card padding="p-0 pt-5">
           <div className="px-5">
-            <CardHeader title="Seguimiento" subtitle="Réplica del control que ya usa Meliza en Excel, ahora editable desde aquí" />
+            <CardHeader title="Seguimiento" subtitle="Solo los clientes a los que ya se les envió el saludo — el Estado lo marca el sistema, la Reservación la actualiza Ventas" />
           </div>
-          <SeguimientoTabla
-            seguimientos={seguimientos} editable={editable}
-            overrides={overridesStore.overrides} setOverride={overridesStore.set} listo={overridesStore.listo}
-          />
+          <SeguimientoTabla seguimientos={seguimientos} editable={editable} onGuardar={guardar} />
         </Card>
       </main>
     </>
@@ -152,14 +183,26 @@ export default function CumpleanosPage() {
 // personalizada) — si es así, lo "envía" (queda escrito en su chat real) y
 // marca saludoEnviado, exactamente como se vería con la API de WhatsApp ya
 // conectada. Se re-evalúa cada minuto mientras la página esté abierta.
+//
+// Todo esto depende de `aprobado` (ver AprobacionMes) — sin la aprobación de
+// Gerencial de ESTE mes, nadie recibe nada, aunque hoy sea su cumpleaños. La
+// aprobación se reinicia sola cada mes calendario (negocio + año + mes en
+// Supabase), así que aprobar agosto no dispara el envío en septiembre.
+//
+// Esto es independiente de Campañas: una campaña también puede escribirle a
+// este mismo cliente (agregarMensajeChatDirecto), pero eso no toca
+// `saludoEnviado` ni la fila de seguimiento — son dos fuentes de mensajes
+// distintas que comparten el chat, no el seguimiento. El seguimiento de
+// cumpleaños (esta tabla) solo se mueve por el saludo de cumpleaños, nunca
+// por una campaña.
 function AutoEnvioCumpleanos({
-  negocioNombre, seguimientos, config, listoConfig, overrides, setOverride, listoOverrides,
+  negocioNombre, seguimientos, config, aprobado, reales, crearSeguimiento, actualizarSeguimiento,
 }: {
-  negocioNombre: string; seguimientos: ReturnType<typeof seguimientosConNuevos>;
-  config: { mensaje: string; hora: string }; listoConfig: boolean;
-  overrides: Record<string, SeguimientoOverride>; setOverride: (id: string, patch: SeguimientoOverride) => void; listoOverrides: boolean;
+  negocioNombre: string; seguimientos: SeguimientoCumple[];
+  config: ConfigSaludo; aprobado: boolean; reales: SeguimientoCumple[];
+  crearSeguimiento: (s: SeguimientoCumple) => Promise<SeguimientoCumple>;
+  actualizarSeguimiento: (id: string, patch: Partial<SeguimientoCumple>) => Promise<void>;
 }) {
-  const set = setOverride;
   const [, forceTick] = useState(0);
 
   useEffect(() => {
@@ -168,40 +211,35 @@ function AutoEnvioCumpleanos({
   }, []);
 
   useEffect(() => {
-    if (!listoConfig || !listoOverrides) return;
+    if (!aprobado) return;
     const ahora = new Date();
     const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
     seguimientos.forEach((s) => {
       if (!esHoy(s.fechaCumple)) return;
-      const o = overrides[s.id] ?? {};
-      const yaEnviado = o.saludoEnviado ?? s.saludoEnviado;
-      if (yaEnviado) return;
-      const horaProgramada = o.hora || config.hora;
+      if (s.saludoEnviado) return;
+      const horaProgramada = s.horaPersonalizada || config.hora;
       const [h, m] = horaProgramada.split(":").map(Number);
       if (h * 60 + (m || 0) > minutosAhora) return;
-      const plantilla = o.mensaje || config.mensaje;
+      const plantilla = s.mensajePersonalizado || config.mensaje;
       const texto = interpolarPlantilla(plantilla, s.nombre.split(" ")[0], negocioNombre);
       agregarMensajeChatDirecto(s.clienteId, texto, "negocio");
-      set(s.id, { saludoEnviado: true });
+      void guardarSeguimiento(s, { saludoEnviado: true }, reales, crearSeguimiento, actualizarSeguimiento);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listoConfig, listoOverrides, seguimientos.length, config.hora, config.mensaje]);
+  }, [aprobado, seguimientos.length, config.hora, config.mensaje, reales]);
 
   return null;
 }
 
 function ConfiguracionSaludoGeneral({
-  negocioNombre, editable, config, guardarConfig, listo,
+  negocioNombre, editable, config, guardarConfig,
 }: {
   negocioNombre: string; editable: boolean;
-  config: { mensaje: string; hora: string }; guardarConfig: (c: { mensaje: string; hora: string }) => void; listo: boolean;
+  config: ConfigSaludo; guardarConfig: (c: ConfigSaludo) => void;
 }) {
-  const guardar = guardarConfig;
   const [abierto, setAbierto] = useState(false);
   const [mensaje, setMensaje] = useState(config.mensaje);
   const [hora, setHora] = useState(config.hora);
-
-  if (!listo) return null;
 
   return (
     <Card>
@@ -243,7 +281,7 @@ function ConfiguracionSaludoGeneral({
               <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="input w-32" />
             </div>
             <button
-              onClick={() => { guardar({ mensaje, hora }); setAbierto(false); }}
+              onClick={() => { guardarConfig({ mensaje, hora }); setAbierto(false); }}
               className="bg-[var(--color-terracota)] text-white text-xs font-semibold rounded-lg px-4 py-2.5 hover:opacity-90 transition-opacity"
             >
               Guardar cambios
@@ -256,16 +294,14 @@ function ConfiguracionSaludoGeneral({
 }
 
 function CalendarioCumpleanos({
-  clientes, seguimientos, negocioNombre, editable, config, listoConfig, overrides, setOverride, listoOverrides,
+  clientes, seguimientos, negocioNombre, editable, config, onGuardar,
 }: {
-  clientes: ClienteIndividual[]; seguimientos: ReturnType<typeof seguimientosConNuevos>;
+  clientes: ClienteIndividual[]; seguimientos: SeguimientoCumple[];
   negocioNombre: string; editable: boolean;
-  config: { mensaje: string; hora: string }; listoConfig: boolean;
-  overrides: Record<string, SeguimientoOverride>; setOverride: (id: string, patch: SeguimientoOverride) => void; listoOverrides: boolean;
+  config: ConfigSaludo; onGuardar: (s: SeguimientoCumple, patch: Partial<SeguimientoCumple>) => Promise<void>;
 }) {
   const [mes, setMes] = useState(BASE_DATE.getMonth() + 1);
   const [diaSeleccionado, setDiaSeleccionado] = useState<number | null>(BASE_DATE.getDate());
-  const set = setOverride;
 
   const anioRef = mes >= BASE_DATE.getMonth() + 1 ? BASE_DATE.getFullYear() : BASE_DATE.getFullYear() + 1;
   const diasEnMes = new Date(anioRef, mes, 0).getDate();
@@ -286,8 +322,6 @@ function CalendarioCumpleanos({
   }, [clientes, mes]);
 
   const clientesDelDia = diaSeleccionado ? clientesPorDia(clientes, mes, diaSeleccionado) : [];
-
-  if (!listoConfig || !listoOverrides) return null;
 
   return (
     <Card>
@@ -343,15 +377,14 @@ function CalendarioCumpleanos({
           ) : (
             <div className="space-y-2">
               {clientesDelDia.map((c) => {
-                const seguimiento = seguimientoPorCliente.get(c.id);
+                const seguimiento = seguimientoPorCliente.get(c.id) ?? seguimientoDefectoPara(c);
                 return (
                   <ClienteDelDia
                     key={c.id}
-                    cliente={c}
+                    seguimiento={seguimiento}
                     negocioNombre={negocioNombre}
                     configGeneral={config}
-                    override={seguimiento ? overrides[seguimiento.id] : undefined}
-                    onGuardar={seguimiento ? (patch) => set(seguimiento.id, patch) : undefined}
+                    onGuardar={onGuardar}
                     editable={editable}
                   />
                 );
@@ -365,32 +398,33 @@ function CalendarioCumpleanos({
 }
 
 function ClienteDelDia({
-  cliente, negocioNombre, configGeneral, override, onGuardar, editable,
+  seguimiento, negocioNombre, configGeneral, onGuardar, editable,
 }: {
-  cliente: ClienteIndividual; negocioNombre: string;
-  configGeneral: { mensaje: string; hora: string }; override?: SeguimientoOverride;
-  onGuardar?: (patch: SeguimientoOverride) => void; editable: boolean;
+  seguimiento: SeguimientoCumple; negocioNombre: string;
+  configGeneral: ConfigSaludo;
+  onGuardar: (s: SeguimientoCumple, patch: Partial<SeguimientoCumple>) => Promise<void>;
+  editable: boolean;
 }) {
   const [editando, setEditando] = useState(false);
-  const mensajeEfectivo = override?.mensaje || configGeneral.mensaje;
-  const horaEfectiva = override?.hora || configGeneral.hora;
+  const mensajeEfectivo = seguimiento.mensajePersonalizado || configGeneral.mensaje;
+  const horaEfectiva = seguimiento.horaPersonalizada || configGeneral.hora;
   const [mensaje, setMensaje] = useState(mensajeEfectivo);
   const [hora, setHora] = useState(horaEfectiva);
-  const personalizado = Boolean(override?.mensaje || override?.hora);
+  const personalizado = Boolean(seguimiento.mensajePersonalizado || seguimiento.horaPersonalizada);
 
   return (
     <div className="rounded-xl border border-[var(--color-gris-claro)]/40 p-3">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-[var(--color-gris)] truncate">{cliente.nombres} {cliente.apellidos}</p>
-          <p className="text-xs text-[var(--color-gris-medio)]">{cliente.celular}</p>
+          <p className="text-sm font-medium text-[var(--color-gris)] truncate">{seguimiento.nombre}</p>
+          <p className="text-xs text-[var(--color-gris-medio)]">{seguimiento.celular}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Badge tono={personalizado ? "naranja" : "gris"}>
             <Clock size={11} /> {horaEfectiva}
           </Badge>
           {personalizado && <Badge tono="azul">Personalizado</Badge>}
-          {editable && onGuardar && (
+          {editable && (
             <button onClick={() => setEditando((v) => !v)} className="p-1.5 rounded-lg hover:bg-[var(--color-crema)] text-[var(--color-gris-medio)]">
               <Pencil size={13} />
             </button>
@@ -400,24 +434,27 @@ function ClienteDelDia({
 
       {!editando && (
         <p className="text-xs text-[var(--color-gris-medio)] mt-2 line-clamp-2">
-          {interpolarPlantilla(mensajeEfectivo, cliente.nombres.split(" ")[0], negocioNombre)}
+          {interpolarPlantilla(mensajeEfectivo, seguimiento.nombre.split(" ")[0], negocioNombre)}
         </p>
       )}
 
-      {editando && editable && onGuardar && (
+      {editando && editable && (
         <div className="mt-2 space-y-2">
           <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} rows={2} className="input text-xs" />
           <div className="flex items-center gap-2">
             <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} className="input w-28 text-xs" />
             <button
-              onClick={() => { onGuardar({ mensaje, hora }); setEditando(false); }}
+              onClick={() => { void onGuardar(seguimiento, { mensajePersonalizado: mensaje, horaPersonalizada: hora }); setEditando(false); }}
               className="text-xs font-semibold bg-[var(--color-terracota)] text-white rounded-lg px-3 py-1.5 hover:opacity-90 transition-opacity"
             >
               Guardar
             </button>
             {personalizado && (
               <button
-                onClick={() => { onGuardar({ mensaje: undefined, hora: undefined }); setMensaje(configGeneral.mensaje); setHora(configGeneral.hora); setEditando(false); }}
+                onClick={() => {
+                  void onGuardar(seguimiento, { mensajePersonalizado: undefined, horaPersonalizada: undefined });
+                  setMensaje(configGeneral.mensaje); setHora(configGeneral.hora); setEditando(false);
+                }}
                 className="flex items-center gap-1 text-xs font-medium text-[var(--color-gris-medio)] hover:text-[var(--color-gris)]"
               >
                 <RotateCcw size={12} /> Usar el general
@@ -430,92 +467,79 @@ function ClienteDelDia({
   );
 }
 
-function AprobacionMes({ negocioId, totalDelMes }: { negocioId: string; totalDelMes: number }) {
-  const { aprobado, aprobar, listo } = useAprobacionCumpleanos(negocioId);
-  if (!listo) return null;
+// Gerencial aprueba (o no) el envío automático de ESTE mes calendario — sin
+// aprobar, AutoEnvioCumpleanos no manda nada, aunque hoy alguien cumpla
+// años. Ventas no puede aprobar, pero sí necesita ver por qué el saludo
+// automático no se está mandando — por eso esta tarjeta se muestra para los
+// dos roles, solo que Ventas ve el estado, no el botón.
+function AprobacionMes({
+  totalDelMes, aprobado, aprobar, puedeAprobar,
+}: {
+  totalDelMes: number; aprobado: boolean; aprobar: () => void; puedeAprobar: boolean;
+}) {
   return (
     <Card>
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <p className="text-sm font-semibold text-[var(--color-gris)]">Aprobación del seguimiento del mes</p>
+          <p className="text-sm font-semibold text-[var(--color-gris)]">Aprobación del envío automático de este mes</p>
           <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">
-            {totalDelMes} clientes cumplen años este mes. Revisa el detalle abajo y aprueba cuando esté conforme.
+            {totalDelMes} clientes cumplen años este mes.{" "}
+            {aprobado
+              ? "El saludo se manda solo, cada quien el día de su cumpleaños."
+              : puedeAprobar
+                ? "Revisa el detalle abajo y aprueba para que el saludo se mande solo, cada quien el día de su cumpleaños."
+                : "El saludo automático de este mes todavía no se manda — falta que Gerencial lo apruebe."}
           </p>
         </div>
         {aprobado ? (
           <Badge tono="verde"><CheckCircle2 size={12} /> Aprobado por Gerencial</Badge>
-        ) : (
+        ) : puedeAprobar ? (
           <button
             onClick={aprobar}
             className="flex items-center gap-1.5 bg-[var(--color-terracota)] text-white text-xs font-semibold rounded-lg px-3.5 py-2 hover:opacity-90 transition-opacity"
           >
             <CheckCircle2 size={14} /> Aprobar mes
           </button>
+        ) : (
+          <Badge tono="naranja"><Lock size={12} /> Pendiente de aprobación</Badge>
         )}
       </div>
     </Card>
   );
 }
 
+// Solo dos campos, cada uno con un dueño claro: Estado lo marca el sistema
+// solo (se pone "Enviado" en cuanto AutoEnvioCumpleanos manda el saludo — no
+// se edita a mano), Reservación la marca Ventas a mano después de hablar con
+// el cliente (¿aceptó volver? ¿se concretó la reserva?).
 function SeguimientoTabla({
-  seguimientos, editable, overrides, setOverride, listo,
+  seguimientos, editable, onGuardar,
 }: {
-  seguimientos: ReturnType<typeof seguimientosConNuevos>; editable: boolean;
-  overrides: Record<string, SeguimientoOverride>; setOverride: (id: string, patch: SeguimientoOverride) => void; listo: boolean;
+  seguimientos: SeguimientoCumple[]; editable: boolean;
+  onGuardar: (s: SeguimientoCumple, patch: Partial<SeguimientoCumple>) => Promise<void>;
 }) {
-  const set = setOverride;
-  if (!listo) return null;
+  // Antes de que se le mande el saludo no hay nada que dar seguimiento —
+  // mostrarlo acá solo genera ruido y confunde (para eso está "Próximos
+  // cumpleaños" arriba, que sí lista a los que todavía no les toca).
+  const enviados = seguimientos.filter((s) => s.saludoEnviado);
 
   return (
-    <Table>
-      <Thead>
-        <Th>Nombre</Th><Th>Celular</Th><Th>Saludo</Th><Th>Visto</Th><Th>Respuesta</Th><Th>Reservación</Th>
-      </Thead>
-      <tbody>
-        {seguimientos.map((s) => {
-          const o = overrides[s.id] ?? {};
-          const saludoEnviado = o.saludoEnviado ?? s.saludoEnviado;
-          const visto = o.visto ?? s.visto;
-          const respuesta = o.respuesta ?? s.respuesta;
-          const reservacion = o.reservacion ?? s.reservacion;
-          return (
+    <>
+      <Table>
+        <Thead>
+          <Th>Nombre</Th><Th>Celular</Th><Th>Estado</Th><Th>Reservación</Th>
+        </Thead>
+        <tbody>
+          {enviados.map((s) => (
             <Tr key={s.id}>
               <Td className="font-medium">{s.nombre}</Td>
               <Td>{s.celular}</Td>
-              <Td>
-                {editable ? (
-                  <button onClick={() => set(s.id, { saludoEnviado: !saludoEnviado })}>
-                    <Badge tono={saludoEnviado ? "verde" : "gris"}>{saludoEnviado ? "Sí" : "No"}</Badge>
-                  </button>
-                ) : (
-                  <Badge tono={saludoEnviado ? "verde" : "gris"}>{saludoEnviado ? "Sí" : "No"}</Badge>
-                )}
-              </Td>
-              <Td><Badge tono={visto ? "verde" : "gris"}>{visto ? "Sí" : "—"}</Badge></Td>
+              <Td><Badge tono="verde"><CheckCircle2 size={11} /> Enviado</Badge></Td>
               <Td>
                 {editable ? (
                   <select
-                    value={respuesta}
-                    onChange={(e) => set(s.id, { respuesta: e.target.value as "si" | "no" | "pendiente" })}
-                    className="text-xs border border-[var(--color-gris-claro)]/50 rounded-lg px-2 py-1 bg-white"
-                  >
-                    <option value="pendiente">Pendiente</option>
-                    <option value="si">Sí</option>
-                    <option value="no">No</option>
-                  </select>
-                ) : (
-                  <>
-                    {respuesta === "si" && <Badge tono="verde">Sí</Badge>}
-                    {respuesta === "no" && <Badge tono="rojo">No</Badge>}
-                    {respuesta === "pendiente" && <Badge tono="gris">Pendiente</Badge>}
-                  </>
-                )}
-              </Td>
-              <Td>
-                {editable ? (
-                  <select
-                    value={reservacion}
-                    onChange={(e) => set(s.id, { reservacion: e.target.value as "si" | "no" | "pendiente" })}
+                    value={s.reservacion}
+                    onChange={(e) => void onGuardar(s, { reservacion: e.target.value as "si" | "no" | "pendiente" })}
                     className="text-xs border border-[var(--color-gris-claro)]/50 rounded-lg px-2 py-1 bg-white"
                   >
                     <option value="pendiente">—</option>
@@ -524,16 +548,21 @@ function SeguimientoTabla({
                   </select>
                 ) : (
                   <>
-                    {reservacion === "si" && <Badge tono="verde">Sí</Badge>}
-                    {reservacion === "no" && <Badge tono="rojo">No</Badge>}
-                    {reservacion === "pendiente" && <Badge tono="gris">—</Badge>}
+                    {s.reservacion === "si" && <Badge tono="verde">Sí</Badge>}
+                    {s.reservacion === "no" && <Badge tono="rojo">No</Badge>}
+                    {s.reservacion === "pendiente" && <Badge tono="gris">—</Badge>}
                   </>
                 )}
               </Td>
             </Tr>
-          );
-        })}
-      </tbody>
-    </Table>
+          ))}
+        </tbody>
+      </Table>
+      {enviados.length === 0 && (
+        <p className="text-center text-sm text-[var(--color-gris-medio)] py-10">
+          Todavía no se le mandó el saludo a nadie este mes.
+        </p>
+      )}
+    </>
   );
 }

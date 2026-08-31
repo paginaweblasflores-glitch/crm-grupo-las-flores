@@ -8,6 +8,7 @@ import { Topbar } from "@/components/layout/Topbar";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { CampoContrasena } from "@/components/ui/CampoContrasena";
 import { Usuario, NegocioId } from "@/lib/types";
 import { requerido, Errores } from "@/lib/validacion";
 
@@ -118,6 +119,9 @@ function UsuariosContenido({
                       <p className="text-sm font-medium text-[var(--color-gris)]">{u.nombre}</p>
                       <p className="text-xs text-[var(--color-gris-medio)]">{u.cargo} · usuario: {u.usuario}</p>
                     </div>
+                    <div className="w-36 shrink-0">
+                      <CampoContrasena value={u.contrasena} disabled />
+                    </div>
                     {esGestionable ? (
                       <div className="flex items-center gap-1 shrink-0">
                         <button onClick={() => setEditando(u)} title="Editar cuenta" className="p-1.5 rounded-lg hover:bg-[var(--color-crema)] text-[var(--color-gris-medio)]">
@@ -185,7 +189,10 @@ function UsuarioForm({
     cargo: editando?.cargo ?? "",
     cargoOtro: "",
     usuarioLogin: editando?.usuario ?? "",
-    contrasena: "",
+    // A diferencia de antes, este campo arranca con la contraseña actual
+    // (no vacío) — Gerencial la ve y la puede editar directamente, en vez
+    // de dejarla en blanco para "no cambiarla".
+    contrasena: editando?.contrasena ?? "",
     negocioId: editando?.negocioId ?? negocios[0].id,
   });
   const [errores, setErrores] = useState<Errores>({});
@@ -203,10 +210,8 @@ function UsuarioForm({
     else if (usuarios.some((u) => u.id !== editando?.id && u.usuario.toLowerCase() === form.usuarioLogin.trim().toLowerCase())) {
       err.usuarioLogin = "Ese usuario ya existe — elige otro.";
     }
-    if (!esEdicion || form.contrasena) {
-      if (!form.contrasena) err.contrasena = "La contraseña es obligatoria.";
-      else if (form.contrasena.length < 6) err.contrasena = "Debe tener al menos 6 caracteres.";
-    }
+    if (!form.contrasena) err.contrasena = "La contraseña es obligatoria.";
+    else if (form.contrasena.length < 6) err.contrasena = "Debe tener al menos 6 caracteres.";
     const eCargo = requerido(form.cargo, "El cargo");
     if (eCargo) err.cargo = eCargo;
     else if (form.cargo === CARGO_OTRO && !form.cargoOtro.trim()) err.cargo = "Especifica el cargo.";
@@ -228,8 +233,8 @@ function UsuarioForm({
         iniciales: form.nombre.trim().split(" ").slice(0, 2).map((p) => p[0]?.toUpperCase()).join(""),
         usuario: form.usuarioLogin.trim(),
         negocioId: form.negocioId,
+        contrasena: form.contrasena,
       };
-      if (form.contrasena) patch.contrasena = form.contrasena;
       onGuardarEdicion(editando.id, patch);
       return;
     }
@@ -307,8 +312,8 @@ function UsuarioForm({
         <Campo label="Usuario de acceso" requerido error={errores.usuarioLogin}>
           <input value={form.usuarioLogin} onChange={(e) => setForm((f) => ({ ...f, usuarioLogin: e.target.value }))} className="input" />
         </Campo>
-        <Campo label="Contraseña" requerido={!esEdicion} error={errores.contrasena}>
-          <input type="password" value={form.contrasena} onChange={(e) => setForm((f) => ({ ...f, contrasena: e.target.value }))} className="input" placeholder={esEdicion ? "Dejar en blanco para no cambiarla" : ""} />
+        <Campo label="Contraseña" requerido error={errores.contrasena}>
+          <CampoContrasena value={form.contrasena} onChange={(v) => setForm((f) => ({ ...f, contrasena: v }))} placeholder="Mínimo 6 caracteres" />
         </Campo>
         <button
           type="submit"

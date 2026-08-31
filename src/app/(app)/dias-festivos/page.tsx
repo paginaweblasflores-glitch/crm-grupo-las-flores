@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Lock, PartyPopper, Plus, Pencil, Trash2, X, Megaphone } from "lucide-react";
 import { useApp } from "@/lib/app-context";
-import { accesoA } from "@/lib/permissions";
+import { accesoA, puedeGestionarDiasFestivos } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useFestividades } from "@/lib/store";
+import { useData } from "@/lib/data-context";
 import { proximaFecha, festividadAlcanzaNegocio } from "@/lib/mock/festividades";
 import { BASE_DATE } from "@/lib/mock/seed";
 import { NEGOCIOS } from "@/lib/mock/negocios";
@@ -26,7 +26,7 @@ export default function DiasFestivosPage() {
   const router = useRouter();
   const [formAbierto, setFormAbierto] = useState(false);
   const [editando, setEditando] = useState<Festividad | null>(null);
-  const { festividades, add, update, remove, listo } = useFestividades();
+  const { festividades, crearFestividad, actualizarFestividad, eliminarFestividad, listo } = useData();
 
   // "Todas las sucursales" no es un negocio real — se redirige a Panel Principal.
   const fueraDeAlcance = negocio.id === "todas";
@@ -37,6 +37,7 @@ export default function DiasFestivosPage() {
 
   if (!usuario || fueraDeAlcance) return null;
   const nivel = accesoA(usuario.rolTipo, "diasFestivos");
+  const puedeGestionar = puedeGestionarDiasFestivos(usuario.rolTipo);
 
   if (nivel === "no") {
     return (
@@ -70,29 +71,31 @@ export default function DiasFestivosPage() {
     <>
       <Topbar titulo="Días Festivos" descripcion="Fechas comerciales, religiosas y cívicas del grupo" />
       <main className="flex-1 p-8 animate-fade-in space-y-5">
-        {(formAbierto || editando) && (
+        {puedeGestionar && (formAbierto || editando) && (
           <FestividadForm
             festividad={editando}
             onCancelar={() => { setFormAbierto(false); setEditando(null); }}
             onGuardar={(f) => {
-              if (editando) update(editando.id, f);
-              else add({ ...f, id: `fest-manual-${Date.now()}` });
+              if (editando) void actualizarFestividad(editando.id, f);
+              else void crearFestividad({ ...f, id: "" });
               setFormAbierto(false);
               setEditando(null);
             }}
           />
         )}
 
-        <div className="flex justify-end">
-          {!formAbierto && !editando && (
-            <button
-              onClick={() => setFormAbierto(true)}
-              className="flex items-center gap-2 bg-[var(--color-terracota)] text-white text-sm font-semibold rounded-xl px-4 py-2.5 hover:opacity-90 transition-opacity"
-            >
-              <Plus size={15} /> Nueva fecha
-            </button>
-          )}
-        </div>
+        {puedeGestionar && (
+          <div className="flex justify-end">
+            {!formAbierto && !editando && (
+              <button
+                onClick={() => setFormAbierto(true)}
+                className="flex items-center gap-2 bg-[var(--color-terracota)] text-white text-sm font-semibold rounded-xl px-4 py-2.5 hover:opacity-90 transition-opacity"
+              >
+                <Plus size={15} /> Nueva fecha
+              </button>
+            )}
+          </div>
+        )}
 
         <Card padding="p-0 pt-5">
           <div className="px-5">
@@ -121,12 +124,16 @@ export default function DiasFestivosPage() {
                 >
                   <Megaphone size={15} />
                 </Link>
-                <button onClick={() => setEditando(f)} className="p-1.5 rounded-lg hover:bg-[var(--color-crema)] text-[var(--color-gris-medio)]">
-                  <Pencil size={13} />
-                </button>
-                <button onClick={() => remove(f.id)} className="p-1.5 rounded-lg hover:bg-[var(--color-rojo-claro)] text-[var(--color-rojo)]">
-                  <Trash2 size={13} />
-                </button>
+                {puedeGestionar && (
+                  <>
+                    <button onClick={() => setEditando(f)} className="p-1.5 rounded-lg hover:bg-[var(--color-crema)] text-[var(--color-gris-medio)]">
+                      <Pencil size={13} />
+                    </button>
+                    <button onClick={() => void eliminarFestividad(f.id)} className="p-1.5 rounded-lg hover:bg-[var(--color-rojo-claro)] text-[var(--color-rojo)]">
+                      <Trash2 size={13} />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
             {ordenadas.length === 0 && (

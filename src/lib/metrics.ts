@@ -1,15 +1,27 @@
-import { NegocioId } from "./types";
+import { NegocioId, ClienteIndividual, ClienteCorporativo, SeguimientoCumple } from "./types";
 import { BASE_DATE } from "./mock/seed";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "./mock/clientes";
 import { seguimientosPorNegocio, resumenCumpleanosHistoricoMes } from "./mock/seguimiento";
 import { NEGOCIOS } from "./mock/negocios";
 
+// Paquete de datos vivos (Supabase, vía useData()) que necesita casi toda
+// función de este archivo — se pasa explícito en vez de leerlo de un
+// arreglo compartido a nivel de módulo (ver mock/clientes.ts para la
+// explicación completa: Next.js/Turbopack puede duplicar ese módulo por
+// chunk de ruta, y esa copia no siempre es la misma que ya hidrató
+// data-context.tsx).
+export interface DatosMetricas {
+  clientesIndividuales: ClienteIndividual[];
+  clientesCorporativos: ClienteCorporativo[];
+  seguimientos: SeguimientoCumple[];
+}
+
 function diasDesde(fechaISO: string): number {
   return Math.round((BASE_DATE.getTime() - new Date(fechaISO).getTime()) / 86400000);
 }
 
-export function clientesNuevos(negocioId: NegocioId, dias: number): number {
-  return clientesIndividualesPorNegocio(negocioId).filter((c) => {
+export function clientesNuevos(datos: DatosMetricas, negocioId: NegocioId, dias: number): number {
+  return clientesIndividualesPorNegocio(datos.clientesIndividuales, negocioId).filter((c) => {
     const d = diasDesde(c.fechaRegistro);
     return d >= 0 && d <= dias;
   }).length;
@@ -29,15 +41,15 @@ export interface ActividadItem {
 // Actividad reciente de relación con el cliente: nuevos registros — enfoque
 // 100% CRM del sistema, sin hospedaje (eliminado junto con Reservas y
 // Delivery).
-export function actividadReciente(negocioId: NegocioId, n = 6): ActividadItem[] {
-  const clientesInd: ActividadItem[] = clientesIndividualesPorNegocio(negocioId).map((c) => ({
+export function actividadReciente(datos: DatosMetricas, negocioId: NegocioId, n = 6): ActividadItem[] {
+  const clientesInd: ActividadItem[] = clientesIndividualesPorNegocio(datos.clientesIndividuales, negocioId).map((c) => ({
     id: c.id,
     tipo: "cliente",
     titulo: `Nuevo cliente: ${c.nombres} ${c.apellidos}`,
     detalle: `Individual · ${c.origen.replace(/-/g, " ")}`,
     fecha: c.fechaRegistro,
   }));
-  const clientesCorp: ActividadItem[] = corporativosPorNegocio(negocioId).map((c) => ({
+  const clientesCorp: ActividadItem[] = corporativosPorNegocio(datos.clientesCorporativos, negocioId).map((c) => ({
     id: c.id,
     tipo: "cliente",
     titulo: `Nuevo cliente: ${c.razonSocial}`,
@@ -55,8 +67,8 @@ export function actividadReciente(negocioId: NegocioId, n = 6): ActividadItem[] 
 // seguimiento de cumpleaños (si el cliente terminó visitando tras el
 // saludo), no del módulo Reservas — es independiente y no se ve afectado por
 // su eliminación.
-export function resumenCumpleanosMes(negocioId: NegocioId) {
-  const seguimientos = seguimientosPorNegocio(negocioId);
+export function resumenCumpleanosMes(datos: DatosMetricas, negocioId: NegocioId) {
+  const seguimientos = seguimientosPorNegocio(datos.seguimientos, negocioId);
   const enviados = seguimientos.filter((s) => s.saludoEnviado).length;
   const reservaron = seguimientos.filter((s) => s.reservacion === "si");
   return {
@@ -189,10 +201,11 @@ export interface ResumenPeriodo {
   clientesNuevos: number; clientesNuevosCambio: number | null;
 }
 
-export function resumenPeriodo(negocioId: NegocioId, periodo: Periodo): ResumenPeriodo {
+export function resumenPeriodo(datos: DatosMetricas, negocioId: NegocioId, periodo: Periodo): ResumenPeriodo {
   const { desde, hasta, desdeAnterior, hastaAnterior } = rangoPeriodo(periodo);
+  const individuales = clientesIndividualesPorNegocio(datos.clientesIndividuales, negocioId);
   const contarClientes = (d: string, h: string) =>
-    clientesIndividualesPorNegocio(negocioId).filter((c) => enRango(c.fechaRegistro, d, h)).length;
+    individuales.filter((c) => enRango(c.fechaRegistro, d, h)).length;
 
   const clientesActual = contarClientes(desde, hasta);
   const clientesAnterior = contarClientes(desdeAnterior, hastaAnterior);
@@ -209,14 +222,11 @@ export function resumenPeriodo(negocioId: NegocioId, periodo: Periodo): ResumenP
 export const ORIGEN_LABEL: Record<string, string> = {
   crm: "CRM (presencial)",
   web: "Sitio web",
-  "redes-sociales": "Redes sociales",
-  referido: "Referido",
-  "importado-excel": "Importado de Excel",
 };
 
-export function distribucionOrigen(negocioId: NegocioId) {
+export function distribucionOrigen(datos: DatosMetricas, negocioId: NegocioId) {
   const conteo: Record<string, number> = {};
-  clientesIndividualesPorNegocio(negocioId).forEach((c) => {
+  clientesIndividualesPorNegocio(datos.clientesIndividuales, negocioId).forEach((c) => {
     conteo[c.origen] = (conteo[c.origen] ?? 0) + 1;
   });
   return Object.entries(conteo).map(([origen, valor]) => ({ nombre: ORIGEN_LABEL[origen] ?? origen, valor }));
@@ -228,13 +238,13 @@ export function distribucionOrigen(negocioId: NegocioId) {
 // periodo — esto separa individuales y corporativos NUEVOS dentro del
 // periodo elegido, cada uno con su cambio %, para que si no hubo ninguno en
 // el día/semana elegido, la tarjeta muestre 0 de verdad.
-export function clientesPorTipoPeriodo(negocioId: NegocioId, periodo: Periodo) {
+export function clientesPorTipoPeriodo(datos: DatosMetricas, negocioId: NegocioId, periodo: Periodo) {
   const { desde, hasta, desdeAnterior, hastaAnterior } = rangoPeriodo(periodo);
   const contar = (arr: { fechaRegistro: string }[], d: string, h: string) =>
     arr.filter((c) => enRango(c.fechaRegistro, d, h)).length;
 
-  const individuales = clientesIndividualesPorNegocio(negocioId);
-  const corporativos = corporativosPorNegocio(negocioId);
+  const individuales = clientesIndividualesPorNegocio(datos.clientesIndividuales, negocioId);
+  const corporativos = corporativosPorNegocio(datos.clientesCorporativos, negocioId);
 
   const indActual = contar(individuales, desde, hasta);
   const indAnterior = contar(individuales, desdeAnterior, hastaAnterior);
@@ -249,14 +259,15 @@ export function clientesPorTipoPeriodo(negocioId: NegocioId, periodo: Periodo) {
 }
 
 // --- Clientes: nuevos por periodo, en serie ---------------------------------
-export function serieClientesPorPeriodo(negocioId: NegocioId, periodo: Periodo) {
+export function serieClientesPorPeriodo(datos: DatosMetricas, negocioId: NegocioId, periodo: Periodo) {
+  const individuales = clientesIndividualesPorNegocio(datos.clientesIndividuales, negocioId);
   if (periodo === "anio") {
     // Enero a diciembre del año en curso — los meses futuros dan 0 solos
     // (ningún fechaRegistro puede ser futuro), sin necesitar un guard
     // explícito.
     const meses: { mes: string; clientes: number }[] = [];
     for (let mesIdx = 0; mesIdx < 12; mesIdx++) {
-      const clientes = clientesIndividualesPorNegocio(negocioId).filter((c) => {
+      const clientes = individuales.filter((c) => {
         const f = new Date(c.fechaRegistro);
         return f.getMonth() === mesIdx && f.getFullYear() === BASE_DATE.getFullYear();
       }).length;
@@ -273,7 +284,7 @@ export function serieClientesPorPeriodo(negocioId: NegocioId, periodo: Periodo) 
       const fecha = new Date(BASE_DATE.getFullYear(), BASE_DATE.getMonth(), dia);
       const clave = isoDate(fecha);
       const label = `${dia} ${MESES_LABEL[fecha.getMonth()].toLowerCase()}`;
-      const clientes = clientesIndividualesPorNegocio(negocioId).filter((c) => c.fechaRegistro === clave).length;
+      const clientes = individuales.filter((c) => c.fechaRegistro === clave).length;
       puntos.push({ mes: label, clientes });
     }
     return puntos;
@@ -286,7 +297,7 @@ export function serieClientesPorPeriodo(negocioId: NegocioId, periodo: Periodo) 
     fecha.setDate(fecha.getDate() - i);
     const clave = isoDate(fecha);
     const label = DIAS_SEMANA_CORTO[fecha.getDay()];
-    const clientes = clientesIndividualesPorNegocio(negocioId).filter((c) => c.fechaRegistro === clave).length;
+    const clientes = individuales.filter((c) => c.fechaRegistro === clave).length;
     puntos.push({ mes: label, clientes });
   }
   return puntos;
@@ -312,13 +323,13 @@ export interface ResumenCrecimientoGrupo {
   negociosActivos: number;
 }
 
-export function resumenCrecimientoGrupo(periodo: Periodo): ResumenCrecimientoGrupo {
+export function resumenCrecimientoGrupo(datos: DatosMetricas, periodo: Periodo): ResumenCrecimientoGrupo {
   const activos = NEGOCIOS.filter((n) => n.operando);
-  const resumenes = activos.map((n) => resumenPeriodo(n.id, periodo));
-  const cumpleanos = activos.map((n) => resumenCumpleanosMes(n.id));
+  const resumenes = activos.map((n) => resumenPeriodo(datos, n.id, periodo));
+  const cumpleanos = activos.map((n) => resumenCumpleanosMes(datos, n.id));
 
   const clientesTotales = activos.reduce(
-    (a, n) => a + clientesIndividualesPorNegocio(n.id).length + corporativosPorNegocio(n.id).length,
+    (a, n) => a + clientesIndividualesPorNegocio(datos.clientesIndividuales, n.id).length + corporativosPorNegocio(datos.clientesCorporativos, n.id).length,
     0
   );
   const clientesNuevos = resumenes.reduce((a, r) => a + r.clientesNuevos, 0);
@@ -350,7 +361,7 @@ export interface PuntoFidelizacion { mes: string; convertidos: number; enviados:
 // mock/seguimiento.ts. `negocioId` por defecto es "todas" (Panel Ejecutivo);
 // el Panel Gerencial la llama con un negocio específico para su propio
 // histórico.
-export function historialFidelizacionGrupo(negocioId: NegocioId = "todas"): PuntoFidelizacion[] {
+export function historialFidelizacionGrupo(datos: DatosMetricas, negocioId: NegocioId = "todas"): PuntoFidelizacion[] {
   const activos = negocioId === "todas"
     ? NEGOCIOS.filter((n) => n.operando)
     : NEGOCIOS.filter((n) => n.id === negocioId);
@@ -363,7 +374,7 @@ export function historialFidelizacionGrupo(negocioId: NegocioId = "todas"): Punt
   const out: PuntoFidelizacion[] = [];
   for (let mesIdx = 0; mesIdx < 12; mesIdx++) {
     const esFuturo = mesIdx > BASE_DATE.getMonth();
-    const totales = esFuturo ? [] : activos.map((n) => resumenCumpleanosHistoricoMes(n.id, mesIdx + 1));
+    const totales = esFuturo ? [] : activos.map((n) => resumenCumpleanosHistoricoMes(datos.clientesIndividuales, n.id, mesIdx + 1));
     out.push({
       mes: MESES_LABEL[mesIdx],
       enviados: totales.reduce((a, t) => a + t.enviados, 0),
@@ -378,18 +389,18 @@ export function historialFidelizacionGrupo(negocioId: NegocioId = "todas"): Punt
 // tarjetas de comparativo por sede se mueven juntas con el mismo selector.
 // En Mensual usa el mes en curso real (resumenCumpleanosMes); en Anual suma
 // enero hasta el mes en curso (mismo año de calendario que Crecimiento).
-export function resumenCumpleanosPeriodo(negocioId: NegocioId, periodo: Periodo): { enviados: number; convertidos: number } {
+export function resumenCumpleanosPeriodo(datos: DatosMetricas, negocioId: NegocioId, periodo: Periodo): { enviados: number; convertidos: number } {
   if (periodo === "anio") {
     let enviados = 0;
     let convertidos = 0;
     for (let mes = 1; mes <= BASE_DATE.getMonth() + 1; mes++) {
-      const t = resumenCumpleanosHistoricoMes(negocioId, mes);
+      const t = resumenCumpleanosHistoricoMes(datos.clientesIndividuales, negocioId, mes);
       enviados += t.enviados;
       convertidos += t.convertidos;
     }
     return { enviados, convertidos };
   }
-  const r = resumenCumpleanosMes(negocioId);
+  const r = resumenCumpleanosMes(datos, negocioId);
   return { enviados: r.enviados, convertidos: r.personasQueReservaron };
 }
 
@@ -406,10 +417,10 @@ export interface DesgloseNegocioMetrica {
 // distinto por sede: un cliente ya pertenece a un solo negocio, así que
 // cruzar origen==="web" con negocioId ya da "web de Las Flores/Umaru/Mamina"
 // sin inflar el enum de origen).
-export function origenWebPorNegocio(): DesgloseNegocioMetrica[] {
+export function origenWebPorNegocio(datos: DatosMetricas): DesgloseNegocioMetrica[] {
   const conteos = NEGOCIOS.map((n) => ({
     negocio: n,
-    valor: clientesIndividualesPorNegocio(n.id).filter((c) => c.origen === "web").length,
+    valor: clientesIndividualesPorNegocio(datos.clientesIndividuales, n.id).filter((c) => c.origen === "web").length,
   }));
   const total = conteos.reduce((a, c) => a + c.valor, 0);
   return conteos

@@ -6,10 +6,9 @@ import {
   Trophy, Clock,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
+import { useData } from "@/lib/data-context";
 import { NegocioId, Usuario } from "@/lib/types";
 import { NEGOCIOS, getNegocio } from "@/lib/mock/negocios";
-import { CLIENTES_INDIVIDUALES, CLIENTES_CORPORATIVOS } from "@/lib/mock/clientes";
-import { useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
 import { rangoPeriodo, rangoDelPeriodo, Periodo } from "@/lib/metrics";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -74,6 +73,7 @@ export function EstadisticasVendedores({
   periodo: Periodo;
 }) {
   const { usuarios, negocio } = useApp();
+  const { clientesIndividuales, clientesCorporativos } = useData();
   const sedeActiva = negocioIdFijo ?? negocio.id;
   const [filtroSede, setFiltroSede] = useState<string>(sedeActiva === "todas" ? "todos" : sedeActiva);
 
@@ -86,9 +86,6 @@ export function EstadisticasVendedores({
     setSedePrevia(sedeActiva);
     setFiltroSede(sedeActiva === "todas" ? "todos" : sedeActiva);
   }
-
-  const { items: clientesCreados } = useClientesCreados();
-  const { items: corpCreados } = useClientesCorporativosCreados();
 
   // Filtrado de asesores (cuentas de rol 'ventas')
   const equipoComercial = useMemo(() => {
@@ -103,14 +100,14 @@ export function EstadisticasVendedores({
     return fechaRegistro >= desde && fechaRegistro <= hasta;
   };
   const todosClientesInd = useMemo(
-    () => [...CLIENTES_INDIVIDUALES, ...clientesCreados].filter((c) => enPeriodo(c.fechaRegistro)),
+    () => clientesIndividuales.filter((c) => enPeriodo(c.fechaRegistro)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [clientesCreados, periodo]
+    [periodo, clientesIndividuales]
   );
   const todosClientesCorp = useMemo(
-    () => [...CLIENTES_CORPORATIVOS, ...corpCreados].filter((c) => enPeriodo(c.fechaRegistro)),
+    () => clientesCorporativos.filter((c) => enPeriodo(c.fechaRegistro)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [corpCreados, periodo]
+    [periodo, clientesCorporativos]
   );
 
   // Cálculo de estadísticas por cada asesor — enfoque 100% CRM: captación de

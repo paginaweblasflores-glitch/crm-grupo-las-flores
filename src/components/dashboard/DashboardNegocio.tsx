@@ -13,10 +13,11 @@ import {
   actividadReciente, resumenCumpleanosPeriodo, clientesPorTipoPeriodo, serieClientesPorPeriodo,
   PERIODOS, Periodo, rangoDelPeriodo, etiquetaPeriodoAnterior,
 } from "@/lib/metrics";
-import { proximosCumpleanos } from "@/lib/mock/seguimiento";
+import { proximosCumpleanosDe } from "@/lib/seguimiento-helpers";
 import { BASE_DATE } from "@/lib/mock/seed";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "@/lib/mock/clientes";
 import { getNegocio } from "@/lib/mock/negocios";
+import { useData } from "@/lib/data-context";
 
 function cambioTexto(valor: number | null, periodo: Periodo): string | undefined {
   // `valor` ya viene en null para Diario (una muestra de 1 día es
@@ -34,6 +35,8 @@ function cambioTexto(valor: number | null, periodo: Periodo): string | undefined
 // siendo exclusivo de Gerencial.
 export function DashboardNegocio({ negocioId, operando }: { negocioId: NegocioId; operando: boolean }) {
   const [periodo, setPeriodo] = useState<Periodo>("semana");
+  const { clientesIndividuales, clientesCorporativos, seguimientos } = useData();
+  const datos = { clientesIndividuales, clientesCorporativos, seguimientos };
 
   if (!operando) {
     return (
@@ -48,13 +51,13 @@ export function DashboardNegocio({ negocioId, operando }: { negocioId: NegocioId
   }
 
   const negocioNombre = getNegocio(negocioId)?.nombre ?? negocioId;
-  const clientesPeriodo = clientesPorTipoPeriodo(negocioId, periodo);
-  const totalClientes = clientesIndividualesPorNegocio(negocioId).length + corporativosPorNegocio(negocioId).length;
-  const totalCorporativos = corporativosPorNegocio(negocioId).length;
-  const cumpleanos = resumenCumpleanosPeriodo(negocioId, periodo);
+  const clientesPeriodo = clientesPorTipoPeriodo(datos, negocioId, periodo);
+  const totalClientes = clientesIndividualesPorNegocio(clientesIndividuales, negocioId).length + corporativosPorNegocio(clientesCorporativos, negocioId).length;
+  const totalCorporativos = corporativosPorNegocio(clientesCorporativos, negocioId).length;
+  const cumpleanos = resumenCumpleanosPeriodo(datos, negocioId, periodo);
   const conversionSaludos = cumpleanos.enviados > 0 ? Math.round((cumpleanos.convertidos / cumpleanos.enviados) * 100) : 0;
-  const serieClientes = serieClientesPorPeriodo(negocioId, periodo);
-  const cumples = proximosCumpleanos(negocioId, BASE_DATE, 10);
+  const serieClientes = serieClientesPorPeriodo(datos, negocioId, periodo);
+  const cumples = proximosCumpleanosDe(clientesIndividualesPorNegocio(clientesIndividuales, negocioId), BASE_DATE, 10);
 
   return (
     <div className="space-y-6">
@@ -125,7 +128,7 @@ export function DashboardNegocio({ negocioId, operando }: { negocioId: NegocioId
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <Card>
           <CardHeader title="Actividad reciente" subtitle="Últimos clientes registrados" />
-          <ActividadFeed items={actividadReciente(negocioId, 7)} />
+          <ActividadFeed items={actividadReciente(datos, negocioId, 7)} />
         </Card>
 
         <Card>

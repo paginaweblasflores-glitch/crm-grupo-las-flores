@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Lock, Send, Sparkles, Settings2, Check, Bot } from "lucide-react";
+import { Lock, Send, Sparkles, Settings2, Bot } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { accesoA } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useEstrategiasChat, useConfigIA, ConfigIA } from "@/lib/store";
+import { useEstrategiasChat, useConfigIA } from "@/lib/store";
 import { sugerenciasPara, generarRespuesta } from "@/lib/estrategias";
 import { NegocioId } from "@/lib/types";
+import { useData } from "@/lib/data-context";
 
 export default function EstrategiasPage() {
   const { usuario, negocio } = useApp();
@@ -49,10 +51,10 @@ export default function EstrategiasPage() {
 
 function EstrategiasContenido({ negocioId, negocioNombre }: { negocioId: NegocioId; negocioNombre: string }) {
   const { mensajes, enviar, listo } = useEstrategiasChat(negocioId);
-  const { config, guardar, desconectar, listo: listoConfig } = useConfigIA();
+  const { config, listo: listoConfig } = useConfigIA();
+  const { clientesIndividuales, clientesCorporativos, seguimientos, campanas } = useData();
   const [texto, setTexto] = useState("");
   const [escribiendo, setEscribiendo] = useState(false);
-  const [configAbierta, setConfigAbierta] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,7 +70,13 @@ function EstrategiasContenido({ negocioId, negocioNombre }: { negocioId: Negocio
     setTexto("");
     setEscribiendo(true);
     setTimeout(() => {
-      const respuesta = generarRespuesta(contenido, negocioId, negocioNombre);
+      const respuesta = generarRespuesta(
+        contenido,
+        { clientesIndividuales, clientesCorporativos, seguimientos },
+        campanas,
+        negocioId,
+        negocioNombre
+      );
       enviar(respuesta, "agente");
       setEscribiendo(false);
     }, 900);
@@ -91,7 +99,13 @@ function EstrategiasContenido({ negocioId, negocioNombre }: { negocioId: Negocio
                 </p>
               </div>
             </div>
-            <ConfigIAMenu abierta={configAbierta} setAbierta={setConfigAbierta} config={config} guardar={guardar} desconectar={desconectar} />
+            <Link
+              href="/configuracion"
+              title="Conectar API de IA"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] hover:text-[var(--color-gris)] transition-colors"
+            >
+              <Settings2 size={16} />
+            </Link>
           </div>
 
           <div className="px-5 pt-3 flex gap-1.5 flex-wrap">
@@ -156,81 +170,3 @@ function EstrategiasContenido({ negocioId, negocioNombre }: { negocioId: Negocio
   );
 }
 
-function ConfigIAMenu({
-  abierta, setAbierta, config, guardar, desconectar,
-}: {
-  abierta: boolean; setAbierta: (v: boolean) => void; config: ConfigIA | null;
-  guardar: (c: ConfigIA) => void; desconectar: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [proveedor, setProveedor] = useState<ConfigIA["proveedor"]>(config?.proveedor ?? "openai");
-  const [apiKey, setApiKey] = useState("");
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setAbierta(false);
-    }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, [setAbierta]);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        onClick={() => setAbierta(!abierta)}
-        title="Conectar API de IA"
-        className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] hover:text-[var(--color-gris)] transition-colors"
-      >
-        <Settings2 size={16} />
-      </button>
-      {abierta && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl border border-[var(--color-gris-claro)]/40 shadow-lg p-4 z-20 animate-fade-in">
-          <p className="text-sm font-semibold text-[var(--color-gris)] mb-1">Conectar API de IA</p>
-          <p className="text-[11px] text-[var(--color-gris-medio)] mb-3">
-            Prototipo: la clave se guarda solo en este navegador y las respuestas siguen siendo simuladas —
-            conectar el proveedor real es un paso pendiente, junto con Supabase.
-          </p>
-          <label className="block text-xs font-semibold text-[var(--color-gris-medio)] mb-1">Proveedor</label>
-          <select
-            value={proveedor}
-            onChange={(e) => setProveedor(e.target.value as ConfigIA["proveedor"])}
-            className="input bg-white mb-3"
-          >
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic</option>
-            <option value="otro">Otro</option>
-          </select>
-          <label className="block text-xs font-semibold text-[var(--color-gris-medio)] mb-1">Clave de API</label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder={config ? "•••••••••••••••• (ya guardada)" : "sk-…"}
-            className="input mb-3"
-          />
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                if (!apiKey.trim()) return;
-                guardar({ proveedor, apiKey: apiKey.trim() });
-                setApiKey("");
-                setAbierta(false);
-              }}
-              className="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-terracota)] text-white text-xs font-semibold rounded-lg py-2 hover:opacity-90 transition-opacity"
-            >
-              <Check size={13} /> Guardar
-            </button>
-            {config && (
-              <button
-                onClick={() => { desconectar(); setAbierta(false); }}
-                className="text-xs font-semibold text-[var(--color-gris-medio)] rounded-lg px-3 py-2 hover:bg-[var(--color-crema)] transition-colors"
-              >
-                Desconectar
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}

@@ -13,10 +13,12 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { clientesIndividualesPorNegocio } from "@/lib/mock/clientes";
 import { seguimientosPorNegocio } from "@/lib/mock/seguimiento";
-import { plantillaCumpleanos, semillaConversacion } from "@/lib/mensajes";
-import { useChat, useModoAutomatico, useClientesCreados } from "@/lib/store";
+import { campanasPorNegocio } from "@/lib/mock/campanas";
+import { plantillaCumpleanos, semillaConversacion, semillaCampanasCliente } from "@/lib/mensajes";
+import { useChat, useModoAutomatico, leerChatGuardado } from "@/lib/store";
+import { useData } from "@/lib/data-context";
 import { seguimientosConNuevos } from "@/lib/seguimiento-helpers";
-import { SeguimientoCumple } from "@/lib/types";
+import { Campana, SeguimientoCumple } from "@/lib/types";
 
 const RESPUESTAS_AUTO = [
   "¡Hola! Muchas gracias por el saludo 🌸",
@@ -25,12 +27,35 @@ const RESPUESTAS_AUTO = [
   "Genial, ¿el descuento aplica si somos un grupo grande?",
 ];
 
+// Mismo criterio simple que la tabla de Cumpleaños: Estado lo pone el
+// sistema solo (Enviado, en cuanto se manda el saludo), Reservación la marca
+// Ventas a mano después de hablar con el cliente. Ya no hay "Visto" ni
+// "Respondió/no respondió" — eran demasiado detalle y se prestaban a
+// confusión con la respuesta real del cliente en el chat.
 function estadoSeguimiento(s: SeguimientoCumple): { texto: string; tono: Tono } {
   if (!s.saludoEnviado) return { texto: "Programado", tono: "gris" };
   if (s.reservacion === "si") return { texto: "Reserva confirmada", tono: "verde" };
-  if (s.respuesta === "si") return { texto: "Respondió", tono: "azul" };
-  if (s.respuesta === "no") return { texto: "Respondió: no por ahora", tono: "naranja" };
-  return { texto: "Enviado, sin respuesta", tono: "gris" };
+  if (s.reservacion === "no") return { texto: "No volvió", tono: "naranja" };
+  return { texto: "Enviado", tono: "azul" };
+}
+
+// Hora del último mensaje de este cliente (real si ya se guardó algo en su
+// chat, o el que le tocaría por historial "sembrado" de cumpleaños/campañas
+// si nunca se abrió) — es lo que ordena la lista de conversaciones, igual
+// que WhatsApp/Telegram: la que tuvo actividad más reciente sube arriba.
+function ultimaActividad(
+  clienteId: string,
+  seguimiento: SeguimientoCumple | undefined,
+  negocioNombre: string,
+  campanas: Campana[]
+): string | null {
+  const guardado = leerChatGuardado(clienteId);
+  const historial = guardado ?? [
+    ...(seguimiento ? semillaConversacion(seguimiento, negocioNombre) : []),
+    ...semillaCampanasCliente(clienteId, campanas),
+  ];
+  if (historial.length === 0) return null;
+  return historial.reduce((max, m) => (m.hora > max ? m.hora : max), historial[0].hora);
 }
 
 export default function MensajeriaPage() {
@@ -49,32 +74,48 @@ function MensajeriaInner() {
   const [vista, setVista] = useState<"chats" | "programados">("chats");
   const [busqueda, setBusqueda] = useState("");
   const [clienteId, setClienteId] = useState<string | null>(clienteInicial);
-  const { items: creados } = useClientesCreados();
+  // Sube en cada mensaje enviado o recibido — no se lee dentro del useMemo de
+  // abajo, solo fuerza a recalcular el orden de la lista (que sí lee
+  // localStorage directamente) apenas hay actividad nueva en algún chat.
+  const [actividad, setActividad] = useState(0);
+  const { clientesIndividuales, campanas: todasLasCampanas, seguimientos: seguimientosReales } = useData();
 
-  const clientesCreadosNegocio = useMemo(
-    () => (usuario ? creados.filter((c) => c.negocioId === negocio.id) : []),
-    [creados, negocio.id, usuario]
-  );
-  const { clientes, seguimientos, seguimientoPorCliente, filtrados } = useMemo(() => {
+  const { clientes, seguimientos, seguimientoPorCliente, filtrados, ultimaPorCliente, campanas } = useMemo(() => {
+    // No se lee más abajo — solo está para que este useMemo se vuelva a
+    // calcular (y relea localStorage) apenas hay actividad nueva en un chat.
+    void actividad;
     if (!usuario) {
       return {
         clientes: [], seguimientos: [],
         seguimientoPorCliente: new Map<string, SeguimientoCumple>(), filtrados: [],
+        ultimaPorCliente: new Map<string, string | null>(), campanas: [] as Campana[],
       };
     }
-    const clientes = [...clientesIndividualesPorNegocio(negocio.id), ...clientesCreadosNegocio];
-    const seguimientos = seguimientosConNuevos(seguimientosPorNegocio(negocio.id), clientesCreadosNegocio, negocio.id);
+    const clientes = clientesIndividualesPorNegocio(clientesIndividuales, negocio.id);
+    const campanas = campanasPorNegocio(todasLasCampanas, negocio.id);
+    // Cubre el caso de un cliente cuyo cumpleaños cae este mes pero todavía
+    // no tiene una fila de seguimiento propia (por ejemplo, recién
+    // registrado) — arma una de vista, sin guardarla, hasta que se envíe el
+    // saludo de verdad (ver AutoEnvioCumpleanos en cumpleanos/page.tsx).
+    const seguimientos = seguimientosConNuevos(seguimientosPorNegocio(seguimientosReales, negocio.id), clientes, negocio.id);
     const seguimientoPorCliente = new Map(seguimientos.map((s) => [s.clienteId, s]));
+    const ultimaPorCliente = new Map(
+      clientes.map((c) => [c.id, ultimaActividad(c.id, seguimientoPorCliente.get(c.id), negocio.nombre, campanas)])
+    );
+    // Como WhatsApp/Telegram: la conversación con actividad más reciente va
+    // primero; sin ningún mensaje todavía (ni siquiera "sembrado") queda al
+    // final, ordenado por nombre.
     const clientesOrdenados = [...clientes].sort((a, b) => {
-      const sa = seguimientoPorCliente.has(a.id) ? 1 : 0;
-      const sb = seguimientoPorCliente.has(b.id) ? 1 : 0;
-      return sb - sa;
+      const ua = ultimaPorCliente.get(a.id) ?? "";
+      const ub = ultimaPorCliente.get(b.id) ?? "";
+      if (ua !== ub) return ub.localeCompare(ua);
+      return `${a.nombres} ${a.apellidos}`.localeCompare(`${b.nombres} ${b.apellidos}`);
     });
     const filtrados = clientesOrdenados.filter((c) =>
       `${c.nombres} ${c.apellidos} ${c.celular}`.toLowerCase().includes(busqueda.toLowerCase())
     );
-    return { clientes, seguimientos, seguimientoPorCliente, filtrados };
-  }, [negocio.id, clientesCreadosNegocio, busqueda, usuario]);
+    return { clientes, seguimientos, seguimientoPorCliente, filtrados, ultimaPorCliente, campanas };
+  }, [negocio.id, negocio.nombre, busqueda, usuario, actividad, clientesIndividuales, todasLasCampanas, seguimientosReales]);
 
   // "Todas las sucursales" no es un negocio real — se redirige a Panel Principal.
   const fueraDeAlcance = negocio.id === "todas";
@@ -135,8 +176,10 @@ function MensajeriaInner() {
               </div>
               <div className="flex-1 overflow-y-auto">
                 {filtrados.map((c) => {
-                  const seg = seguimientoPorCliente.get(c.id);
-                  const estado = seg ? estadoSeguimiento(seg) : null;
+                  // Sin etiqueta de Estado/Reservación acá — esas dos son
+                  // para la estadística (tabla de Cumpleaños), no para la
+                  // lista de chats; mostrarlas ahí solo generaba ruido.
+                  const hora = ultimaPorCliente.get(c.id);
                   return (
                     <button
                       key={c.id}
@@ -147,9 +190,9 @@ function MensajeriaInner() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-medium text-[var(--color-gris)] truncate">{c.nombres} {c.apellidos}</p>
-                        {estado && <Badge tono={estado.tono}>{estado.texto}</Badge>}
+                        {hora && <span className="text-[10px] text-[var(--color-gris-medio)] shrink-0">{formatearFechaMensaje(hora)}</span>}
                       </div>
-                      <p className="text-xs text-[var(--color-gris-medio)]">{c.celular}</p>
+                      <p className="text-xs text-[var(--color-gris-medio)] truncate mt-0.5">{c.celular}</p>
                     </button>
                   );
                 })}
@@ -162,6 +205,8 @@ function MensajeriaInner() {
                 clienteNombre={`${clienteActivo.nombres} ${clienteActivo.apellidos}`}
                 seguimiento={seguimientoActivo}
                 negocioNombre={negocio.nombre}
+                campanas={campanas}
+                onActividad={() => setActividad((v) => v + 1)}
               />
             ) : (
               <Card><EmptyState icon={<MessageCircle size={22} />} title="Sin clientes" description="No hay clientes para chatear todavía." /></Card>
@@ -220,17 +265,34 @@ function MensajesProgramados({
 }
 
 function ChatPanel({
-  clienteId, clienteNombre, seguimiento, negocioNombre,
+  clienteId, clienteNombre, seguimiento, negocioNombre, campanas, onActividad,
 }: {
-  clienteId: string; clienteNombre: string; seguimiento?: SeguimientoCumple; negocioNombre: string;
+  clienteId: string; clienteNombre: string; seguimiento?: SeguimientoCumple; negocioNombre: string; campanas: Campana[];
+  onActividad: () => void;
 }) {
-  const semilla = useMemo(
-    () => (seguimiento ? semillaConversacion(seguimiento, negocioNombre) : []),
-    [seguimiento, negocioNombre]
-  );
+  // Se combinan las dos fuentes de historial "sembrado" — cumpleaños y
+  // campañas — y se ordenan por fecha, para que se lean como una sola
+  // conversación cronológica y no como dos bloques sueltos.
+  const semilla = useMemo(() => {
+    const deCumpleanos = seguimiento ? semillaConversacion(seguimiento, negocioNombre) : [];
+    const deCampanas = semillaCampanasCliente(clienteId, campanas);
+    return [...deCumpleanos, ...deCampanas].sort((a, b) => a.hora.localeCompare(b.hora));
+  }, [seguimiento, negocioNombre, clienteId, campanas]);
   const { mensajes, enviar, listo } = useChat(clienteId, semilla);
   const { modo, setModo, listo: listoModo } = useModoAutomatico();
   const [texto, setTexto] = useState("");
+
+  // Se avisa al padre DESPUÉS de que este chat ya terminó de renderizar con
+  // los mensajes nuevos (no al hacer clic en enviar) — para ese momento
+  // `enviar` ya escribió en localStorage de verdad, así que cuando el padre
+  // recalcula el orden de la lista, encuentra el dato fresco. Avisar antes
+  // (por ejemplo justo al hacer clic) corre el riesgo de leer el chat
+  // todavía viejo, porque React renderiza primero al padre y recién después
+  // este componente — y es ahí donde `enviar` escribe en localStorage.
+  useEffect(() => {
+    onActividad();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mensajes]);
 
   if (!listo || !listoModo) return null;
 

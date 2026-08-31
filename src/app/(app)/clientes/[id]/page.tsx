@@ -8,13 +8,13 @@ import { Card } from "@/components/ui/Card";
 import { buscarClienteIndividual } from "@/lib/mock/clientes";
 import { ORIGEN_LABEL } from "@/lib/metrics";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useClientesCreados } from "@/lib/store";
+import { useData } from "@/lib/data-context";
 
 export default function ClienteDetallePage(props: PageProps<"/clientes/[id]">) {
   const { id } = use(props.params);
   const router = useRouter();
-  const { items: creados } = useClientesCreados();
-  const cliente = buscarClienteIndividual(id) ?? creados.find((c) => c.id === id);
+  const { clientesIndividuales } = useData();
+  const cliente = buscarClienteIndividual(clientesIndividuales, id);
 
   if (!cliente) {
     return (
@@ -28,6 +28,16 @@ export default function ClienteDetallePage(props: PageProps<"/clientes/[id]">) {
   }
 
   const edad = new Date().getFullYear() - new Date(cliente.fechaNacimiento).getFullYear();
+  // Fuera de Huamanga (u otra provincia/departamento/país) no todos los
+  // niveles de procedencia aplican — se muestra el par más específico
+  // disponible, igual que antes para el caso común (distrito, provincia).
+  const procedencia = cliente.distrito
+    ? `${cliente.distrito}, ${cliente.provincia}`
+    : cliente.provincia
+      ? `${cliente.provincia}, ${cliente.departamento}`
+      : cliente.departamento
+        ? `${cliente.departamento}, Perú`
+        : cliente.pais;
 
   return (
     <>
@@ -52,7 +62,7 @@ export default function ClienteDetallePage(props: PageProps<"/clientes/[id]">) {
               <Phone size={15} className="text-[var(--color-gris-medio)]" /> {cliente.celular}
             </div>
             <div className="flex items-center gap-2.5 text-[var(--color-gris)]">
-              <MapPin size={15} className="text-[var(--color-gris-medio)]" /> {cliente.distrito}, {cliente.provincia}
+              <MapPin size={15} className="text-[var(--color-gris-medio)]" /> {procedencia}
             </div>
             <div className="flex items-center gap-2.5 text-[var(--color-gris)]">
               <Cake size={15} className="text-[var(--color-gris-medio)]" />

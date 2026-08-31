@@ -1,22 +1,15 @@
-// Cliente de Supabase — PLACEHOLDER, sin conectar todavía.
-//
-// Tal como se acordó, la conexión real a Supabase se hace en la siguiente etapa,
-// junto con Joel. Este archivo queda listo para cuando llegue ese momento:
-//
-//   1. npm install @supabase/supabase-js
-//   2. Crear un archivo .env.local con:
-//        NEXT_PUBLIC_SUPABASE_URL=...
-//        NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-//   3. Descomentar el cliente de abajo.
-//   4. Reemplazar, uno por uno, los archivos de src/lib/mock/*.ts por funciones
-//      que consulten las tablas reales — las páginas y componentes no cambian,
-//      porque ya consumen esas funciones como si fueran la fuente de verdad.
-//
-// import { createClient } from "@supabase/supabase-js";
-//
-// export const supabase = createClient(
-//   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-//   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-// );
+import { createClient } from "@supabase/supabase-js";
 
-export const SUPABASE_CONECTADO = false;
+// Cliente único de Supabase — la app le habla directo desde el navegador con
+// la llave "anon" (no hay backend propio todavía). Las tablas tienen RLS
+// abierto a propósito para este prototipo interno (ver base de datos/schema.sql).
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!url || !anonKey) {
+  throw new Error(
+    "Faltan NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY — revisa .env.local"
+  );
+}
+
+export const supabase = createClient(url, anonKey);

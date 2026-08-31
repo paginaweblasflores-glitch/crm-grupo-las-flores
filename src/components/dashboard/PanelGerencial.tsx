@@ -7,9 +7,10 @@ import {
   UserPlus, Clock, MessageCircle, User, Percent,
 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
+import { useData } from "@/lib/data-context";
 import { NEGOCIOS, getNegocio } from "@/lib/mock/negocios";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "@/lib/mock/clientes";
-import { proximosCumpleanos } from "@/lib/mock/seguimiento";
+import { proximosCumpleanosDe } from "@/lib/seguimiento-helpers";
 import { BASE_DATE } from "@/lib/mock/seed";
 import {
   clientesPorTipoPeriodo, serieClientesPorPeriodo,
@@ -17,7 +18,6 @@ import {
   distribucionOrigen, origenWebPorNegocio, ORIGEN_LABEL,
   resumenCumpleanosMes, resumenCumpleanosPeriodo, historialFidelizacionGrupo,
 } from "@/lib/metrics";
-import { useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { StatTile } from "@/components/ui/StatTile";
 import { Badge } from "@/components/ui/Badge";
@@ -66,10 +66,13 @@ function origenLabel(origen: string): string {
 export function PanelGerencial() {
   const { negocio, usuarios } = useApp();
   const [periodo, setPeriodo] = useState<Periodo>("semana");
-  const { items: clientesCreados } = useClientesCreados();
-  const { items: corpCreados } = useClientesCorporativosCreados();
   const esTodas = negocio.id === "todas";
   const negociosOperando = NEGOCIOS.filter((n) => n.operando);
+  const { clientesIndividuales, clientesCorporativos, seguimientos } = useData();
+  const datos = useMemo(
+    () => ({ clientesIndividuales, clientesCorporativos, seguimientos }),
+    [clientesIndividuales, clientesCorporativos, seguimientos]
+  );
 
   // Lista de asesores comerciales según el filtro principal activo (Topbar)
   const vendedoresAMostrar = useMemo(() => {
@@ -88,10 +91,7 @@ export function PanelGerencial() {
       // atribución histórica.
       const matchVendedor = (reg?: string) => reg === v.id;
 
-      const individuales = [
-        ...clientesCreados.filter((c) => matchVendedor(c.registradoPor)),
-        ...clientesIndividualesPorNegocio(v.negocioId).filter((c) => matchVendedor(c.registradoPor)),
-      ].map((c) => ({
+      const individuales = clientesIndividualesPorNegocio(clientesIndividuales, v.negocioId).filter((c) => matchVendedor(c.registradoPor)).map((c) => ({
         id: c.id,
         nombre: `${c.nombres} ${c.apellidos}`.trim(),
         tipo: "Natural" as const,
@@ -102,10 +102,7 @@ export function PanelGerencial() {
         distrito: c.distrito,
       }));
 
-      const corporativos = [
-        ...corpCreados.filter((c) => matchVendedor(c.registradoPor)),
-        ...corporativosPorNegocio(v.negocioId).filter((c) => matchVendedor(c.registradoPor)),
-      ].map((c) => ({
+      const corporativos = corporativosPorNegocio(clientesCorporativos, v.negocioId).filter((c) => matchVendedor(c.registradoPor)).map((c) => ({
         id: c.id,
         nombre: c.razonSocial,
         tipo: "Corporativo" as const,
@@ -122,7 +119,7 @@ export function PanelGerencial() {
 
       // Fallback si la cuenta es nueva y no tiene asignados todavía
       if (todos.length === 0) {
-        todos = clientesIndividualesPorNegocio(v.negocioId).slice(0, 10).map((c) => ({
+        todos = clientesIndividualesPorNegocio(clientesIndividuales, v.negocioId).slice(0, 10).map((c) => ({
           id: c.id,
           nombre: `${c.nombres} ${c.apellidos}`.trim(),
           tipo: "Natural" as const,
@@ -143,18 +140,18 @@ export function PanelGerencial() {
         totalClientes: todos.length,
       };
     });
-  }, [vendedoresAMostrar, clientesCreados, corpCreados]);
+  }, [vendedoresAMostrar, clientesIndividuales, clientesCorporativos]);
 
   // --- Crecimiento -----------------------------------------------------
-  const clientesPeriodo = clientesPorTipoPeriodo(negocio.id, periodo);
-  const serieClientes = serieClientesPorPeriodo(negocio.id, periodo);
-  const clientesDelNegocio = clientesIndividualesPorNegocio(negocio.id).length + corporativosPorNegocio(negocio.id).length;
-  const corporativosDelNegocio = corporativosPorNegocio(negocio.id).length;
+  const clientesPeriodo = clientesPorTipoPeriodo(datos, negocio.id, periodo);
+  const serieClientes = serieClientesPorPeriodo(datos, negocio.id, periodo);
+  const clientesDelNegocio = clientesIndividualesPorNegocio(clientesIndividuales, negocio.id).length + corporativosPorNegocio(clientesCorporativos, negocio.id).length;
+  const corporativosDelNegocio = corporativosPorNegocio(clientesCorporativos, negocio.id).length;
 
   const comparativoCrecimiento = useMemo(
-    () => (esTodas ? negociosOperando.map((n) => ({ negocio: n, clientes: clientesPorTipoPeriodo(n.id, periodo) })) : []),
+    () => (esTodas ? negociosOperando.map((n) => ({ negocio: n, clientes: clientesPorTipoPeriodo(datos, n.id, periodo) })) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [esTodas, periodo]
+    [esTodas, periodo, datos]
   );
 
   // --- Fidelización ------------------------------------------------------
@@ -165,10 +162,10 @@ export function PanelGerencial() {
   // granularidad diaria, así que en esos 3 casos se muestra el mes de
   // calendario real; en Anual, el histórico de 12 meses.
   const mesActual = BASE_DATE.toLocaleDateString("es-PE", { month: "long", year: "numeric" });
-  const cumpleMes = resumenCumpleanosMes(negocio.id);
+  const cumpleMes = resumenCumpleanosMes(datos, negocio.id);
   const historialFidelizacion = useMemo(
-    () => (periodo === "anio" ? historialFidelizacionGrupo(negocio.id) : []),
-    [negocio.id, periodo]
+    () => (periodo === "anio" ? historialFidelizacionGrupo(datos, negocio.id) : []),
+    [negocio.id, periodo, datos]
   );
   const fidelizacionAnual = useMemo(
     () => historialFidelizacion.reduce(
@@ -184,7 +181,7 @@ export function PanelGerencial() {
   // rodante de 12 meses — mismo criterio que "mes" acá abajo y que usa
   // Directorio, para que "Anual" signifique lo mismo en toda la página.
   const vistaFidelizacion = periodo === "anio" ? String(BASE_DATE.getFullYear()) : mesActual;
-  const cumpleanosDelNegocio = proximosCumpleanos(negocio.id, BASE_DATE, 30).length;
+  const cumpleanosDelNegocio = proximosCumpleanosDe(clientesIndividualesPorNegocio(clientesIndividuales, negocio.id), BASE_DATE, 30).length;
   // Las 3 tarjetas de cumpleaños solo se muestran en Mensual/Anual (ver más
   // abajo) — en Diario/Semanal no hay nada que mostrar en esta sección, así
   // que el título tampoco se muestra (sin esto quedaría flotando sin nada
@@ -192,14 +189,14 @@ export function PanelGerencial() {
   const mostrarSeccionFidelizacion = periodo === "mes" || periodo === "anio";
 
   const comparativoFidelizacion = useMemo(
-    () => (esTodas ? negociosOperando.map((n) => ({ negocio: n, cumple: resumenCumpleanosPeriodo(n.id, periodo) })) : []),
+    () => (esTodas ? negociosOperando.map((n) => ({ negocio: n, cumple: resumenCumpleanosPeriodo(datos, n.id, periodo) })) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [esTodas, periodo]
+    [esTodas, periodo, datos]
   );
 
   // --- De dónde vienen más registros --------------------------------------
-  const origenClientes = distribucionOrigen(negocio.id);
-  const desgloseWeb = esTodas ? origenWebPorNegocio() : [];
+  const origenClientes = distribucionOrigen(datos, negocio.id);
+  const desgloseWeb = esTodas ? origenWebPorNegocio(datos) : [];
 
   return (
     <div className="space-y-6" id="reporte">

@@ -33,8 +33,6 @@ export function seguimientoDefectoPara(cliente: ClienteIndividual): SeguimientoC
     fechaCumple: cliente.fechaNacimiento,
     celular: cliente.celular,
     saludoEnviado: false,
-    visto: false,
-    respuesta: "pendiente",
     reservacion: "pendiente",
   };
 }

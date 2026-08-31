@@ -9,54 +9,39 @@ import { Topbar } from "@/components/layout/Topbar";
 import { Card } from "@/components/ui/Card";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table, Thead, Th, Tr, Td } from "@/components/ui/Table";
-import { Paginacion, paginar } from "@/components/ui/Paginacion";
-import {
-  clientesIndividualesPorNegocio, corporativosPorNegocio, CLIENTES_INDIVIDUALES, CLIENTES_CORPORATIVOS,
-} from "@/lib/mock/clientes";
 import { exportarCSV } from "@/lib/export-csv";
-import { useClientesCreados, useClientesCorporativosCreados } from "@/lib/store";
+import { useData } from "@/lib/data-context";
 import { NuevoClienteForm } from "@/components/clientes/NuevoClienteForm";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
-
-const POR_PAGINA = 15;
 
 export default function ClientesPage() {
   const { usuario, negocio } = useApp();
   const router = useRouter();
-  const [tab, setTabState] = useState<"individual" | "corporativo">("individual");
-  const [busqueda, setBusquedaState] = useState("");
-  const [pagina, setPagina] = useState(1);
+  const [tab, setTab] = useState<"individual" | "corporativo">("individual");
+  const [busqueda, setBusqueda] = useState("");
   const [formAbierto, setFormAbierto] = useState(false);
 
-  // Cambiar de pestaña o buscar reinicia la página — si no, podrías quedar
-  // "varado" en una página 4 que ya no existe para el nuevo filtro.
-  function setTab(t: "individual" | "corporativo") {
-    setTabState(t);
-    setPagina(1);
-  }
-  function setBusqueda(v: string) {
-    setBusquedaState(v);
-    setPagina(1);
-  }
-  const { items: creados, add: agregarCliente } = useClientesCreados();
-  const { items: corpCreados, add: agregarCorporativo } = useClientesCorporativosCreados();
+  const {
+    clientesIndividuales, clientesCorporativos,
+    crearClienteIndividual, crearClienteCorporativo,
+  } = useData();
 
   // "Todas las sucursales" no es un negocio real donde se pueda registrar un
   // cliente — se redirige a Panel Principal, ver fueraDeAlcance más abajo.
   const individuales = useMemo(
-    () => [...creados.filter((c) => c.negocioId === negocio.id), ...clientesIndividualesPorNegocio(negocio.id)],
-    [creados, negocio.id]
+    () => clientesIndividuales.filter((c) => c.negocioId === negocio.id),
+    [clientesIndividuales, negocio.id]
   );
   const corporativos = useMemo(
-    () => [...corpCreados.filter((c) => c.negocioId === negocio.id), ...corporativosPorNegocio(negocio.id)],
-    [corpCreados, negocio.id]
+    () => clientesCorporativos.filter((c) => c.negocioId === negocio.id),
+    [clientesCorporativos, negocio.id]
   );
 
   const individualesFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return individuales;
     return individuales.filter((c) =>
-      `${c.nombres} ${c.apellidos} ${c.celular} ${c.distrito} ${c.registradoPor ?? ""}`.toLowerCase().includes(q)
+      `${c.nombres} ${c.apellidos} ${c.celular} ${c.distrito} ${c.pais} ${c.registradoPor ?? ""}`.toLowerCase().includes(q)
     );
   }, [individuales, busqueda]);
 
@@ -64,7 +49,7 @@ export default function ClientesPage() {
     const q = busqueda.trim().toLowerCase();
     if (!q) return corporativos;
     return corporativos.filter((c) =>
-      `${c.razonSocial} ${c.ruc} ${c.celular} ${c.distrito} ${c.registradoPor ?? ""}`.toLowerCase().includes(q)
+      `${c.razonSocial} ${c.ruc} ${c.celular} ${c.distrito} ${c.pais} ${c.registradoPor ?? ""}`.toLowerCase().includes(q)
     );
   }, [corporativos, busqueda]);
 
@@ -72,18 +57,13 @@ export default function ClientesPage() {
   // registrarse dos veces como cliente distinto (SFIDA #3).
   const celularesExistentes = useMemo(() => {
     const s = new Set<string>();
-    CLIENTES_INDIVIDUALES.forEach((c) => s.add(c.celular));
-    CLIENTES_CORPORATIVOS.forEach((c) => s.add(c.celular));
-    creados.forEach((c) => s.add(c.celular));
-    corpCreados.forEach((c) => s.add(c.celular));
+    clientesIndividuales.forEach((c) => s.add(c.celular));
+    clientesCorporativos.forEach((c) => s.add(c.celular));
     return s;
-  }, [creados, corpCreados]);
+  }, [clientesIndividuales, clientesCorporativos]);
   const celularExiste = (celular: string) => celularesExistentes.has(celular);
 
   const listaActiva = tab === "individual" ? individualesFiltrados : corporativosFiltrados;
-  const totalPaginas = Math.max(1, Math.ceil(listaActiva.length / POR_PAGINA));
-  const individualesPagina = useMemo(() => paginar(individualesFiltrados, pagina, POR_PAGINA), [individualesFiltrados, pagina]);
-  const corporativosPagina = useMemo(() => paginar(corporativosFiltrados, pagina, POR_PAGINA), [corporativosFiltrados, pagina]);
 
   const fueraDeAlcance = negocio.id === "todas";
 
@@ -97,17 +77,17 @@ export default function ClientesPage() {
     if (tab === "individual") {
       exportarCSV(
         `clientes-individuales-${negocio.id}`,
-        ["N°", "Fecha registro", "Nombres", "Apellidos", "Fecha nacimiento", "Celular", "Distrito", "Origen"],
+        ["N°", "Fecha registro", "Nombres", "Apellidos", "Fecha nacimiento", "Celular", "País", "Origen"],
         individualesFiltrados.map((c) => [
-          c.numero, c.fechaRegistro, c.nombres, c.apellidos, c.fechaNacimiento, c.celular, c.distrito, c.origen,
+          c.numero, c.fechaRegistro, c.nombres, c.apellidos, c.fechaNacimiento, c.celular, c.pais, c.origen,
         ])
       );
     } else {
       exportarCSV(
         `clientes-corporativos-${negocio.id}`,
-        ["N°", "Razón social", "RUC", "Dirección", "Celular", "Representante", "Distrito"],
+        ["N°", "Razón social", "RUC", "Dirección", "Celular", "Representante", "País"],
         corporativosFiltrados.map((c) => [
-          c.numero, c.razonSocial, c.ruc, c.direccion, c.celular, c.nombreRepresentante, c.distrito,
+          c.numero, c.razonSocial, c.ruc, c.direccion, c.celular, c.nombreRepresentante, c.pais,
         ])
       );
     }
@@ -133,7 +113,7 @@ export default function ClientesPage() {
             </button>
           </div>
           <div className="flex items-center gap-3 flex-1 justify-end">
-            <SearchInput value={busqueda} onChange={setBusqueda} placeholder="Buscar por nombre, teléfono, distrito o RUC…" />
+            <SearchInput value={busqueda} onChange={setBusqueda} placeholder="Buscar por nombre, teléfono, país o RUC…" />
             {puedeRegistrarClientes(usuario.rolTipo) && (
               <button
                 onClick={() => setFormAbierto((v) => !v)}
@@ -160,12 +140,12 @@ export default function ClientesPage() {
             celularExiste={celularExiste}
             onCancelar={() => setFormAbierto(false)}
             onGuardarIndividual={(c) => {
-              agregarCliente(c);
+              void crearClienteIndividual(c);
               setTab("individual");
               setFormAbierto(false);
             }}
             onGuardarCorporativo={(c) => {
-              agregarCorporativo(c);
+              void crearClienteCorporativo(c);
               setTab("corporativo");
               setFormAbierto(false);
             }}
@@ -178,16 +158,16 @@ export default function ClientesPage() {
               <Thead>
                 <Th>Nombre</Th>
                 <Th>Celular</Th>
-                <Th>Distrito</Th>
+                <Th>País</Th>
                 <Th>Origen</Th>
                 <Th>{" "}</Th>
               </Thead>
               <tbody>
-                {individualesPagina.map((c) => (
+                {individualesFiltrados.map((c) => (
                   <Tr key={c.id} onClick={() => router.push(`/clientes/${c.id}`)}>
                     <Td className="font-medium">{c.nombres} {c.apellidos}</Td>
                     <Td>{c.celular}</Td>
-                    <Td>{c.distrito}</Td>
+                    <Td>{c.pais}</Td>
                     <Td className="capitalize">{c.origen.replace("-", " ")}</Td>
                     <Td><BotonWhatsApp celular={c.celular} /></Td>
                   </Tr>
@@ -200,17 +180,17 @@ export default function ClientesPage() {
                 <Th>Razón social</Th>
                 <Th>RUC</Th>
                 <Th>Representante</Th>
-                <Th>Distrito</Th>
+                <Th>País</Th>
                 <Th>Celular</Th>
                 <Th>{" "}</Th>
               </Thead>
               <tbody>
-                {corporativosPagina.map((c) => (
+                {corporativosFiltrados.map((c) => (
                   <Tr key={c.id}>
                     <Td className="font-medium">{c.razonSocial}</Td>
                     <Td>{c.ruc}</Td>
                     <Td>{c.nombreRepresentante}</Td>
-                    <Td>{c.distrito}</Td>
+                    <Td>{c.pais}</Td>
                     <Td>{c.celular}</Td>
                     <Td><BotonWhatsApp celular={c.celular} /></Td>
                   </Tr>
@@ -221,7 +201,6 @@ export default function ClientesPage() {
           {listaActiva.length === 0 && (
             <p className="text-center text-sm text-[var(--color-gris-medio)] py-10">Sin resultados para esa búsqueda.</p>
           )}
-          <Paginacion pagina={pagina} totalPaginas={totalPaginas} onCambiar={setPagina} totalItems={listaActiva.length} porPagina={POR_PAGINA} />
         </Card>
       </main>
     </>

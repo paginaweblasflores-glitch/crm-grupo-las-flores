@@ -3,15 +3,13 @@
 import { useState } from "react";
 import { X, User, Building2 } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { DISTRITOS_AYACUCHO, ACTIVIDADES_ECONOMICAS } from "@/lib/mock/nombres";
-import { getNegocio } from "@/lib/mock/negocios";
-import { ClienteIndividual, ClienteCorporativo, NegocioId, TipoDocumento, Genero } from "@/lib/types";
+import { DISTRITOS_AYACUCHO, DEPARTAMENTOS_PERU, PROVINCIAS_AYACUCHO, PAISES } from "@/lib/mock/nombres";
+import { ClienteIndividual, ClienteCorporativo, NegocioId, Genero } from "@/lib/types";
 import {
-  requerido, celularPeru, emailOpcional, fechaPasada, exactoDigitos, limitarDigitos,
+  requerido, celularPeru, emailOpcional, fechaPasada, limitarDigitos,
   rucPeru, soloLetras, nombrePersona, Errores,
 } from "@/lib/validacion";
 
-const TIPOS_DOCUMENTO: TipoDocumento[] = ["DNI", "Carné de extranjería", "Pasaporte"];
 const GENEROS: Genero[] = ["Femenino", "Masculino", "Prefiere no decirlo"];
 
 export function NuevoClienteForm({
@@ -63,6 +61,75 @@ export function NuevoClienteForm({
   );
 }
 
+// --- Procedencia: País → Departamento → Provincia → Distrito ---------------
+// El negocio es local de Huamanga, así que la cascada empieza ya resuelta en
+// los valores por defecto (Perú / Ayacucho / Huamanga) — quien registra no
+// tiene que tocar nada si el cliente es de acá. En cuanto alguien elige un
+// valor distinto del default en un nivel, ya no tiene sentido pedir (ni
+// guardar) el siguiente nivel — no tenemos provincias de Lima ni distritos
+// de Chile — así que el "efectivo" de un campo oculto por la cascada es "",
+// calculado acá mismo en cada render (nunca con un efecto que limpie
+// estado): si el campo vuelve a mostrarse, recupera lo último que se había
+// escrito ahí en vez de reiniciarse al valor por defecto.
+function useUbicacion() {
+  const [pais, setPais] = useState<string>(PAISES[0]);
+  const [departamento, setDepartamento] = useState<string>(DEPARTAMENTOS_PERU[0]);
+  const [provincia, setProvincia] = useState<string>(PROVINCIAS_AYACUCHO[0]);
+  const [distrito, setDistrito] = useState<string>(DISTRITOS_AYACUCHO[0]);
+
+  const departamentoEfectivo = pais === "Perú" ? departamento : "";
+  const provinciaEfectiva = departamentoEfectivo === "Ayacucho" ? provincia : "";
+  const distritoEfectivo = provinciaEfectiva === "Huamanga" ? distrito : "";
+
+  return {
+    pais, setPais,
+    departamento: departamentoEfectivo, setDepartamento,
+    provincia: provinciaEfectiva, setProvincia,
+    distrito: distritoEfectivo, setDistrito,
+  };
+}
+
+function CamposUbicacion({
+  pais, setPais, departamento, setDepartamento, provincia, setProvincia, distrito, setDistrito, errores,
+}: {
+  pais: string; setPais: (v: string) => void;
+  departamento: string; setDepartamento: (v: string) => void;
+  provincia: string; setProvincia: (v: string) => void;
+  distrito: string; setDistrito: (v: string) => void;
+  errores: Errores;
+}) {
+  return (
+    <>
+      <SelectConOtro label="País" opciones={PAISES} value={pais} onChange={setPais} requerido error={errores.pais} />
+      {pais === "Perú" && (
+        <SelectConOtro label="Departamento" opciones={DEPARTAMENTOS_PERU} value={departamento} onChange={setDepartamento} requerido error={errores.departamento} />
+      )}
+      {pais === "Perú" && departamento === "Ayacucho" && (
+        <SelectConOtro label="Provincia" opciones={PROVINCIAS_AYACUCHO} value={provincia} onChange={setProvincia} requerido error={errores.provincia} />
+      )}
+      {pais === "Perú" && departamento === "Ayacucho" && provincia === "Huamanga" && (
+        <SelectConOtro label="Distrito" opciones={DISTRITOS_AYACUCHO} value={distrito} onChange={setDistrito} requerido error={errores.distrito} />
+      )}
+    </>
+  );
+}
+
+function validarUbicacion(pais: string, departamento: string, provincia: string, distrito: string): Errores {
+  const err: Errores = {};
+  const ePais = requerido(pais, "El país");
+  if (ePais) err.pais = ePais;
+  if (pais !== "Perú") return err;
+  const eDepto = requerido(departamento, "El departamento");
+  if (eDepto) err.departamento = eDepto;
+  if (departamento !== "Ayacucho") return err;
+  const eProv = requerido(provincia, "La provincia");
+  if (eProv) err.provincia = eProv;
+  if (provincia !== "Huamanga") return err;
+  const eDist = requerido(distrito, "El distrito");
+  if (eDist) err.distrito = eDist;
+  return err;
+}
+
 function FormIndividual({
   negocioId, registradoPor, celularExiste, onGuardar, onCancelar,
 }: {
@@ -71,18 +138,12 @@ function FormIndividual({
 }) {
   const [nombres, setNombres] = useState("");
   const [apellidos, setApellidos] = useState("");
-  const [tipoDocumento, setTipoDocumento] = useState<TipoDocumento>("DNI");
-  const [numeroDocumento, setNumeroDocumento] = useState("");
   const [celular, setCelular] = useState("");
   const [email, setEmail] = useState("");
   const [fechaNacimiento, setFechaNacimiento] = useState("");
   const [genero, setGenero] = useState<Genero | "">("");
-  const [distrito, setDistrito] = useState<string>(DISTRITOS_AYACUCHO[0]);
-  const [direccionExacta, setDireccionExacta] = useState("");
-  const [origen, setOrigen] = useState<ClienteIndividual["origen"]>("crm");
-  const nombreNegocio = getNegocio(negocioId)?.nombre ?? "este negocio";
+  const ubicacion = useUbicacion();
   const [aceptaComunicaciones, setAceptaComunicaciones] = useState(true);
-  const [observaciones, setObservaciones] = useState("");
   const [errores, setErrores] = useState<Errores>({});
 
   function validar(): Errores {
@@ -91,8 +152,6 @@ function FormIndividual({
     if (eNombres) err.nombres = eNombres;
     const eApellidos = nombrePersona(apellidos, "El apellido");
     if (eApellidos) err.apellidos = eApellidos;
-    const eDoc = tipoDocumento === "DNI" ? exactoDigitos(numeroDocumento, 8, "El DNI") : requerido(numeroDocumento, "El número de documento");
-    if (eDoc) err.numeroDocumento = eDoc;
     const eCelular = celularPeru(celular);
     if (eCelular) err.celular = eCelular;
     else if (celularExiste(celular)) err.celular = "Ese celular ya pertenece a un cliente registrado en el grupo.";
@@ -100,6 +159,7 @@ function FormIndividual({
     if (eEmail) err.email = eEmail;
     const eFecha = fechaPasada(fechaNacimiento, "La fecha de nacimiento");
     if (eFecha) err.fechaNacimiento = eFecha;
+    Object.assign(err, validarUbicacion(ubicacion.pais, ubicacion.departamento, ubicacion.provincia, ubicacion.distrito));
     return err;
   }
 
@@ -117,17 +177,17 @@ function FormIndividual({
       apellidos: apellidos.trim(),
       fechaNacimiento,
       celular,
-      departamento: "Ayacucho",
-      provincia: "Huamanga",
-      distrito,
-      origen,
-      observaciones: observaciones.trim() || undefined,
+      pais: ubicacion.pais,
+      departamento: ubicacion.departamento,
+      provincia: ubicacion.provincia,
+      distrito: ubicacion.distrito,
+      // Se registra desde este formulario → siempre es captación CRM
+      // (presencial). "web" solo lo pone la futura integración con la
+      // página de cada negocio, nunca alguien llenando este formulario.
+      origen: "crm",
       registradoPor,
-      tipoDocumento,
-      numeroDocumento,
       email: email.trim() || undefined,
       genero: genero || undefined,
-      direccionExacta: direccionExacta.trim() || undefined,
       aceptaComunicaciones,
     });
   }
@@ -139,20 +199,6 @@ function FormIndividual({
       </Campo>
       <Campo label="Apellidos" requerido error={errores.apellidos}>
         <input value={apellidos} onChange={(e) => setApellidos(soloLetras(e.target.value))} className="input" />
-      </Campo>
-
-      <Campo label="Tipo de documento" requerido>
-        <select value={tipoDocumento} onChange={(e) => setTipoDocumento(e.target.value as TipoDocumento)} className="input bg-white">
-          {TIPOS_DOCUMENTO.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-      </Campo>
-      <Campo label="Número de documento" requerido error={errores.numeroDocumento}>
-        <input
-          value={numeroDocumento}
-          onChange={(e) => setNumeroDocumento(tipoDocumento === "DNI" ? limitarDigitos(e.target.value, 8) : e.target.value)}
-          maxLength={tipoDocumento === "DNI" ? 8 : 20}
-          className="input"
-        />
       </Campo>
 
       <Campo label="Celular (WhatsApp)" requerido error={errores.celular}>
@@ -179,26 +225,7 @@ function FormIndividual({
         </select>
       </Campo>
 
-      <Campo label="Distrito" requerido>
-        <select value={distrito} onChange={(e) => setDistrito(e.target.value)} className="input bg-white">
-          {DISTRITOS_AYACUCHO.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-      </Campo>
-      <Campo label="Dirección exacta (opcional)">
-        <input value={direccionExacta} onChange={(e) => setDireccionExacta(e.target.value)} className="input" />
-      </Campo>
-
-      <Campo label="¿Cómo llegó el cliente?">
-        <select value={origen} onChange={(e) => setOrigen(e.target.value as ClienteIndividual["origen"])} className="input bg-white">
-          <option value="crm">CRM (registro presencial)</option>
-          <option value="web">{`Web — ${nombreNegocio}`}</option>
-          <option value="redes-sociales">Redes sociales</option>
-          <option value="referido">Referido por otro cliente</option>
-        </select>
-      </Campo>
-      <Campo label="Observaciones (preferencias, alergias)">
-        <input value={observaciones} onChange={(e) => setObservaciones(e.target.value)} className="input" />
-      </Campo>
+      <CamposUbicacion {...ubicacion} errores={errores} />
 
       <label className="sm:col-span-2 flex items-center gap-2 text-xs text-[var(--color-gris-medio)] mt-1">
         <input type="checkbox" checked={aceptaComunicaciones} onChange={(e) => setAceptaComunicaciones(e.target.checked)} className="rounded" />
@@ -219,13 +246,15 @@ function FormCorporativo({
   const [razonSocial, setRazonSocial] = useState("");
   const [ruc, setRuc] = useState("");
   const [direccion, setDireccion] = useState("");
-  const [celular, setCelular] = useState("");
   const [fechaAniversario, setFechaAniversario] = useState("");
   const [nombreRepresentante, setNombreRepresentante] = useState("");
   const [cargoRepresentante, setCargoRepresentante] = useState("Gerente General");
-  const [celularRepresentante, setCelularRepresentante] = useState("");
-  const [actividadEconomica, setActividadEconomica] = useState<string>(ACTIVIDADES_ECONOMICAS[0]);
-  const [distrito, setDistrito] = useState<string>(DISTRITOS_AYACUCHO[0]);
+  // Un solo celular, el del representante — en la práctica Ventas siempre
+  // termina hablando con una persona puntual, nunca con "el teléfono de la
+  // empresa" en abstracto, así que pedir los dos era redundante. Este es el
+  // único número del cliente corporativo, y por eso es obligatorio.
+  const [celular, setCelular] = useState("");
+  const ubicacion = useUbicacion();
   const [aceptaComunicaciones, setAceptaComunicaciones] = useState(true);
   const [errores, setErrores] = useState<Errores>({});
 
@@ -237,15 +266,12 @@ function FormCorporativo({
     if (eRuc) err.ruc = eRuc;
     const eDireccion = requerido(direccion, "La dirección");
     if (eDireccion) err.direccion = eDireccion;
+    const eRepresentante = nombrePersona(nombreRepresentante, "El nombre del representante");
+    if (eRepresentante) err.nombreRepresentante = eRepresentante;
     const eCelular = celularPeru(celular);
     if (eCelular) err.celular = eCelular;
     else if (celularExiste(celular)) err.celular = "Ese celular ya pertenece a un cliente registrado en el grupo.";
-    const eRepresentante = nombrePersona(nombreRepresentante, "El nombre del representante");
-    if (eRepresentante) err.nombreRepresentante = eRepresentante;
-    if (celularRepresentante) {
-      const eCelRep = celularPeru(celularRepresentante);
-      if (eCelRep) err.celularRepresentante = eCelRep;
-    }
+    Object.assign(err, validarUbicacion(ubicacion.pais, ubicacion.departamento, ubicacion.provincia, ubicacion.distrito));
     return err;
   }
 
@@ -266,12 +292,10 @@ function FormCorporativo({
       fechaAniversario: fechaAniversario || "",
       nombreRepresentante: nombreRepresentante.trim(),
       cargoRepresentante,
-      celularRepresentante,
-      ciiu: "",
-      actividadEconomica,
-      departamento: "Ayacucho",
-      provincia: "Huamanga",
-      distrito,
+      pais: ubicacion.pais,
+      departamento: ubicacion.departamento,
+      provincia: ubicacion.provincia,
+      distrito: ubicacion.distrito,
       registradoPor,
       aceptaComunicaciones,
     });
@@ -289,13 +313,10 @@ function FormCorporativo({
       <Campo label="Dirección" requerido error={errores.direccion}>
         <input value={direccion} onChange={(e) => setDireccion(e.target.value)} className="input" />
       </Campo>
-      <Campo label="Celular / teléfono" requerido error={errores.celular}>
-        <input value={celular} onChange={(e) => setCelular(limitarDigitos(e.target.value, 9))} maxLength={9} inputMode="numeric" placeholder="9XXXXXXXX" className="input" />
-      </Campo>
-
       <Campo label="Nombre del representante" requerido error={errores.nombreRepresentante}>
         <input value={nombreRepresentante} onChange={(e) => setNombreRepresentante(soloLetras(e.target.value))} className="input" />
       </Campo>
+
       <Campo label="Cargo del representante">
         <select value={cargoRepresentante} onChange={(e) => setCargoRepresentante(e.target.value)} className="input bg-white">
           <option>Gerente General</option>
@@ -304,24 +325,15 @@ function FormCorporativo({
           <option>Asistente de Gerencia</option>
         </select>
       </Campo>
-
-      <Campo label="Celular del representante (opcional)" error={errores.celularRepresentante}>
-        <input value={celularRepresentante} onChange={(e) => setCelularRepresentante(limitarDigitos(e.target.value, 9))} maxLength={9} inputMode="numeric" className="input" />
+      <Campo label="Celular del representante (WhatsApp)" requerido error={errores.celular}>
+        <input value={celular} onChange={(e) => setCelular(limitarDigitos(e.target.value, 9))} maxLength={9} inputMode="numeric" placeholder="9XXXXXXXX" className="input" />
       </Campo>
+
       <Campo label="Fecha de aniversario (opcional)">
         <input type="date" value={fechaAniversario} onChange={(e) => setFechaAniversario(e.target.value)} className="input" />
       </Campo>
 
-      <Campo label="Actividad económica">
-        <select value={actividadEconomica} onChange={(e) => setActividadEconomica(e.target.value)} className="input bg-white">
-          {ACTIVIDADES_ECONOMICAS.map((a) => <option key={a} value={a}>{a}</option>)}
-        </select>
-      </Campo>
-      <Campo label="Distrito" requerido>
-        <select value={distrito} onChange={(e) => setDistrito(e.target.value)} className="input bg-white">
-          {DISTRITOS_AYACUCHO.map((d) => <option key={d} value={d}>{d}</option>)}
-        </select>
-      </Campo>
+      <CamposUbicacion {...ubicacion} errores={errores} />
 
       <label className="sm:col-span-2 flex items-center gap-2 text-xs text-[var(--color-gris-medio)] mt-1">
         <input type="checkbox" checked={aceptaComunicaciones} onChange={(e) => setAceptaComunicaciones(e.target.checked)} className="rounded" />
@@ -359,5 +371,48 @@ function Campo({
       {children}
       {error && <p className="text-[11px] text-[var(--color-rojo)] mt-1 font-medium">{error}</p>}
     </div>
+  );
+}
+
+// Sentinela para "el valor no está en la lista" — nunca se guarda tal cual,
+// solo decide si el <select> muestra el <input> de texto libre debajo.
+const OTRO = "__otro__";
+
+// Select con salida a mano: si lo que hace falta no está en la lista corta
+// de opciones, "Otro" revela un campo de texto libre — así ningún selector
+// de este formulario deja a alguien sin poder registrar el dato real.
+function SelectConOtro({
+  label, opciones, value, onChange, requerido, error,
+}: {
+  label: string; opciones: readonly string[]; value: string; onChange: (v: string) => void;
+  requerido?: boolean; error?: string;
+}) {
+  const esManual = value !== "" && !opciones.includes(value);
+  const [seleccion, setSeleccion] = useState(esManual ? OTRO : value);
+
+  return (
+    <Campo label={label} requerido={requerido} error={error}>
+      <select
+        value={seleccion}
+        onChange={(e) => {
+          const v = e.target.value;
+          setSeleccion(v);
+          onChange(v === OTRO ? "" : v);
+        }}
+        className="input bg-white"
+      >
+        {opciones.map((o) => <option key={o} value={o}>{o}</option>)}
+        <option value={OTRO}>Otro (escribir)</option>
+      </select>
+      {seleccion === OTRO && (
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Escríbelo"
+          className="input mt-1.5"
+          autoFocus
+        />
+      )}
+    </Campo>
   );
 }

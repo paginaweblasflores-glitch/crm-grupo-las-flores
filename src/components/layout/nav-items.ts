@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Users, Gift, Megaphone,
-  MessageCircle, UserCog, Sparkles, PartyPopper,
+  MessageCircle, UserCog, Sparkles, PartyPopper, Settings,
 } from "lucide-react";
 import { ModuloId } from "@/lib/permissions";
 
@@ -26,7 +26,8 @@ export interface NavItem {
   // de un negocioId real). "Todas las sucursales" es una vista consolidada
   // de solo lectura, así que por default un módulo NO está disponible ahí —
   // hay que marcarlo true explícitamente si de verdad tiene sentido verlo
-  // con los 3 negocios juntos (hoy solo Panel Principal).
+  // con los 3 negocios juntos (hoy Panel Principal y Configuración — esta
+  // última ni siquiera depende de un negocio, es la cuenta de quien entró).
   disponibleEnTodas?: boolean;
   // Para el módulo "dashboard": qué mostrar cuando el rol solo ve resumen
   // (Dirección) — su panel se llama distinto al de Gerencial/Ventas.
@@ -42,4 +43,5 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dias-festivos", label: "Días Festivos", modulo: "diasFestivos", icon: PartyPopper, grupo: "Relación con el cliente" },
   { href: "/estrategias", label: "Estrategias", modulo: "estrategias", icon: Sparkles, grupo: "Gestión" },
   { href: "/usuarios", label: "Usuarios", modulo: "usuarios", icon: UserCog, grupo: "Gestión" },
+  { href: "/configuracion", label: "Configuración", modulo: "configuracion", icon: Settings, grupo: "Gestión", disponibleEnTodas: true },
 ];

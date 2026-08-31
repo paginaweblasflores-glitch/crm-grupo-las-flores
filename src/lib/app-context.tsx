@@ -1,11 +1,10 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode, useMemo } from "react";
-import { NegocioId, Usuario } from "./types";
-import { USUARIOS } from "./mock/usuarios";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { Negocio, NegocioId, Usuario } from "./types";
 import { NEGOCIOS, NEGOCIO_TODAS, getNegocio } from "./mock/negocios";
 import { negociosPermitidos } from "./permissions";
-import { useUsuariosCreados } from "./store";
+import { useData } from "./data-context";
 
 interface AppContextValue {
   usuario: Usuario | null;
@@ -22,21 +21,25 @@ interface AppContextValue {
   eliminarUsuario: (id: string) => void;
 }
 
-type Negocio = (typeof NEGOCIOS)[number];
-
 const AppContext = createContext<AppContextValue | null>(null);
 
 const STORAGE_USUARIO = "crm-usuario-id-activo";
 const STORAGE_NEGOCIO = "crm-negocio-activo";
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  // Las 3 sedes (nombre, color, si opera) son config del sistema, casi fija
+  // — no el tipo de dato ficticio/generado que se migró a Supabase (eso son
+  // clientes, campañas, festividades, seguimiento, usuarios). Se quedan acá.
+  const negocios: Negocio[] = NEGOCIOS;
+  const {
+    usuarios, listo: listoDatos,
+    crearUsuario: dbCrear, actualizarUsuario: dbActualizar, eliminarUsuario: dbEliminar,
+  } = useData();
   const [usuarioId, setUsuarioId] = useState<string | null>(null);
   const [negocioId, setNegocioId] = useState<NegocioId>("las-flores");
-  const [listo, setListo] = useState(false);
-  const { items: usuariosCreados, add: crearUsuario, update: actualizarUsuario, remove: removerUsuario, listo: listoCreados } = useUsuariosCreados();
+  const [listoSesion, setListoSesion] = useState(false);
 
-  const todosLosUsuarios = useMemo(() => [...USUARIOS, ...usuariosCreados], [usuariosCreados]);
-  const usuario = usuarioId ? todosLosUsuarios.find((u) => u.id === usuarioId) ?? null : null;
+  const usuario = usuarioId ? usuarios.find((u) => u.id === usuarioId) ?? null : null;
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -44,12 +47,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const negocioGuardado = window.localStorage.getItem(STORAGE_NEGOCIO) as NegocioId | null;
     if (usuarioGuardado) setUsuarioId(usuarioGuardado);
     if (negocioGuardado) setNegocioId(negocioGuardado);
-    setListo(true);
+    setListoSesion(true);
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   function iniciarSesion(loginUsuario: string, contrasena: string): boolean {
-    const encontrado = todosLosUsuarios.find(
+    const encontrado = usuarios.find(
       (u) => u.usuario.toLowerCase() === loginUsuario.trim().toLowerCase() && u.contrasena === contrasena
     );
     if (!encontrado) return false;
@@ -62,12 +65,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return true;
   }
 
+  // Ya no hace falta el truco de "semilla vs override" — cada cuenta es una
+  // fila de verdad en Supabase, editar (aunque sea una de las 5 originales)
+  // es un UPDATE normal.
   const editarUsuario = (id: string, patch: Partial<Usuario>) => {
-    actualizarUsuario((u) => u.id === id, (u) => ({ ...u, ...patch }));
+    void dbActualizar(id, patch);
   };
 
   const eliminarUsuario = (id: string) => {
-    removerUsuario((u) => u.id === id);
+    void dbEliminar(id);
+  };
+
+  const crearUsuarioFn = (u: Usuario) => {
+    void dbCrear(u);
   };
 
   const cerrarSesion = () => {
@@ -86,21 +96,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const negociosDisponibles = usuario
     ? (() => {
         const alcance = negociosPermitidos(usuario.rolTipo, usuario.negocioId);
-        return alcance === "todos" ? [NEGOCIO_TODAS, ...NEGOCIOS] : NEGOCIOS.filter((n) => alcance.includes(n.id));
+        return alcance === "todos" ? [NEGOCIO_TODAS, ...negocios] : negocios.filter((n) => alcance.includes(n.id));
       })()
-    : [NEGOCIO_TODAS, ...NEGOCIOS];
+    : [NEGOCIO_TODAS, ...negocios];
+
+  const negocioActivo = getNegocio(negocioId) ?? negocios[0];
 
   const value: AppContextValue = {
     usuario,
-    negocio: getNegocio(negocioId) ?? NEGOCIOS[0],
-    negocios: NEGOCIOS,
+    negocio: negocioActivo,
+    negocios,
     negociosDisponibles,
-    usuarios: todosLosUsuarios,
-    listo: listo && listoCreados,
+    usuarios,
+    listo: listoSesion && listoDatos,
     iniciarSesion,
     cerrarSesion,
     cambiarNegocio,
-    crearUsuario,
+    crearUsuario: crearUsuarioFn,
     editarUsuario,
     eliminarUsuario,
   };

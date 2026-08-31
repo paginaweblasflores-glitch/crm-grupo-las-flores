@@ -46,18 +46,27 @@ export interface ClienteIndividual {
   apellidos: string;
   fechaNacimiento: string; // ISO
   celular: string;
+  // Procedencia — cascada País → Departamento → Provincia → Distrito. Solo
+  // el país es obligatorio: fuera de Perú (o de Ayacucho/Huamanga dentro de
+  // Perú) no se pide más detalle, así que estos tres quedan en "" cuando no
+  // aplican (nunca undefined, para no romper el texto donde se muestran).
+  pais: string;
   departamento: string;
   provincia: string;
   distrito: string;
-  origen: "crm" | "web" | "redes-sociales" | "referido" | "importado-excel";
-  observaciones?: string;
+  // "crm" = registrado desde este formulario (Ventas/Gerencial, presencial)
+  // — se marca solo, nadie lo elige a mano. "web" queda reservado para la
+  // futura integración con las páginas web de cada negocio: el cliente
+  // llega por código, ya etiquetado como "web" + su negocioId (ver
+  // `origenWebPorNegocio` en metrics.ts) — no hace falta un valor de origen
+  // distinto por sede, el negocioId ya lo distingue.
+  origen: "crm" | "web";
   registradoPor?: string; // nombre de quién lo registró (cuando se agrega desde el sistema)
   // Campos investigados y agregados sobre el estándar del Excel original:
   tipoDocumento?: TipoDocumento;
   numeroDocumento?: string;
   email?: string;
   genero?: Genero;
-  direccionExacta?: string;
   aceptaComunicaciones?: boolean; // consentimiento para campañas — buena práctica de CRM
 }
 
@@ -70,13 +79,11 @@ export interface ClienteCorporativo {
   razonSocial: string;
   ruc: string;
   direccion: string;
-  celular: string;
+  celular: string; // del representante — es a quien Ventas de verdad contacta
   fechaAniversario: string;
   nombreRepresentante: string;
   cargoRepresentante: string;
-  celularRepresentante: string;
-  ciiu: string;
-  actividadEconomica: string;
+  pais: string;
   departamento: string;
   provincia: string;
   distrito: string;
@@ -86,6 +93,10 @@ export interface ClienteCorporativo {
 
 // --- Seguimiento de cumpleaños (hoja "SEGUIMIENTO") -------------------------
 // Este módulo lo opera Ventas día a día; Gerencial supervisa y aprueba.
+// Solo dos campos con dueño: Estado lo marca el sistema solo (saludoEnviado,
+// en cuanto se manda el saludo), Reservación la actualiza Ventas a mano
+// después de hablar con el cliente. "visto"/"respuesta" y los montos de
+// reserva/consumo se quitaron — eran de más y ya no se usan en ningún lado.
 export interface SeguimientoCumple {
   id: string;
   negocioId: NegocioId;
@@ -95,11 +106,11 @@ export interface SeguimientoCumple {
   fechaCumple: string;
   celular: string;
   saludoEnviado: boolean;
-  visto: boolean;
-  respuesta: "si" | "no" | "pendiente";
   reservacion: "si" | "no" | "pendiente";
-  adelantoReserva?: number;
-  montoConsumo?: number;
+  // Personalización del saludo para ESTE cliente — si no están definidos, se
+  // usa la plantilla/hora general del negocio (ver config_saludo_cumpleanos).
+  mensajePersonalizado?: string;
+  horaPersonalizada?: string; // "HH:mm"
 }
 
 // "Campaña" = un mensaje masivo por WhatsApp a un segmento de clientes del

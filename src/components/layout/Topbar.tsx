@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect, ReactNode } from "react";
-import { ChevronDown, Check, LogOut, Building2 } from "lucide-react";
+import Link from "next/link";
+import { ChevronDown, Check, LogOut, Building2, Settings } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { NegocioId } from "@/lib/types";
-import { puedeCambiarNegocio } from "@/lib/permissions";
+import { puedeCambiarNegocio, accesoA } from "@/lib/permissions";
 
 export function Topbar({ titulo, descripcion, accion }: { titulo: string; descripcion?: string; accion?: ReactNode }) {
   const { usuario, negocio, negociosDisponibles, cambiarNegocio, cerrarSesion } = useApp();
@@ -123,6 +124,15 @@ export function Topbar({ titulo, descripcion, accion }: { titulo: string; descri
                 <p className="text-sm font-semibold text-[var(--color-gris)]">{nombreMostrado}</p>
                 <p className="text-xs text-[var(--color-gris-medio)]">{usuario.cargo}</p>
               </div>
+              {accesoA(usuario.rolTipo, "configuracion") !== "no" && (
+                <Link
+                  href="/configuracion"
+                  onClick={() => setPerfilAbierto(false)}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-left text-sm font-medium text-[var(--color-gris)] hover:bg-[var(--color-crema)] transition-colors"
+                >
+                  <Settings size={15} /> Configuración
+                </Link>
+              )}
               <button
                 onClick={() => {
                   setPerfilAbierto(false);

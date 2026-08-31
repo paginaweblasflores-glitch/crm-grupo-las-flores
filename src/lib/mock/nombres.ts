@@ -36,19 +36,25 @@ export const RAZONES_SOCIALES = [
   "Municipalidad Distrital de Jesús Nazareno",
 ] as const;
 
-export const ACTIVIDADES_ECONOMICAS = [
-  "Venta al por menor de combustibles para vehículos automotores",
-  "Enseñanza secundaria de formación general",
-  "Venta al por menor de artículos de ferretería",
-  "Fabricación de tejidos y artículos textiles",
-  "Construcción de edificios completos",
-  "Transporte de pasajeros por carretera",
-  "Actividades jurídicas",
-  "Actividades de hospitales y clínicas",
-  "Cultivo de cereales y otras semillas",
-  "Elaboración de productos de panadería",
+// Procedencia del cliente — cascada País → Departamento → Provincia →
+// Distrito (ver NuevoClienteForm). Listas cortas a propósito: el negocio es
+// local de Huamanga, así que casi todos los clientes caen en los valores por
+// defecto (Perú / Ayacucho / Huamanga); estas son solo las opciones más
+// comunes fuera de eso — cualquier otra se escribe a mano con "Otro".
+export const PAISES = ["Perú", "Chile", "Argentina", "Bolivia", "Estados Unidos", "España"] as const;
+
+export const DEPARTAMENTOS_PERU = [
+  "Ayacucho", "Lima", "Huancavelica", "Apurímac", "Ica", "Cusco", "Junín",
 ] as const;
 
+export const PROVINCIAS_AYACUCHO = [
+  "Huamanga", "Cangallo", "Huanca Sancos", "Huanta", "La Mar", "Lucanas",
+  "Parinacochas", "Páucar del Sara Sara", "Sucre", "Víctor Fajardo", "Vilcas Huamán",
+] as const;
+
+// Distritos de la provincia de Huamanga — es la única provincia con detalle
+// a nivel de distrito (el negocio opera ahí); el resto de provincias/
+// departamentos/países solo llegan hasta su propio nivel en la cascada.
 export const DISTRITOS_AYACUCHO = [
   "Huamanga", "Ayacucho", "Andrés Avelino Cáceres", "Jesús Nazareno",
   "Carmen Alto", "San Juan Bautista", "Socos", "Acocro",

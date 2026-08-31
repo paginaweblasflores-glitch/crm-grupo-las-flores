@@ -5,9 +5,10 @@
 
 import { NegocioId } from "./types";
 import {
-  resumenPeriodo, clientesPorTipoPeriodo, distribucionOrigen, resumenCumpleanosMes,
+  resumenPeriodo, clientesPorTipoPeriodo, distribucionOrigen, resumenCumpleanosMes, DatosMetricas,
 } from "./metrics";
 import { campanasPorNegocio } from "./mock/campanas";
+import { Campana } from "./types";
 
 export function sugerenciasPara(): string[] {
   return [
@@ -18,18 +19,24 @@ export function sugerenciasPara(): string[] {
   ];
 }
 
-function origenPrincipal(negocioId: NegocioId): { nombre: string; valor: number } | null {
-  const distrib = distribucionOrigen(negocioId);
+function origenPrincipal(datos: DatosMetricas, negocioId: NegocioId): { nombre: string; valor: number } | null {
+  const distrib = distribucionOrigen(datos, negocioId);
   if (distrib.length === 0) return null;
   return [...distrib].sort((a, b) => b.valor - a.valor)[0];
 }
 
-export function generarRespuesta(prompt: string, negocioId: NegocioId, negocioNombre: string): string {
+export function generarRespuesta(
+  prompt: string,
+  datos: DatosMetricas,
+  campanasTodas: Campana[],
+  negocioId: NegocioId,
+  negocioNombre: string
+): string {
   const p = prompt.toLowerCase();
-  const mes = resumenPeriodo(negocioId, "mes");
+  const mes = resumenPeriodo(datos, negocioId, "mes");
 
   if (p.includes("cumpleañ") || p.includes("cumplea")) {
-    const c = resumenCumpleanosMes(negocioId);
+    const c = resumenCumpleanosMes(datos, negocioId);
     const tasa = c.enviados === 0 ? 0 : Math.round((c.personasQueReservaron / c.enviados) * 100);
     return (
       `Este mes en ${negocioNombre}: ${c.totalDelMes} clientes cumplen años, se enviaron ${c.enviados} saludos y ` +
@@ -39,8 +46,8 @@ export function generarRespuesta(prompt: string, negocioId: NegocioId, negocioNo
   }
 
   if (p.includes("campaña") || p.includes("campana") || p.includes("promoci")) {
-    const origen = origenPrincipal(negocioId);
-    const campanas = campanasPorNegocio(negocioId);
+    const origen = origenPrincipal(datos, negocioId);
+    const campanas = campanasPorNegocio(campanasTodas, negocioId);
     const ultima = campanas[campanas.length - 1];
     const alcanceUltima = ultima?.clientesObjetivo?.length
       ? Math.round(((ultima.contactados?.length ?? 0) / ultima.clientesObjetivo.length) * 100)
@@ -58,7 +65,7 @@ export function generarRespuesta(prompt: string, negocioId: NegocioId, negocioNo
     // La conversión de saludo de cumpleaños en visita es la única señal de
     // "volvió" que existe en el sistema (Hospedaje, la otra que hubo, se
     // eliminó) — misma cuenta que usa la rama de "cumpleañ" arriba.
-    const c = resumenCumpleanosMes(negocioId);
+    const c = resumenCumpleanosMes(datos, negocioId);
     const tasa = c.enviados === 0 ? 0 : Math.round((c.personasQueReservaron / c.enviados) * 100);
     return (
       `La única señal de "volvió" que tiene hoy el CRM es la conversión de saludo de cumpleaños en visita: este mes en ${negocioNombre} se enviaron ${c.enviados} saludos y ${c.personasQueReservaron} terminaron visitando (${tasa}%).\n\n` +
@@ -68,8 +75,8 @@ export function generarRespuesta(prompt: string, negocioId: NegocioId, negocioNo
   }
 
   if (p.includes("cliente")) {
-    const tipo = clientesPorTipoPeriodo(negocioId, "mes");
-    const origen = origenPrincipal(negocioId);
+    const tipo = clientesPorTipoPeriodo(datos, negocioId, "mes");
+    const origen = origenPrincipal(datos, negocioId);
     return (
       `Este mes llegaron ${tipo.total} clientes nuevos a ${negocioNombre} (${tipo.individuales} individuales, ${tipo.corporativos} corporativos).` +
       (origen ? ` La mayoría vienen de "${origen.nombre}" (${origen.valor} en total, histórico).` : "") +
