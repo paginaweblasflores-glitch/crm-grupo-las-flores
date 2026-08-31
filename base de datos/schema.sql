@@ -39,7 +39,7 @@ create table usuarios (
   nombre text not null,
   nombre_real text,
   cargo text not null,
-  rol_tipo text not null check (rol_tipo in ('direccion', 'gerencial', 'ventas')),
+  rol_tipo text not null check (rol_tipo in ('direccion', 'gerencial', 'ventas', 'administracion')),
   rol_label text not null,
   iniciales text not null,
   usuario text not null unique,           -- usuario de acceso (login)

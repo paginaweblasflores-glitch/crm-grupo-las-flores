@@ -17,7 +17,7 @@ export interface Negocio {
 // - direccion: socios/directorio en Lima — solo un panel de métricas, cero acciones.
 // - gerencial: Mijael — control operativo total de los 3 negocios.
 // - ventas: el equipo de cada negocio (registra clientes, cumpleaños).
-export type RolTipo = "direccion" | "gerencial" | "ventas";
+export type RolTipo = "direccion" | "gerencial" | "ventas" | "administracion";
 
 export interface Usuario {
   id: string;

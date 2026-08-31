@@ -75,6 +75,25 @@ export const PERMISOS: Record<RolTipo, Record<ModuloId, NivelAcceso>> = {
     diasFestivos: "resumen",
     configuracion: "no",
   },
+  // Administración: entre Gerencial y Ventas — pero de alcance MUY angosto,
+  // a propósito. No opera nada (no registra clientes, no manda mensajes, no
+  // arma campañas): solo supervisa al equipo de Ventas de los 3 negocios —
+  // quién registró más, hace cuánto, y puede entrar a ver el detalle de
+  // cada cliente que registraron (eso último no necesita el módulo
+  // Clientes completo: la Ficha de un cliente ya es una página sin permiso
+  // propio, se llega ahí solo por el enlace desde este panel). Por eso el
+  // único módulo con acceso es "dashboard" — todo lo demás queda cerrado.
+  administracion: {
+    dashboard: "completo",
+    clientes: "no",
+    cumpleanos: "no",
+    campanas: "no",
+    estrategias: "no",
+    mensajeria: "no",
+    usuarios: "no",
+    diasFestivos: "no",
+    configuracion: "no",
+  },
 };
 
 export function accesoA(rol: RolTipo, modulo: ModuloId): NivelAcceso {
@@ -132,7 +151,7 @@ export function puedeConectarAPIs(rol: RolTipo): boolean {
 // comparan los tres negocios del grupo (Dirección solo para métricas
 // agregadas; Gerencial además puede operar en cualquiera de los tres).
 export function negociosPermitidos(rol: RolTipo, negocioPropio: NegocioId): NegocioId[] | "todos" {
-  if (rol === "direccion" || rol === "gerencial") return "todos";
+  if (rol === "direccion" || rol === "gerencial" || rol === "administracion") return "todos";
   return [negocioPropio];
 }
 
