@@ -102,10 +102,16 @@ function MensajeriaInner() {
     const ultimaPorCliente = new Map(
       clientes.map((c) => [c.id, ultimaActividad(c.id, seguimientoPorCliente.get(c.id), negocio.nombre, campanas)])
     );
+    // Lista de conversaciones, no la agenda completa de clientes — solo
+    // entra quien ya tiene algo escrito en el chat (real o "sembrado" desde
+    // un saludo de cumpleaños/campaña ya enviados). Un cliente recién
+    // registrado, al que nadie le escribió nada todavía, no aparece acá
+    // hasta que alguien le mande el primer mensaje (desde su Ficha 360° o
+    // desde Cumpleaños/Campañas).
+    const clientesConConversacion = clientes.filter((c) => ultimaPorCliente.get(c.id) !== null);
     // Como WhatsApp/Telegram: la conversación con actividad más reciente va
-    // primero; sin ningún mensaje todavía (ni siquiera "sembrado") queda al
-    // final, ordenado por nombre.
-    const clientesOrdenados = [...clientes].sort((a, b) => {
+    // primero.
+    const clientesOrdenados = [...clientesConConversacion].sort((a, b) => {
       const ua = ultimaPorCliente.get(a.id) ?? "";
       const ub = ultimaPorCliente.get(b.id) ?? "";
       if (ua !== ub) return ub.localeCompare(ua);

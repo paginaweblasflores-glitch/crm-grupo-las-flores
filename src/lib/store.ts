@@ -34,10 +34,24 @@ function writeLS<T>(key: string, value: T) {
 // Escribe un mensaje directo al chat de un cliente sin pasar por el hook
 // useChat — lo usa el envío automático de saludos (corre en un efecto, no en
 // un componente que tenga esa conversación abierta).
-export function agregarMensajeChatDirecto(clienteId: string, texto: string, de: "negocio" | "cliente" = "negocio") {
+//
+// `idEstable` es opcional: quien llama desde un efecto que puede llegar a
+// dispararse más de una vez para el mismo envío (ej. AutoEnvioCumpleanos, que
+// se re-ejecuta cada vez que cambia el estado de seguimientos — algo más
+// probable ahora que hay eventos de Supabase Realtime de por medio) debe
+// pasar un id fijo y repetible (ej. `${seguimiento.id}-auto-saludo`) — si ya
+// existe un mensaje con ese id en el chat, no se vuelve a escribir. Sin esto,
+// dos disparos del mismo efecto duplicaban el saludo en el chat del cliente.
+export function agregarMensajeChatDirecto(
+  clienteId: string,
+  texto: string,
+  de: "negocio" | "cliente" = "negocio",
+  idEstable?: string
+) {
   const key = `crm-chat-${clienteId}`;
   const actuales = readLS<Mensaje[]>(key, []);
-  const next = [...actuales, { id: `${Date.now()}-${de}-${clienteId}`, de, texto, hora: new Date().toISOString() }];
+  if (idEstable && actuales.some((m) => m.id === idEstable)) return;
+  const next = [...actuales, { id: idEstable ?? `${Date.now()}-${de}-${clienteId}`, de, texto, hora: new Date().toISOString() }];
   writeLS(key, next);
 }
 
