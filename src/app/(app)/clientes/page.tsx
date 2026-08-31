@@ -13,7 +13,7 @@ import { exportarCSV } from "@/lib/export-csv";
 import { useData } from "@/lib/data-context";
 import { NuevoClienteForm } from "@/components/clientes/NuevoClienteForm";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
-import { procedenciaDe } from "@/lib/formato";
+import { valorOGuion } from "@/lib/formato";
 
 export default function ClientesPage() {
   const { usuario, negocio } = useApp();
@@ -161,8 +161,10 @@ export default function ClientesPage() {
               <Thead>
                 <Th>Nombre</Th>
                 <Th>Celular</Th>
-                <Th>Procedencia</Th>
-                <Th>Origen</Th>
+                <Th>País</Th>
+                <Th>Departamento</Th>
+                <Th>Provincia</Th>
+                <Th>Distrito</Th>
                 <Th>{" "}</Th>
               </Thead>
               <tbody>
@@ -170,8 +172,10 @@ export default function ClientesPage() {
                   <Tr key={c.id} onClick={() => router.push(`/clientes/${c.id}`)}>
                     <Td className="font-medium">{c.nombres} {c.apellidos}</Td>
                     <Td>{c.celular}</Td>
-                    <Td>{procedenciaDe(c)}</Td>
-                    <Td className="capitalize">{c.origen.replace("-", " ")}</Td>
+                    <Td>{valorOGuion(c.pais)}</Td>
+                    <Td>{valorOGuion(c.departamento)}</Td>
+                    <Td>{valorOGuion(c.provincia)}</Td>
+                    <Td>{valorOGuion(c.distrito)}</Td>
                     <Td><BotonWhatsApp celular={c.celular} /></Td>
                   </Tr>
                 ))}
@@ -182,9 +186,14 @@ export default function ClientesPage() {
               <Thead>
                 <Th>Razón social</Th>
                 <Th>RUC</Th>
+                <Th>Dirección</Th>
                 <Th>Representante</Th>
-                <Th>Procedencia</Th>
+                <Th>Cargo</Th>
                 <Th>Celular</Th>
+                <Th>País</Th>
+                <Th>Departamento</Th>
+                <Th>Provincia</Th>
+                <Th>Distrito</Th>
                 <Th>{" "}</Th>
               </Thead>
               <tbody>
@@ -192,9 +201,14 @@ export default function ClientesPage() {
                   <Tr key={c.id}>
                     <Td className="font-medium">{c.razonSocial}</Td>
                     <Td>{c.ruc}</Td>
+                    <Td>{c.direccion}</Td>
                     <Td>{c.nombreRepresentante}</Td>
-                    <Td>{procedenciaDe(c)}</Td>
+                    <Td>{c.cargoRepresentante}</Td>
                     <Td>{c.celular}</Td>
+                    <Td>{valorOGuion(c.pais)}</Td>
+                    <Td>{valorOGuion(c.departamento)}</Td>
+                    <Td>{valorOGuion(c.provincia)}</Td>
+                    <Td>{valorOGuion(c.distrito)}</Td>
                     <Td><BotonWhatsApp celular={c.celular} /></Td>
                   </Tr>
                 ))}

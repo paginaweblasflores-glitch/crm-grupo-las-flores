@@ -13,6 +13,14 @@ export function procedenciaDe(c: { pais: string; departamento: string; provincia
   return c.pais;
 }
 
+// Para tablas con una columna por campo (País | Departamento | Provincia |
+// Distrito) en vez de un solo texto combinado — un campo que no aplica (ej.
+// Distrito de un cliente que solo llegó hasta Departamento) se ve como "—",
+// no como una celda vacía sin explicación.
+export function valorOGuion(v: string): string {
+  return v || "—";
+}
+
 // "Hace X min", "Hoy, HH:mm", "Ayer, HH:mm", "Hace X días" o la fecha corta.
 // Recibe un timestamp CON hora real (creadoEn) — nunca fechaRegistro (esa
 // solo guarda el día; Postgres/JS la interpretan como medianoche UTC, lo que
