@@ -184,30 +184,6 @@ export function EstadisticasVendedores({
         </p>
       </div>
 
-      {/* Un día/semana es muy poca muestra para un gráfico comparativo con
-          sentido (mismo criterio que ya usa el resto del sistema) — solo
-          se arma en Mensual/Anual. Se construye a partir de la misma lista
-          `estadisticasOrdenadas` de abajo (deriva de TODOS los usuarios con
-          rolTipo "ventas"), así que un asesor nuevo que Mijael cree
-          aparece acá también, sin tocar código. */}
-      {(periodo === "mes" || periodo === "anio") && estadisticasOrdenadas.length > 0 && (
-        <Card>
-          <CardHeader title="Comparativo de rendimiento" subtitle={`Clientes captados por asesor · ${rangoDelPeriodo(periodo)}`} />
-          <BarChartSerie
-            data={estadisticasOrdenadas.map((e) => ({
-              asesor: e.usuario.nombre.replace("Ventas ", ""),
-              individuales: e.clientesNaturales,
-              corporativos: e.clientesCorporativos,
-            }))}
-            xKey="asesor"
-            series={[
-              { key: "individuales", nombre: "Individuales", color: "#8C3A25" },
-              { key: "corporativos", nombre: "Corporativos", color: "#5C7C8C" },
-            ]}
-          />
-        </Card>
-      )}
-
       {/* Las 2 tarjetas de resumen que había acá (Mayor Captadora / Total
           clientes captados) se quitaron por redundantes — la tabla de abajo
           ya muestra al líder (fila 1, con 🌟) y "X asesores en evaluación"
@@ -340,6 +316,34 @@ export function EstadisticasVendedores({
           </table>
         </div>
       </Card>
+
+      {/* Un día/semana es muy poca muestra para un gráfico comparativo con
+          sentido (mismo criterio que ya usa el resto del sistema) — solo
+          se arma en Mensual/Anual. Se construye a partir de la misma lista
+          `estadisticasOrdenadas` de la tabla de arriba (deriva de TODOS los
+          usuarios con rolTipo "ventas"), así que un asesor nuevo que Mijael
+          cree aparece acá también, sin tocar código. */}
+      {(periodo === "mes" || periodo === "anio") && estadisticasOrdenadas.length > 0 && (
+        <Card>
+          <CardHeader title="Comparativo de rendimiento" subtitle={`Clientes captados por asesor · ${rangoDelPeriodo(periodo)}`} />
+          <BarChartSerie
+            data={estadisticasOrdenadas.map((e) => ({
+              // Lo que se evalúa acá es el rendimiento del VENDEDOR de cada
+              // sede — "Vendedor Las Flores/Umaru/Mamina", no el nombre de
+              // la cuenta tal cual (que dice "Ventas ...", pensado para el
+              // login, no para leerse en un eje de gráfico).
+              asesor: e.usuario.nombre.replace("Ventas ", "Vendedor "),
+              individuales: e.clientesNaturales,
+              corporativos: e.clientesCorporativos,
+            }))}
+            xKey="asesor"
+            series={[
+              { key: "individuales", nombre: "Individuales", color: "#8C3A25" },
+              { key: "corporativos", nombre: "Corporativos", color: "#5C7C8C" },
+            ]}
+          />
+        </Card>
+      )}
 
       {asesorHistorial && (
         <Modal
