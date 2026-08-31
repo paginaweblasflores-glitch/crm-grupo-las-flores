@@ -235,9 +235,8 @@ function FormIndividual({
       <Campo label="Fecha de nacimiento" requerido error={errores.fechaNacimiento}>
         <input type="date" value={fechaNacimiento} onChange={(e) => setFechaNacimiento(e.target.value)} className="input" />
       </Campo>
-      <Campo label="Género (opcional)">
+      <Campo label="Género" requerido>
         <select value={genero} onChange={(e) => setGenero(e.target.value as Genero)} className="input bg-white">
-          <option value="">Prefiere no decir</option>
           {GENEROS.map((g) => <option key={g} value={g}>{g}</option>)}
         </select>
       </Campo>
