@@ -50,7 +50,7 @@ export default function LoginPage() {
             <Image src="/logo.png" alt="Grupo Las Flores" width={56} height={56} className="w-full h-full rounded-full object-cover" priority />
           </div>
           <h1 className="text-2xl font-bold text-[var(--color-terracota)] tracking-tight" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
-            CRM CONSORCIO LAS FLORES
+            CRM Consorcio Las Flores
           </h1>
           <p className="text-xs text-[var(--color-gris-medio)] mt-1 font-medium">
             Restaurante · Hotel · Restobar

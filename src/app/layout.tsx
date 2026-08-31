@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "CRM CONSORCIO LAS FLORES",
+  title: "CRM Consorcio Las Flores",
   description: "Prototipo de CRM para Restaurante Las Flores, Hotel Umaru y Mamina Restobar",
 };
 
