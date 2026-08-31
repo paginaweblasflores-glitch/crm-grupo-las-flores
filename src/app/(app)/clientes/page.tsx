@@ -9,7 +9,7 @@ import { Topbar } from "@/components/layout/Topbar";
 import { Card } from "@/components/ui/Card";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table, Thead, Th, Tr, Td } from "@/components/ui/Table";
-import { exportarCSV } from "@/lib/export-csv";
+import { exportarExcel } from "@/lib/exportar-excel";
 import { useData } from "@/lib/data-context";
 import { NuevoClienteForm } from "@/components/clientes/NuevoClienteForm";
 import { ModalConfirmar } from "@/components/ui/ModalConfirmar";
@@ -27,6 +27,7 @@ export default function ClientesPage() {
   const [editandoCorporativo, setEditandoCorporativo] = useState<ClienteCorporativo | null>(null);
   const [eliminandoIndividual, setEliminandoIndividual] = useState<ClienteIndividual | null>(null);
   const [eliminandoCorporativo, setEliminandoCorporativo] = useState<ClienteCorporativo | null>(null);
+  const [exportando, setExportando] = useState(false);
   const mostrarForm = formAbierto || editandoIndividual !== null || editandoCorporativo !== null;
   function cerrarForm() {
     setFormAbierto(false);
@@ -87,25 +88,40 @@ export default function ClientesPage() {
 
   if (!usuario || fueraDeAlcance) return null;
 
-  function exportar() {
-    if (tab === "individual") {
-      exportarCSV(
-        `clientes-individuales-${negocio.id}`,
-        ["N°", "Fecha registro", "Nombres", "Apellidos", "Fecha nacimiento", "Celular", "Departamento", "Provincia", "Distrito", "Origen"],
-        individualesFiltrados.map((c) => [
-          c.numero, c.fechaRegistro, c.nombres, c.apellidos, c.fechaNacimiento, c.celular,
-          c.departamento, c.provincia, c.distrito, c.origen,
-        ])
-      );
-    } else {
-      exportarCSV(
-        `clientes-corporativos-${negocio.id}`,
-        ["N°", "Razón social", "RUC", "Dirección", "Celular", "Representante", "Departamento", "Provincia", "Distrito"],
-        corporativosFiltrados.map((c) => [
-          c.numero, c.razonSocial, c.ruc, c.direccion, c.celular, c.nombreRepresentante,
-          c.departamento, c.provincia, c.distrito,
-        ])
-      );
+  async function exportar() {
+    if (exportando) return;
+    setExportando(true);
+    const nombreGenerador = usuario?.nombreReal ?? usuario?.nombre ?? "";
+    try {
+      if (tab === "individual") {
+        await exportarExcel({
+          archivo: `clientes-individuales-${negocio.id}`,
+          hoja: "Clientes individuales",
+          negocioId: negocio.id,
+          titulo: "Clientes individuales",
+          generadoPor: nombreGenerador,
+          columnas: ["N°", "Fecha registro", "Nombres", "Apellidos", "Fecha nacimiento", "Celular", "Departamento", "Provincia", "Distrito", "Origen"],
+          filas: individualesFiltrados.map((c) => [
+            c.numero, c.fechaRegistro, c.nombres, c.apellidos, c.fechaNacimiento, c.celular,
+            c.departamento, c.provincia, c.distrito, c.origen,
+          ]),
+        });
+      } else {
+        await exportarExcel({
+          archivo: `clientes-corporativos-${negocio.id}`,
+          hoja: "Clientes corporativos",
+          negocioId: negocio.id,
+          titulo: "Clientes corporativos",
+          generadoPor: nombreGenerador,
+          columnas: ["N°", "Razón social", "RUC", "Dirección", "Celular", "Representante", "Departamento", "Provincia", "Distrito"],
+          filas: corporativosFiltrados.map((c) => [
+            c.numero, c.razonSocial, c.ruc, c.direccion, c.celular, c.nombreRepresentante,
+            c.departamento, c.provincia, c.distrito,
+          ]),
+        });
+      }
+    } finally {
+      setExportando(false);
     }
   }
 
@@ -141,10 +157,11 @@ export default function ClientesPage() {
             )}
             <button
               onClick={exportar}
-              className="flex items-center gap-2 bg-[var(--color-verde)] text-white text-sm font-semibold rounded-xl px-4 py-2.5 hover:opacity-90 transition-opacity whitespace-nowrap"
+              disabled={exportando}
+              className="flex items-center gap-2 bg-[var(--color-verde)] text-white text-sm font-semibold rounded-xl px-4 py-2.5 hover:opacity-90 transition-opacity whitespace-nowrap disabled:opacity-60 disabled:cursor-wait"
             >
               <Download size={15} />
-              Exportar a Excel
+              {exportando ? "Generando…" : "Exportar a Excel"}
             </button>
           </div>
         </div>

@@ -36,15 +36,34 @@ export default function DashboardPage() {
   // real; el resto de cuentas se saluda por el nombre completo del cargo
   // ("Ventas Uno"), que ya no es un nombre de pila para recortar.
   const primerNombre = usuario.nombreReal ? usuario.nombreReal.split(" ")[0] : usuario.nombre;
+  const nombreCompleto = usuario.nombreReal ?? usuario.nombre;
+
+  // Dirección siempre reporta consolidado, sin importar qué negocio traiga
+  // guardado su cuenta internamente (ver app-context: negocioInicial usa el
+  // negocioId de la cuenta incluso para roles "todos") — el PDF debe usar
+  // la marca del consorcio, no la de un negocio puntual.
+  const negocioIdReporte = esResumen ? "todas" : negocio.id;
+  const tituloReporte = esResumen ? "Reporte ejecutivo" : esGerencial ? "Reporte gerencial" : "Reporte de panel";
 
   return (
     <>
       <Topbar
         titulo={`Bienvenido, ${primerNombre}`}
         descripcion={descripcion}
-        accion={esGerencial || esResumen ? <ExportarPDFBoton etiqueta="Exportar PDF" /> : undefined}
+        accion={
+          esGerencial || esResumen ? (
+            <ExportarPDFBoton
+              etiqueta="Exportar PDF"
+              objetivoId="contenido-dashboard"
+              negocioId={negocioIdReporte}
+              titulo={tituloReporte}
+              subtitulo={descripcion}
+              generadoPor={nombreCompleto}
+            />
+          ) : undefined
+        }
       />
-      <main className="flex-1 p-8 animate-fade-in">
+      <main id="contenido-dashboard" className="flex-1 p-8 animate-fade-in">
         {esResumen ? (
           <PanelEjecutivo />
         ) : esAdministracion ? (

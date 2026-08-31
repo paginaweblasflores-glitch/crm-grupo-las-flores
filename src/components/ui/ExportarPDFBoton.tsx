@@ -1,17 +1,50 @@
 "use client";
 
-import { FileDown } from "lucide-react";
+import { useState } from "react";
+import { FileDown, Loader2 } from "lucide-react";
+import { exportarDashboardPDF } from "@/lib/exportar-pdf";
+import { NegocioId } from "@/lib/types";
 
-// Genera un PDF real con el diálogo de impresión del navegador — el CSS de
-// impresión (globals.css) oculta el sidebar y los controles, y deja solo el
-// reporte. No hace falta ninguna librería ni backend para esto.
-export function ExportarPDFBoton({ etiqueta = "Exportar reporte (PDF)" }: { etiqueta?: string }) {
+// Genera un PDF real (encabezado con logo/marca, cuerpo del panel, pie con
+// numeración) — ver exportar-pdf.ts. objetivoId es el id del contenedor que
+// se captura como cuerpo del reporte.
+export function ExportarPDFBoton({
+  etiqueta = "Exportar PDF",
+  objetivoId,
+  negocioId,
+  titulo,
+  subtitulo,
+  generadoPor,
+}: {
+  etiqueta?: string;
+  objetivoId: string;
+  negocioId: NegocioId;
+  titulo: string;
+  subtitulo?: string;
+  generadoPor: string;
+}) {
+  const [generando, setGenerando] = useState(false);
+
+  async function onClick() {
+    if (generando) return;
+    setGenerando(true);
+    try {
+      await exportarDashboardPDF({ elementoId: objetivoId, negocioId, titulo, subtitulo, generadoPor });
+    } catch (e) {
+      console.error("Error al exportar PDF:", e);
+    } finally {
+      setGenerando(false);
+    }
+  }
+
   return (
     <button
-      onClick={() => window.print()}
-      className="no-imprimir flex items-center gap-1.5 bg-white border border-[var(--color-gris-claro)]/50 text-[var(--color-gris)] text-xs font-semibold rounded-lg px-3.5 py-2 hover:border-[var(--color-terracota)]/40 transition-colors"
+      onClick={onClick}
+      disabled={generando}
+      className="no-imprimir flex items-center gap-1.5 bg-white border border-[var(--color-gris-claro)]/50 text-[var(--color-gris)] text-xs font-semibold rounded-lg px-3.5 py-2 hover:border-[var(--color-terracota)]/40 transition-colors disabled:opacity-60 disabled:cursor-wait"
     >
-      <FileDown size={14} /> {etiqueta}
+      {generando ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+      {generando ? "Generando…" : etiqueta}
     </button>
   );
 }
