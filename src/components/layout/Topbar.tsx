@@ -14,11 +14,12 @@ export function Topbar({ titulo, descripcion, accion }: { titulo: string; descri
   const ref = useRef<HTMLDivElement>(null);
   const perfilRef = useRef<HTMLDivElement>(null);
   const puedeElegir = negociosDisponibles.length > 1 && Boolean(usuario && puedeCambiarNegocio(usuario.rolTipo));
-  // Dirección siempre ve los 3 negocios consolidados — su `negocioId` de
-  // cuenta no significa nada para este rol (existe solo porque el tipo
-  // Usuario lo exige), así que el pill no debe mostrar un negocio
-  // específico como si Dirección estuviera "parada" en uno solo.
-  const esDireccion = usuario?.rolTipo === "direccion";
+  // Dirección y Administración siempre ven/supervisan los 3 negocios
+  // consolidados — su `negocioId` de cuenta no significa nada para estos
+  // roles (existe solo porque el tipo Usuario lo exige), así que el pill
+  // no debe mostrar un negocio específico como si estuvieran "parados" en
+  // uno solo.
+  const esConsolidado = usuario?.rolTipo === "direccion" || usuario?.rolTipo === "administracion";
   // Solo Gerente General guarda nombreReal — su perfil, ya dentro del sistema,
   // muestra su nombre real; el resto de cuentas se ve por el nombre del cargo.
   const nombreMostrado = usuario?.nombreReal ?? usuario?.nombre;
@@ -48,10 +49,10 @@ export function Topbar({ titulo, descripcion, accion }: { titulo: string; descri
             onClick={() => puedeElegir && setAbierto((v) => !v)}
             className={`flex items-center gap-2 bg-white border border-[var(--color-gris-claro)]/50 rounded-xl px-3.5 py-2 text-sm font-medium text-[var(--color-gris)] transition-colors ${puedeElegir ? "hover:border-[var(--color-terracota)]/40 cursor-pointer" : "cursor-default"}`}
           >
-            {esDireccion ? (
+            {esConsolidado ? (
               <>
                 <Building2 size={14} className="text-[var(--color-terracota)]" />
-                Grupo Las Flores · 3 sucursales
+                Consorcio Las Flores
               </>
             ) : (
               <>
