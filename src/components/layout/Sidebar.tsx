@@ -27,7 +27,7 @@ export function Sidebar() {
       <div className="flex items-center gap-3 px-5 h-20 border-b border-[var(--color-sidebar-border)]">
         <Image src="/logo.png" alt="Grupo Las Flores" width={36} height={36} className="w-9 h-9 shrink-0 rounded-full object-cover" priority />
         <div>
-          <p className="font-semibold text-sm leading-tight">CRM Grupo Las Flores</p>
+          <p className="font-semibold text-sm leading-tight">CRM CONSORCIO LAS FLORES</p>
           <p className="text-[11px] text-white/50">Prototipo interno</p>
         </div>
       </div>
