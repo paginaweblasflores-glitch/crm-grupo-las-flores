@@ -25,30 +25,7 @@ import { BarChartSerie } from "@/components/charts/BarChartSerie";
 import { DonutChart } from "@/components/charts/DonutChart";
 import { EstadisticasVendedores } from "@/components/dashboard/EstadisticasVendedores";
 import { ComparativoCrecimientoPorNegocio, ComparativoFidelizacionPorNegocio } from "@/components/dashboard/ComparativosNegocio";
-
-function tiempoRelativoOFecha(fechaISO: string): string {
-  try {
-    const fecha = new Date(fechaISO);
-    const ahora = new Date();
-    const diffMs = ahora.getTime() - fecha.getTime();
-    const diffMin = Math.floor(diffMs / (1000 * 60));
-    const diffHoras = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffMin >= 0 && diffMin < 1) return "Hace un momento";
-    if (diffMin >= 1 && diffMin < 60) return `Hace ${diffMin} min`;
-    if (diffHoras >= 0 && diffHoras < 24 && fecha.getDate() === ahora.getDate()) {
-      return `Hoy, ${fecha.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}`;
-    }
-    if (diffDias === 1 || (diffHoras < 48 && fecha.getDate() === ahora.getDate() - 1)) {
-      return `Ayer, ${fecha.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}`;
-    }
-    if (diffDias >= 0 && diffDias < 7) return `Hace ${diffDias} días`;
-    return fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
-  } catch {
-    return fechaISO;
-  }
-}
+import { tiempoRelativoOFecha, procedenciaDe } from "@/lib/formato";
 
 function origenLabel(origen: string): string {
   if (origen === "corporativo") return "Convenio corporativo"; // etiqueta sintética — ClienteCorporativo no tiene campo origen propio
@@ -98,8 +75,9 @@ export function PanelGerencial() {
         documento: c.numeroDocumento ? `DNI ${c.numeroDocumento}` : undefined,
         celular: c.celular,
         fechaRegistro: c.fechaRegistro,
+        creadoEn: c.creadoEn,
         origen: c.origen || "crm",
-        distrito: c.distrito,
+        pais: c.pais, departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
       }));
 
       const corporativos = corporativosPorNegocio(clientesCorporativos, v.negocioId).filter((c) => matchVendedor(c.registradoPor)).map((c) => ({
@@ -109,12 +87,13 @@ export function PanelGerencial() {
         documento: `RUC ${c.ruc}`,
         celular: c.celular,
         fechaRegistro: c.fechaRegistro,
+        creadoEn: c.creadoEn,
         origen: "corporativo",
-        distrito: c.distrito,
+        pais: c.pais, departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
       }));
 
       let todos = [...individuales, ...corporativos].sort(
-        (a, b) => new Date(b.fechaRegistro).getTime() - new Date(a.fechaRegistro).getTime()
+        (a, b) => new Date(b.creadoEn ?? b.fechaRegistro).getTime() - new Date(a.creadoEn ?? a.fechaRegistro).getTime()
       );
 
       // Fallback si la cuenta es nueva y no tiene asignados todavía
@@ -126,8 +105,9 @@ export function PanelGerencial() {
           documento: c.numeroDocumento ? `DNI ${c.numeroDocumento}` : undefined,
           celular: c.celular,
           fechaRegistro: c.fechaRegistro,
+          creadoEn: c.creadoEn,
           origen: c.origen || "crm",
-          distrito: c.distrito,
+          pais: c.pais, departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
         }));
       }
 
@@ -427,18 +407,16 @@ export function PanelGerencial() {
                         <div className="text-xs text-[var(--color-gris-medio)] space-y-1.5 pt-1">
                           <div className="flex items-center gap-1.5 text-[var(--color-terracota)] font-semibold">
                             <Clock size={12} className="shrink-0" />
-                            <span>{tiempoRelativoOFecha(ultimoCliente.fechaRegistro)}</span>
+                            <span>{tiempoRelativoOFecha(ultimoCliente.creadoEn ?? ultimoCliente.fechaRegistro)}</span>
                           </div>
                           <div className="flex items-center gap-1.5 text-[var(--color-gris-medio)] truncate">
                             <User size={12} className="shrink-0" />
                             <span className="truncate">Canal: {origenLabel(ultimoCliente.origen)}</span>
                           </div>
-                          {ultimoCliente.distrito && (
-                            <div className="flex items-center gap-1.5 truncate text-[11px] text-[var(--color-gris-medio)]">
-                              <MapPin size={11} className="shrink-0" />
-                              <span className="truncate">{ultimoCliente.distrito}, Ayacucho</span>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-1.5 truncate text-[11px] text-[var(--color-gris-medio)]">
+                            <MapPin size={11} className="shrink-0" />
+                            <span className="truncate">{procedenciaDe(ultimoCliente)}</span>
+                          </div>
                         </div>
                       </div>
                     ) : (

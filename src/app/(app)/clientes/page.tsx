@@ -13,6 +13,7 @@ import { exportarCSV } from "@/lib/export-csv";
 import { useData } from "@/lib/data-context";
 import { NuevoClienteForm } from "@/components/clientes/NuevoClienteForm";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
+import { procedenciaDe } from "@/lib/formato";
 
 export default function ClientesPage() {
   const { usuario, negocio } = useApp();
@@ -77,17 +78,19 @@ export default function ClientesPage() {
     if (tab === "individual") {
       exportarCSV(
         `clientes-individuales-${negocio.id}`,
-        ["N°", "Fecha registro", "Nombres", "Apellidos", "Fecha nacimiento", "Celular", "País", "Origen"],
+        ["N°", "Fecha registro", "Nombres", "Apellidos", "Fecha nacimiento", "Celular", "País", "Departamento", "Provincia", "Distrito", "Origen"],
         individualesFiltrados.map((c) => [
-          c.numero, c.fechaRegistro, c.nombres, c.apellidos, c.fechaNacimiento, c.celular, c.pais, c.origen,
+          c.numero, c.fechaRegistro, c.nombres, c.apellidos, c.fechaNacimiento, c.celular,
+          c.pais, c.departamento, c.provincia, c.distrito, c.origen,
         ])
       );
     } else {
       exportarCSV(
         `clientes-corporativos-${negocio.id}`,
-        ["N°", "Razón social", "RUC", "Dirección", "Celular", "Representante", "País"],
+        ["N°", "Razón social", "RUC", "Dirección", "Celular", "Representante", "País", "Departamento", "Provincia", "Distrito"],
         corporativosFiltrados.map((c) => [
-          c.numero, c.razonSocial, c.ruc, c.direccion, c.celular, c.nombreRepresentante, c.pais,
+          c.numero, c.razonSocial, c.ruc, c.direccion, c.celular, c.nombreRepresentante,
+          c.pais, c.departamento, c.provincia, c.distrito,
         ])
       );
     }
@@ -158,7 +161,7 @@ export default function ClientesPage() {
               <Thead>
                 <Th>Nombre</Th>
                 <Th>Celular</Th>
-                <Th>País</Th>
+                <Th>Procedencia</Th>
                 <Th>Origen</Th>
                 <Th>{" "}</Th>
               </Thead>
@@ -167,7 +170,7 @@ export default function ClientesPage() {
                   <Tr key={c.id} onClick={() => router.push(`/clientes/${c.id}`)}>
                     <Td className="font-medium">{c.nombres} {c.apellidos}</Td>
                     <Td>{c.celular}</Td>
-                    <Td>{c.pais}</Td>
+                    <Td>{procedenciaDe(c)}</Td>
                     <Td className="capitalize">{c.origen.replace("-", " ")}</Td>
                     <Td><BotonWhatsApp celular={c.celular} /></Td>
                   </Tr>
@@ -180,7 +183,7 @@ export default function ClientesPage() {
                 <Th>Razón social</Th>
                 <Th>RUC</Th>
                 <Th>Representante</Th>
-                <Th>País</Th>
+                <Th>Procedencia</Th>
                 <Th>Celular</Th>
                 <Th>{" "}</Th>
               </Thead>
@@ -190,7 +193,7 @@ export default function ClientesPage() {
                     <Td className="font-medium">{c.razonSocial}</Td>
                     <Td>{c.ruc}</Td>
                     <Td>{c.nombreRepresentante}</Td>
-                    <Td>{c.pais}</Td>
+                    <Td>{procedenciaDe(c)}</Td>
                     <Td>{c.celular}</Td>
                     <Td><BotonWhatsApp celular={c.celular} /></Td>
                   </Tr>

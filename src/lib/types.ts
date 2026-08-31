@@ -41,7 +41,8 @@ export interface ClienteIndividual {
   id: string;
   negocioId: NegocioId;
   numero: number;
-  fechaRegistro: string; // ISO
+  fechaRegistro: string; // ISO — solo el día, sin hora
+  creadoEn?: string; // timestamp real (con hora) — para mostrar "hace X min/horas", no para filtrar por periodo
   nombres: string;
   apellidos: string;
   fechaNacimiento: string; // ISO
@@ -75,7 +76,8 @@ export interface ClienteCorporativo {
   id: string;
   negocioId: NegocioId;
   numero: number;
-  fechaRegistro: string;
+  fechaRegistro: string; // ISO — solo el día, sin hora
+  creadoEn?: string; // timestamp real (con hora) — para mostrar "hace X min/horas", no para filtrar por periodo
   razonSocial: string;
   ruc: string;
   direccion: string;

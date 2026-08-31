@@ -7,6 +7,7 @@ import { Topbar } from "@/components/layout/Topbar";
 import { Card } from "@/components/ui/Card";
 import { buscarClienteIndividual } from "@/lib/mock/clientes";
 import { ORIGEN_LABEL } from "@/lib/metrics";
+import { procedenciaDe } from "@/lib/formato";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useData } from "@/lib/data-context";
 
@@ -28,16 +29,7 @@ export default function ClienteDetallePage(props: PageProps<"/clientes/[id]">) {
   }
 
   const edad = new Date().getFullYear() - new Date(cliente.fechaNacimiento).getFullYear();
-  // Fuera de Huamanga (u otra provincia/departamento/país) no todos los
-  // niveles de procedencia aplican — se muestra el par más específico
-  // disponible, igual que antes para el caso común (distrito, provincia).
-  const procedencia = cliente.distrito
-    ? `${cliente.distrito}, ${cliente.provincia}`
-    : cliente.provincia
-      ? `${cliente.provincia}, ${cliente.departamento}`
-      : cliente.departamento
-        ? `${cliente.departamento}, Perú`
-        : cliente.pais;
+  const procedencia = procedenciaDe(cliente);
 
   return (
     <>

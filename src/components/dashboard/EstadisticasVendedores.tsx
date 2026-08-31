@@ -13,14 +13,20 @@ import { rangoPeriodo, rangoDelPeriodo, Periodo } from "@/lib/metrics";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { tiempoRelativoOFecha, procedenciaDe } from "@/lib/formato";
 
 interface ClienteRegistrado {
   id: string;
   nombre: string;
   tipo: "Natural" | "Corporativo";
   fechaRegistro: string;
+  creadoEn?: string;
   celular: string;
   negocioId: NegocioId;
+  pais: string;
+  departamento: string;
+  provincia: string;
+  distrito: string;
 }
 
 interface AsesorEstadistica {
@@ -32,30 +38,6 @@ interface AsesorEstadistica {
   totalClientes: number;
   todosMisClientes: ClienteRegistrado[];
   ultimoCliente: ClienteRegistrado | null;
-}
-
-function tiempoRelativoOFecha(fechaISO: string): string {
-  try {
-    const fecha = new Date(fechaISO);
-    const ahora = new Date();
-    const diffMs = ahora.getTime() - fecha.getTime();
-    const diffMin = Math.floor(diffMs / (1000 * 60));
-    const diffHoras = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffMin >= 0 && diffMin < 1) return "Hace un momento";
-    if (diffMin >= 1 && diffMin < 60) return `Hace ${diffMin} min`;
-    if (diffHoras >= 0 && diffHoras < 24 && fecha.getDate() === ahora.getDate()) {
-      return `Hoy, ${fecha.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}`;
-    }
-    if (diffDias === 1 || (diffHoras < 48 && fecha.getDate() === ahora.getDate() - 1)) {
-      return `Ayer, ${fecha.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}`;
-    }
-    if (diffDias >= 0 && diffDias < 7) return `Hace ${diffDias} días`;
-    return fecha.toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
-  } catch {
-    return fechaISO;
-  }
 }
 
 export function EstadisticasVendedores({
@@ -132,18 +114,22 @@ export function EstadisticasVendedores({
             nombre: `${c.nombres} ${c.apellidos}`.trim(),
             tipo: "Natural" as const,
             fechaRegistro: c.fechaRegistro,
+            creadoEn: c.creadoEn,
             celular: c.celular,
             negocioId: c.negocioId,
+            pais: c.pais, departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
           })),
           ...clientesCorp.map((c) => ({
             id: c.id,
             nombre: c.razonSocial,
             tipo: "Corporativo" as const,
             fechaRegistro: c.fechaRegistro,
+            creadoEn: c.creadoEn,
             celular: c.celular,
             negocioId: c.negocioId,
+            pais: c.pais, departamento: c.departamento, provincia: c.provincia, distrito: c.distrito,
           })),
-        ].sort((a, b) => new Date(b.fechaRegistro).getTime() - new Date(a.fechaRegistro).getTime());
+        ].sort((a, b) => new Date(b.creadoEn ?? b.fechaRegistro).getTime() - new Date(a.creadoEn ?? a.fechaRegistro).getTime());
 
         const ultimoCliente = todosMisClientes[0] ?? null;
 
@@ -320,7 +306,7 @@ export function EstadisticasVendedores({
                           </Link>
                           <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-terracota)] font-medium">
                             <Clock size={11} className="shrink-0" />
-                            <span>{tiempoRelativoOFecha(e.ultimoCliente.fechaRegistro)}</span>
+                            <span>{tiempoRelativoOFecha(e.ultimoCliente.creadoEn ?? e.ultimoCliente.fechaRegistro)}</span>
                           </div>
                         </div>
                       ) : (
@@ -361,6 +347,7 @@ export function EstadisticasVendedores({
                       {c.nombre}
                     </Link>
                     <p className="text-xs text-[var(--color-gris-medio)]">{c.celular}</p>
+                    <p className="text-[11px] text-[var(--color-gris-medio)] truncate">{procedenciaDe(c)}</p>
                   </div>
                   <div className="text-right shrink-0">
                     <Badge tono={c.tipo === "Corporativo" ? "verde" : "azul"}>{c.tipo}</Badge>
