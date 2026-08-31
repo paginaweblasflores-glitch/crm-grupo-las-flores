@@ -139,17 +139,19 @@ function EstrategiasContenido({
             </div>
           </div>
 
-          <div className="px-5 pt-3 flex gap-1.5 flex-wrap">
-            {sugerenciasPara().map((s) => (
-              <button
-                key={s}
-                onClick={() => enviarPrompt(s)}
-                className="text-xs font-medium bg-[var(--color-crema)] hover:bg-[var(--color-crema-oscuro)] text-[var(--color-gris)] rounded-full px-3 py-1.5 transition-colors"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          {mensajes.length === 0 && (
+            <div className="px-5 pt-3 flex gap-1.5 flex-wrap">
+              {sugerenciasPara().map((s) => (
+                <button
+                  key={s}
+                  onClick={() => enviarPrompt(s)}
+                  className="text-xs font-medium bg-[var(--color-crema)] hover:bg-[var(--color-crema-oscuro)] text-[var(--color-gris)] rounded-full px-3 py-1.5 transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-3 bg-[var(--color-crema)]/40">
             {mensajes.length === 0 && (
