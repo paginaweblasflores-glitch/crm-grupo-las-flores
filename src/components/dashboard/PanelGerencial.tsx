@@ -469,7 +469,15 @@ export function PanelGerencial() {
         <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">{negocio.nombre}</p>
       </div>
 
-      {esTodas ? (
+      <Card>
+        <CardHeader title="De dónde vienen los clientes" subtitle={negocio.nombre} />
+        <DonutChart data={origenClientes} />
+      </Card>
+
+      {/* Solo en "Todas las sucursales": el desglose de Web por sede es un
+          detalle adicional que solo tiene sentido comparando entre negocios
+          — el donut de arriba (CRM vs. Web) ya se ve igual en las 4 vistas. */}
+      {esTodas && (
         <Card>
           <CardHeader title="Web por sede" subtitle="Clientes que se registraron por la web de cada negocio (vs. presencial en el CRM)" />
           <div className="space-y-4 mt-1">
@@ -488,11 +496,6 @@ export function PanelGerencial() {
               </div>
             ))}
           </div>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader title="De dónde vienen los clientes" subtitle={negocio.nombre} />
-          <DonutChart data={origenClientes} />
         </Card>
       )}
     </div>
