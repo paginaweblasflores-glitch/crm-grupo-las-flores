@@ -1,22 +1,32 @@
-// Asistente de Estrategias — simulado. No hay una API de IA conectada de
-// verdad todavía (el prototipo no tiene backend); esto arma respuestas útiles
-// y concretas a partir de los datos reales del negocio (ver lib/metrics.ts),
-// como para mostrar qué tan útil sería el agente una vez conectado.
+// Asistente de Estrategias — desde que se conectó Gemini de verdad (ver
+// src/app/api/estrategias/route.ts), esto ya no es la respuesta principal:
+// generarRespuesta() sigue existiendo como RESPALDO, para cuando Gemini
+// falla por cualquier motivo (sin internet, límite de uso, clave inválida)
+// y el chat necesita responder algo igual, con los mismos datos reales.
 
-import { NegocioId } from "./types";
+import { NegocioId, Festividad, Usuario } from "./types";
 import {
   resumenPeriodo, clientesPorTipoPeriodo, distribucionOrigen, resumenCumpleanosMes, DatosMetricas,
 } from "./metrics";
 import { campanasPorNegocio } from "./mock/campanas";
+import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "./mock/clientes";
+import { festividadAlcanzaNegocio, proximaFecha } from "./mock/festividades";
+import { proximosCumpleanosDe } from "./seguimiento-helpers";
+import { BASE_DATE } from "./mock/seed";
 import { Campana } from "./types";
 
 // Resumen en texto plano de los datos reales del negocio, para dárselo como
-// contexto a la IA (Gemini, ver src/app/api/estrategias/route.ts) — así sus
-// respuestas se basan en números reales y no inventa cifras. Reutiliza las
-// mismas funciones de metrics.ts que ya usa generarRespuesta().
+// contexto a la IA (Gemini) — así sus respuestas se basan en números reales
+// y no inventa cifras. Cubre bastante más que generarRespuesta() de abajo:
+// además de clientes/cumpleaños/campañas del mes, incluye la cartera total,
+// los cumpleaños de la semana que viene, las fechas festivas próximas y el
+// tamaño del equipo — para que el agente "conozca" el negocio de verdad, no
+// solo el corte del mes en curso.
 export function construirContextoDatos(
   datos: DatosMetricas,
   campanasTodas: Campana[],
+  festividadesTodas: Festividad[],
+  usuariosTodos: Usuario[],
   negocioId: NegocioId,
   negocioNombre: string
 ): string {
@@ -26,15 +36,35 @@ export function construirContextoDatos(
   const tasaCumple = cumple.enviados === 0 ? 0 : Math.round((cumple.personasQueReservaron / cumple.enviados) * 100);
   const origen = origenPrincipal(datos, negocioId);
   const campanas = campanasPorNegocio(campanasTodas, negocioId);
+  const campanasAprobadas = campanas.filter((c) => c.estado === "aprobada").length;
   const ultimaCampana = campanas[campanas.length - 1];
+
+  const clientesDelNegocio = clientesIndividualesPorNegocio(datos.clientesIndividuales, negocioId);
+  const totalIndividuales = clientesDelNegocio.length;
+  const totalCorporativos = corporativosPorNegocio(datos.clientesCorporativos, negocioId).length;
+  const proximos7dias = proximosCumpleanosDe(clientesDelNegocio, BASE_DATE, 7).length;
+
+  const festividadesProximas = festividadesTodas
+    .filter((f) => festividadAlcanzaNegocio(f, negocioId))
+    .map((f) => ({ nombre: f.nombre, ...proximaFecha(f.mesDia, BASE_DATE) }))
+    .filter((f) => f.diffDias >= 0 && f.diffDias <= 30)
+    .sort((a, b) => a.diffDias - b.diffDias)
+    .slice(0, 3);
+
+  const equipoVentas = usuariosTodos.filter((u) => u.rolTipo === "ventas" && u.negocioId === negocioId).length;
 
   return [
     `Negocio: ${negocioNombre}.`,
+    `Clientes totales acumulados: ${totalIndividuales} individuales, ${totalCorporativos} corporativos.`,
     `Clientes nuevos este mes: ${mes.clientesNuevos} (${tipo.individuales} individuales, ${tipo.corporativos} corporativos).`,
     origen ? `Canal principal de registro: "${origen.nombre}" (${origen.valor} clientes, histórico).` : "Sin datos de canal todavía.",
     `Cumpleaños este mes: ${cumple.totalDelMes} clientes cumplen años, ${cumple.enviados} saludos enviados, ${cumple.personasQueReservaron} terminaron visitando (${tasaCumple}% de conversión).`,
-    ultimaCampana ? `Última campaña: "${ultimaCampana.nombre}" (estado: ${ultimaCampana.estado}).` : "Sin campañas registradas todavía.",
-    `Campañas totales del negocio: ${campanas.length}.`,
+    `Cumpleaños en los próximos 7 días: ${proximos7dias}.`,
+    `Campañas: ${campanas.length} en total, ${campanasAprobadas} aprobadas. ${ultimaCampana ? `Última: "${ultimaCampana.nombre}" (estado: ${ultimaCampana.estado}).` : "Ninguna todavía."}`,
+    festividadesProximas.length > 0
+      ? `Fechas comerciales/festivas próximas (30 días): ${festividadesProximas.map((f) => `${f.nombre} (en ${f.diffDias} días)`).join(", ")}.`
+      : "Sin fechas comerciales/festivas en los próximos 30 días.",
+    `Equipo de ventas asignado a este negocio: ${equipoVentas} persona(s).`,
   ].join("\n");
 }
 

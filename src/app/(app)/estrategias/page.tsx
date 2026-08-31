@@ -3,13 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Lock, Send, Sparkles, Settings2, Bot } from "lucide-react";
+import { Lock, Send, Sparkles, Settings2, Bot, Trash2 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { accesoA } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useEstrategiasChat } from "@/lib/store";
+import { useEstrategiasChat, useConfigIA } from "@/lib/store";
 import { sugerenciasPara, generarRespuesta, construirContextoDatos } from "@/lib/estrategias";
 import { NegocioId } from "@/lib/types";
 import { useData } from "@/lib/data-context";
@@ -46,12 +46,15 @@ export default function EstrategiasPage() {
     );
   }
 
-  return <EstrategiasContenido negocioId={negocio.id} negocioNombre={negocio.nombre} />;
+  return <EstrategiasContenido negocioId={negocio.id} negocioNombre={negocio.nombre} nombreUsuario={usuario.nombreReal ?? usuario.nombre} />;
 }
 
-function EstrategiasContenido({ negocioId, negocioNombre }: { negocioId: NegocioId; negocioNombre: string }) {
-  const { mensajes, enviar, listo } = useEstrategiasChat(negocioId);
-  const { clientesIndividuales, clientesCorporativos, seguimientos, campanas } = useData();
+function EstrategiasContenido({
+  negocioId, negocioNombre, nombreUsuario,
+}: { negocioId: NegocioId; negocioNombre: string; nombreUsuario: string }) {
+  const { mensajes, enviar, limpiar, listo } = useEstrategiasChat(negocioId);
+  const { config: configIA, listo: listoConfigIA } = useConfigIA();
+  const { clientesIndividuales, clientesCorporativos, seguimientos, campanas, festividades, usuarios } = useData();
   const [texto, setTexto] = useState("");
   const [escribiendo, setEscribiendo] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -60,11 +63,14 @@ function EstrategiasContenido({ negocioId, negocioNombre }: { negocioId: Negocio
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [mensajes, escribiendo]);
 
-  if (!listo) return null;
+  if (!listo || !listoConfigIA) return null;
 
   async function enviarPrompt(valor: string) {
     const contenido = valor.trim();
     if (!contenido) return;
+    // Se calcula ANTES de agregar el mensaje del usuario a la lista — así el
+    // saludo por nombre/hora solo se dispara la primera vez, no en cada mensaje.
+    const esPrimerMensaje = mensajes.length === 0;
     enviar(contenido, "usuario");
     setTexto("");
     setEscribiendo(true);
@@ -75,11 +81,14 @@ function EstrategiasContenido({ negocioId, negocioNombre }: { negocioId: Negocio
     // vuelta a la lógica local con los mismos datos reales — el chat nunca
     // se queda sin responder.
     try {
-      const contexto = construirContextoDatos(datos, campanas, negocioId, negocioNombre);
+      const contexto = construirContextoDatos(datos, campanas, festividades, usuarios, negocioId, negocioNombre);
       const resp = await fetch("/api/estrategias", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: contenido, contexto, negocioNombre }),
+        body: JSON.stringify({
+          prompt: contenido, contexto, negocioNombre, nombreUsuario, esPrimerMensaje,
+          apiKeyManual: configIA?.apiKey,
+        }),
       });
       if (!resp.ok) throw new Error("Respuesta no exitosa del servidor");
       const data = await resp.json();
@@ -110,13 +119,24 @@ function EstrategiasContenido({ negocioId, negocioNombre }: { negocioId: Negocio
                 </p>
               </div>
             </div>
-            <Link
-              href="/configuracion"
-              title="Conectar API de IA"
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] hover:text-[var(--color-gris)] transition-colors"
-            >
-              <Settings2 size={16} />
-            </Link>
+            <div className="flex items-center gap-1">
+              {mensajes.length > 0 && (
+                <button
+                  onClick={() => { if (confirm("¿Borrar toda la conversación de Estrategias con este negocio?")) limpiar(); }}
+                  title="Limpiar chat"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] hover:text-[var(--color-rojo)] transition-colors"
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
+              <Link
+                href="/configuracion"
+                title="Conectar API de IA"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] hover:text-[var(--color-gris)] transition-colors"
+              >
+                <Settings2 size={16} />
+              </Link>
+            </div>
           </div>
 
           <div className="px-5 pt-3 flex gap-1.5 flex-wrap">

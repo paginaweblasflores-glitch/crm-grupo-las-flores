@@ -142,14 +142,21 @@ export function useEstrategiasChat(negocioId: string) {
     [key]
   );
 
-  return { mensajes, enviar, listo };
+  const limpiar = useCallback(() => {
+    writeLS(key, []);
+    setMensajes([]);
+  }, [key]);
+
+  return { mensajes, enviar, limpiar, listo };
 }
 
-// Config de la API de IA — solo se guarda localmente para simular el flujo de
-// "conectar tu proveedor"; el chat sigue siendo simulado aunque haya una
-// clave guardada, porque este prototipo no tiene backend que la use de verdad.
+// Clave propia de Gemini, opcional — solo se guarda en este navegador. Si
+// está vacía, /api/estrategias usa la clave del sistema (GEMINI_API_KEY en
+// el servidor); si Mijael (o quien sea) pega la suya acá, esa se usa en su
+// lugar para ESTE navegador — útil si en algún momento quiere su propia
+// cuota/facturación de Gemini, sin depender de la clave que configuró
+// Sistemas.
 export interface ConfigIA {
-  proveedor: "openai" | "anthropic" | "otro";
   apiKey: string;
 }
 

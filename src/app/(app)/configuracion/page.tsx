@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Lock, Check, X, Plug, Sparkles } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { accesoA } from "@/lib/permissions";
@@ -9,7 +9,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge, type Tono } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CampoContrasena } from "@/components/ui/CampoContrasena";
-import { useConfigWhatsAppAPI, useConfigIA, ConfigIA } from "@/lib/store";
+import { useConfigWhatsAppAPI, useConfigIA } from "@/lib/store";
 import { Errores } from "@/lib/validacion";
 import { Usuario } from "@/lib/types";
 
@@ -236,57 +236,59 @@ function IntegracionWhatsApp() {
 function IntegracionIA() {
   const { config, guardar, desconectar, listo } = useConfigIA();
   const [editando, setEditando] = useState(false);
-  const [proveedor, setProveedor] = useState<ConfigIA["proveedor"]>(config?.proveedor ?? "openai");
   const [apiKey, setApiKey] = useState("");
+  // Estado real del servidor (GEMINI_API_KEY) — la clave en sí nunca viaja
+  // al navegador, solo un true/false de si el servidor tiene una configurada.
+  const [conectadoServidor, setConectadoServidor] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/estrategias")
+      .then((r) => r.json())
+      .then((d) => setConectadoServidor(Boolean(d?.conectado)))
+      .catch(() => setConectadoServidor(false));
+  }, []);
 
   if (!listo) return null;
 
-  const nombreProveedor = (p: ConfigIA["proveedor"]) => (p === "openai" ? "OpenAI" : p === "anthropic" ? "Anthropic" : "Otro proveedor");
+  const conectado = Boolean(config) || conectadoServidor === true;
+  const subtitulo = config
+    ? "Conectado — con tu propia clave de Gemini guardada en este navegador"
+    : conectadoServidor === true
+      ? "Conectado — con la clave de Gemini configurada por Sistemas"
+      : conectadoServidor === null
+        ? "Revisando conexión…"
+        : "Sin conectar — las respuestas en Estrategias usan un respaldo simulado con tus datos";
 
   return (
     <Card>
       <div className="flex items-start justify-between flex-wrap gap-3">
-        <CardHeader
-          title="API de IA (Estrategias)"
-          subtitle={
-            config
-              ? `Conectado — ${nombreProveedor(config.proveedor)} (las respuestas en Estrategias siguen simuladas por ahora)`
-              : "Sin conectar — las respuestas en Estrategias se simulan con tus datos"
-          }
-        />
-        <Badge tono={config ? "verde" : "gris" as Tono}>{config ? "Conectado" : "Sin conectar"}</Badge>
+        <CardHeader title="Google Gemini (Estrategias)" subtitle={subtitulo} />
+        <Badge tono={conectado ? "verde" : "gris" as Tono}>{conectado ? "Conectado" : "Sin conectar"}</Badge>
       </div>
 
       {!editando ? (
         <button
-          onClick={() => { setProveedor(config?.proveedor ?? "openai"); setEditando(true); }}
+          onClick={() => setEditando(true)}
           className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-terracota)] hover:underline"
         >
-          <Sparkles size={13} /> {config ? "Editar conexión" : "Conectar"}
+          <Sparkles size={13} /> {config ? "Editar mi clave" : "Usar mi propia clave"}
         </button>
       ) : (
         <div className="space-y-3 max-w-sm">
           <p className="text-[11px] text-[var(--color-gris-medio)]">
-            Prototipo: la clave se guarda solo en este navegador y las respuestas siguen siendo simuladas —
-            conectar el proveedor real es un paso pendiente, junto con Supabase.
+            Opcional: si el negocio ya tiene una clave de Gemini configurada por Sistemas, no hace falta que
+            pongas nada acá. Solo llena esto si quieres usar TU PROPIA clave de Gemini (tu propia cuota/facturación
+            en Google AI Studio) en vez de la del sistema — se guarda solo en este navegador.
           </p>
           <div>
-            <label className="block text-xs font-semibold text-[var(--color-gris-medio)] mb-1">Proveedor</label>
-            <select value={proveedor} onChange={(e) => setProveedor(e.target.value as ConfigIA["proveedor"])} className="input bg-white">
-              <option value="openai">OpenAI</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="otro">Otro</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-[var(--color-gris-medio)] mb-1">Clave de API</label>
-            <CampoContrasena value={apiKey} onChange={setApiKey} placeholder={config ? "•••••••••••••••• (ya guardada)" : "sk-…"} />
+            <label className="block text-xs font-semibold text-[var(--color-gris-medio)] mb-1">Tu clave de Gemini</label>
+            <CampoContrasena value={apiKey} onChange={setApiKey} placeholder={config ? "•••••••••••••••• (ya guardada)" : "AIzaSy… o AQ…"} />
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => {
                 if (!apiKey.trim()) return;
-                guardar({ proveedor, apiKey: apiKey.trim() });
+                guardar({ apiKey: apiKey.trim() });
                 setApiKey("");
                 setEditando(false);
               }}
@@ -299,7 +301,7 @@ function IntegracionIA() {
                 onClick={() => { desconectar(); setEditando(false); }}
                 className="text-xs font-semibold text-[var(--color-gris-medio)] rounded-lg px-3 py-2 hover:bg-[var(--color-crema)] transition-colors"
               >
-                Desconectar
+                Quitar mi clave
               </button>
             )}
             <button
