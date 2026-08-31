@@ -10,7 +10,7 @@ import {
   rucPeru, soloLetras, nombrePersona, Errores,
 } from "@/lib/validacion";
 
-const GENEROS: Genero[] = ["Femenino", "Masculino", "Prefiere no decirlo"];
+const GENEROS: Genero[] = ["Femenino", "Masculino"];
 
 export function NuevoClienteForm({
   negocioId, registradoPor, celularExiste, onGuardarIndividual, onGuardarCorporativo, onCancelar,

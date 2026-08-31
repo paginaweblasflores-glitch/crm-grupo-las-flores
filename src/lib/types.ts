@@ -34,7 +34,7 @@ export interface Usuario {
 }
 
 export type TipoDocumento = "DNI" | "Carné de extranjería" | "Pasaporte";
-export type Genero = "Femenino" | "Masculino" | "Prefiere no decirlo";
+export type Genero = "Femenino" | "Masculino";
 
 // --- Clientes individuales (hoja "BASE DE DATOS CLIENTES") -----------------
 export interface ClienteIndividual {

@@ -73,7 +73,7 @@ create table clientes_individuales (
   tipo_documento text check (tipo_documento in ('DNI', 'Carné de extranjería', 'Pasaporte')),
   numero_documento text,
   email text,
-  genero text check (genero in ('Femenino', 'Masculino', 'Prefiere no decirlo')),
+  genero text check (genero in ('Femenino', 'Masculino')),
   acepta_comunicaciones boolean not null default true,
   creado_en timestamptz not null default now()
 );

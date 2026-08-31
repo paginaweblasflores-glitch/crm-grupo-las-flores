@@ -181,7 +181,7 @@ export default function ClientesPage() {
                 <Th>Distrito</Th>
                 <Th>{" "}</Th>
               </Thead>
-              <tbody>
+              <tbody className="uppercase">
                 {individualesFiltrados.map((c) => (
                   <Tr key={c.id} onClick={() => router.push(`/clientes/${c.id}`)}>
                     <Td className="font-medium">{c.nombres} {c.apellidos}</Td>
@@ -227,7 +227,7 @@ export default function ClientesPage() {
                 <Th>Distrito</Th>
                 <Th>{" "}</Th>
               </Thead>
-              <tbody>
+              <tbody className="uppercase">
                 {corporativosFiltrados.map((c) => (
                   <Tr key={c.id}>
                     <Td className="font-medium">{c.razonSocial}</Td>
