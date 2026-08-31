@@ -201,3 +201,20 @@ create policy "permitir todo (prototipo)" on campanas for all using (true) with 
 create policy "permitir todo (prototipo)" on seguimiento_cumpleanos for all using (true) with check (true);
 create policy "permitir todo (prototipo)" on aprobacion_cumpleanos_mes for all using (true) with check (true);
 create policy "permitir todo (prototipo)" on config_saludo_cumpleanos for all using (true) with check (true);
+
+-- ============================================================================
+-- Tiempo real (Supabase Realtime) — sin esto, un cambio hecho en una sesión
+-- (ej. Ventas Uno registra un cliente) no se refleja en las demás sesiones
+-- abiertas (ej. Gerente General) hasta que alguien recarga la página a mano.
+-- Con esto, cada mutación (crear/editar/eliminar) se transmite al toque a
+-- toda pestaña/sesión que tenga el CRM abierto — ver suscribirCambios() en
+-- src/lib/db.ts, que es quien recibe estos eventos del lado de la app.
+-- ============================================================================
+alter publication supabase_realtime add table usuarios;
+alter publication supabase_realtime add table clientes_individuales;
+alter publication supabase_realtime add table clientes_corporativos;
+alter publication supabase_realtime add table campanas;
+alter publication supabase_realtime add table festividades;
+alter publication supabase_realtime add table seguimiento_cumpleanos;
+alter publication supabase_realtime add table config_saludo_cumpleanos;
+alter publication supabase_realtime add table aprobacion_cumpleanos_mes;

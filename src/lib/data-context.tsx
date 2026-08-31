@@ -28,7 +28,96 @@ import {
   dbCrearFestividad, dbActualizarFestividad, dbEliminarFestividad,
   dbCrearSeguimiento, dbActualizarSeguimiento,
   dbGuardarConfigSaludo, dbAprobarMes,
+  suscribirCambios, type CambioRealtime,
+  mapUsuario, mapClienteIndividual, mapClienteCorporativo, mapCampana, mapFestividad, mapSeguimiento,
 } from "./db";
+
+// Aplica un evento de Supabase Realtime al estado local — el mecanismo que
+// hace que un cambio hecho en una pestaña/sesión (ej. Ventas Uno registra un
+// cliente) se vea reflejado al toque en cualquier otra pestaña/sesión
+// abierta (ej. Gerente General), sin recargar la página. "existe → reemplaza,
+// si no → agrega" hace que esto sea seguro aunque el propio cambio local
+// (ya aplicado de forma optimista por el mutator que lo originó) llegue de
+// vuelta por este mismo canal — no duplica nada, solo confirma lo que ya
+// estaba.
+function aplicarCambioRealtime(d: DatosApp, c: CambioRealtime): DatosApp {
+  const idDe = (fila: Record<string, unknown> | null) => (fila?.id as string | undefined);
+
+  switch (c.tabla) {
+    case "usuarios": {
+      const id = idDe(c.vieja);
+      if (c.tipo === "DELETE") return id ? { ...d, usuarios: d.usuarios.filter((u) => u.id !== id) } : d;
+      if (!c.nueva) return d;
+      const fila = mapUsuario(c.nueva);
+      const existe = d.usuarios.some((u) => u.id === fila.id);
+      return { ...d, usuarios: existe ? d.usuarios.map((u) => (u.id === fila.id ? fila : u)) : [...d.usuarios, fila] };
+    }
+    case "clientes_individuales": {
+      const id = idDe(c.vieja);
+      if (c.tipo === "DELETE") return id ? { ...d, clientesIndividuales: d.clientesIndividuales.filter((x) => x.id !== id) } : d;
+      if (!c.nueva) return d;
+      const fila = mapClienteIndividual(c.nueva);
+      const existe = d.clientesIndividuales.some((x) => x.id === fila.id);
+      return { ...d, clientesIndividuales: existe ? d.clientesIndividuales.map((x) => (x.id === fila.id ? fila : x)) : [fila, ...d.clientesIndividuales] };
+    }
+    case "clientes_corporativos": {
+      const id = idDe(c.vieja);
+      if (c.tipo === "DELETE") return id ? { ...d, clientesCorporativos: d.clientesCorporativos.filter((x) => x.id !== id) } : d;
+      if (!c.nueva) return d;
+      const fila = mapClienteCorporativo(c.nueva);
+      const existe = d.clientesCorporativos.some((x) => x.id === fila.id);
+      return { ...d, clientesCorporativos: existe ? d.clientesCorporativos.map((x) => (x.id === fila.id ? fila : x)) : [fila, ...d.clientesCorporativos] };
+    }
+    case "campanas": {
+      const id = idDe(c.vieja);
+      if (c.tipo === "DELETE") return id ? { ...d, campanas: d.campanas.filter((x) => x.id !== id) } : d;
+      if (!c.nueva) return d;
+      const fila = mapCampana(c.nueva);
+      const existe = d.campanas.some((x) => x.id === fila.id);
+      return { ...d, campanas: existe ? d.campanas.map((x) => (x.id === fila.id ? fila : x)) : [fila, ...d.campanas] };
+    }
+    case "festividades": {
+      const id = idDe(c.vieja);
+      if (c.tipo === "DELETE") return id ? { ...d, festividades: d.festividades.filter((x) => x.id !== id) } : d;
+      if (!c.nueva) return d;
+      const fila = mapFestividad(c.nueva);
+      const existe = d.festividades.some((x) => x.id === fila.id);
+      return { ...d, festividades: existe ? d.festividades.map((x) => (x.id === fila.id ? fila : x)) : [fila, ...d.festividades] };
+    }
+    case "seguimiento_cumpleanos": {
+      const id = idDe(c.vieja);
+      if (c.tipo === "DELETE") return id ? { ...d, seguimientos: d.seguimientos.filter((x) => x.id !== id) } : d;
+      if (!c.nueva) return d;
+      const fila = mapSeguimiento(c.nueva);
+      const existe = d.seguimientos.some((x) => x.id === fila.id);
+      return { ...d, seguimientos: existe ? d.seguimientos.map((x) => (x.id === fila.id ? fila : x)) : [...d.seguimientos, fila] };
+    }
+    // Las 2 tablas de config no tienen `id` propio — su llave es negocioId
+    // (config_saludo_cumpleanos) o negocioId+año+mes (aprobacion_cumpleanos_mes).
+    case "config_saludo_cumpleanos": {
+      const base = c.nueva ?? c.vieja;
+      const negocioId = base?.negocio_id as NegocioId | undefined;
+      if (!negocioId) return d;
+      const sinEsta = d.configsSaludo.filter((x) => x.negocioId !== negocioId);
+      if (c.tipo === "DELETE" || !c.nueva) return { ...d, configsSaludo: sinEsta };
+      const fila: ConfigSaludoRow = { negocioId, mensaje: c.nueva.mensaje as string, hora: c.nueva.hora as string };
+      return { ...d, configsSaludo: [...sinEsta, fila] };
+    }
+    case "aprobacion_cumpleanos_mes": {
+      const base = c.nueva ?? c.vieja;
+      const negocioId = base?.negocio_id as NegocioId | undefined;
+      const anio = base?.anio as number | undefined;
+      const mes = base?.mes as number | undefined;
+      if (!negocioId || anio === undefined || mes === undefined) return d;
+      const sinEsta = d.aprobaciones.filter((x) => !(x.negocioId === negocioId && x.anio === anio && x.mes === mes));
+      if (c.tipo === "DELETE" || !c.nueva) return { ...d, aprobaciones: sinEsta };
+      const fila: AprobacionMesRow = { negocioId, anio, mes, aprobado: c.nueva.aprobado as boolean };
+      return { ...d, aprobaciones: [...sinEsta, fila] };
+    }
+    default:
+      return d;
+  }
+}
 interface DataContextValue extends DatosApp {
   listo: boolean;
   error: string | null;
@@ -80,6 +169,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [intento]);
 
   const recargar = useCallback(() => setIntento((n) => n + 1), []);
+
+  // Se abre recién cuando la carga inicial terminó (evita que un evento que
+  // llegue antes de tiempo se pierda al pisarlo cargarTodo). Se cierra y
+  // vuelve a abrir solo si `recargar()` fuerza una nueva carga completa.
+  useEffect(() => {
+    if (!listo) return;
+    const cerrar = suscribirCambios((c) => setDatos((d) => aplicarCambioRealtime(d, c)));
+    return cerrar;
+  }, [listo]);
 
   const crearUsuario = useCallback(async (u: Usuario) => {
     const creado = await dbCrearUsuario(u);

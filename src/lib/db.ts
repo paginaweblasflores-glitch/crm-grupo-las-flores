@@ -26,7 +26,7 @@ function mapNegocio(r: Record<string, unknown>): Negocio {
   };
 }
 
-function mapUsuario(r: Record<string, unknown>): Usuario {
+export function mapUsuario(r: Record<string, unknown>): Usuario {
   return {
     id: r.id as string,
     nombre: r.nombre as string,
@@ -42,7 +42,7 @@ function mapUsuario(r: Record<string, unknown>): Usuario {
   };
 }
 
-function mapClienteIndividual(r: Record<string, unknown>): ClienteIndividual {
+export function mapClienteIndividual(r: Record<string, unknown>): ClienteIndividual {
   return {
     id: r.id as string,
     negocioId: r.negocio_id as NegocioId,
@@ -66,7 +66,7 @@ function mapClienteIndividual(r: Record<string, unknown>): ClienteIndividual {
   };
 }
 
-function mapClienteCorporativo(r: Record<string, unknown>): ClienteCorporativo {
+export function mapClienteCorporativo(r: Record<string, unknown>): ClienteCorporativo {
   return {
     id: r.id as string,
     negocioId: r.negocio_id as NegocioId,
@@ -88,7 +88,7 @@ function mapClienteCorporativo(r: Record<string, unknown>): ClienteCorporativo {
   };
 }
 
-function mapCampana(r: Record<string, unknown>): Campana {
+export function mapCampana(r: Record<string, unknown>): Campana {
   return {
     id: r.id as string,
     negocios: r.alcanza_todas ? "todas" : ((r.negocio_ids as NegocioId[]) ?? []),
@@ -105,7 +105,7 @@ function mapCampana(r: Record<string, unknown>): Campana {
   };
 }
 
-function mapFestividad(r: Record<string, unknown>): Festividad {
+export function mapFestividad(r: Record<string, unknown>): Festividad {
   return {
     id: r.id as string,
     nombre: r.nombre as string,
@@ -116,7 +116,7 @@ function mapFestividad(r: Record<string, unknown>): Festividad {
   };
 }
 
-function mapSeguimiento(r: Record<string, unknown>): SeguimientoCumple {
+export function mapSeguimiento(r: Record<string, unknown>): SeguimientoCumple {
   return {
     id: r.id as string,
     negocioId: r.negocio_id as NegocioId,
@@ -362,4 +362,59 @@ export async function dbAprobarMes(negocioId: NegocioId, anio: number, mes: numb
   const { error } = await supabase.from("aprobacion_cumpleanos_mes")
     .upsert({ negocio_id: negocioId, anio, mes, aprobado: true, aprobado_en: new Date().toISOString() });
   if (error) throw new Error(error.message);
+}
+
+// ============================================================================
+// Tiempo real (Supabase Realtime) — el "cerebro" central: cuando alguien crea,
+// edita o borra algo en una pestaña/sesión, esto avisa a TODAS las demás
+// pestañas/sesiones abiertas al toque, sin que nadie tenga que recargar la
+// página. Sin esto, cada sesión solo ve la foto del momento en que abrió el
+// CRM (ver cargarTodo arriba) — exactamente el bug que reportó Mijael: un
+// cliente nuevo de Ventas Uno no aparecía en la sesión de Gerente General
+// hasta recargar.
+//
+// Requiere que las tablas estén agregadas a la publicación `supabase_realtime`
+// en Postgres (ver "base de datos/schema.sql" y "habilitar_realtime.sql") —
+// sin eso, Supabase no manda ningún evento aunque el código de acá esté bien.
+export const TABLAS_TIEMPO_REAL = [
+  "usuarios",
+  "clientes_individuales",
+  "clientes_corporativos",
+  "campanas",
+  "festividades",
+  "seguimiento_cumpleanos",
+  "config_saludo_cumpleanos",
+  "aprobacion_cumpleanos_mes",
+] as const;
+
+export type TablaTiempoReal = (typeof TABLAS_TIEMPO_REAL)[number];
+export type TipoCambio = "INSERT" | "UPDATE" | "DELETE";
+
+export interface CambioRealtime {
+  tabla: TablaTiempoReal;
+  tipo: TipoCambio;
+  nueva: Record<string, unknown> | null; // fila nueva (INSERT/UPDATE)
+  vieja: Record<string, unknown> | null; // fila vieja (UPDATE/DELETE) — solo trae las columnas de la llave primaria
+}
+
+// Un solo canal para las 8 tablas — devuelve la función para cerrarlo
+// (llamarla al desmontar el DataProvider).
+export function suscribirCambios(onCambio: (c: CambioRealtime) => void): () => void {
+  let canal = supabase.channel("crm-cambios");
+  for (const tabla of TABLAS_TIEMPO_REAL) {
+    canal = canal.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: tabla },
+      (payload) => {
+        onCambio({
+          tabla,
+          tipo: payload.eventType as TipoCambio,
+          nueva: (payload.new as Record<string, unknown>) ?? null,
+          vieja: (payload.old as Record<string, unknown>) ?? null,
+        });
+      }
+    );
+  }
+  canal.subscribe();
+  return () => { supabase.removeChannel(canal); };
 }
