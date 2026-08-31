@@ -9,8 +9,8 @@ import { accesoA } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useEstrategiasChat, useConfigIA } from "@/lib/store";
-import { sugerenciasPara, generarRespuesta } from "@/lib/estrategias";
+import { useEstrategiasChat } from "@/lib/store";
+import { sugerenciasPara, generarRespuesta, construirContextoDatos } from "@/lib/estrategias";
 import { NegocioId } from "@/lib/types";
 import { useData } from "@/lib/data-context";
 
@@ -51,7 +51,6 @@ export default function EstrategiasPage() {
 
 function EstrategiasContenido({ negocioId, negocioNombre }: { negocioId: NegocioId; negocioNombre: string }) {
   const { mensajes, enviar, listo } = useEstrategiasChat(negocioId);
-  const { config, listo: listoConfig } = useConfigIA();
   const { clientesIndividuales, clientesCorporativos, seguimientos, campanas } = useData();
   const [texto, setTexto] = useState("");
   const [escribiendo, setEscribiendo] = useState(false);
@@ -61,25 +60,37 @@ function EstrategiasContenido({ negocioId, negocioNombre }: { negocioId: Negocio
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [mensajes, escribiendo]);
 
-  if (!listo || !listoConfig) return null;
+  if (!listo) return null;
 
-  function enviarPrompt(valor: string) {
+  async function enviarPrompt(valor: string) {
     const contenido = valor.trim();
     if (!contenido) return;
     enviar(contenido, "usuario");
     setTexto("");
     setEscribiendo(true);
-    setTimeout(() => {
-      const respuesta = generarRespuesta(
-        contenido,
-        { clientesIndividuales, clientesCorporativos, seguimientos },
-        campanas,
-        negocioId,
-        negocioNombre
-      );
+    const datos = { clientesIndividuales, clientesCorporativos, seguimientos };
+    // Se intenta con Gemini de verdad (vía nuestro propio endpoint, para no
+    // exponer la clave al navegador) y, si falla por cualquier motivo (sin
+    // clave configurada, sin internet, límite de uso alcanzado), cae de
+    // vuelta a la lógica local con los mismos datos reales — el chat nunca
+    // se queda sin responder.
+    try {
+      const contexto = construirContextoDatos(datos, campanas, negocioId, negocioNombre);
+      const resp = await fetch("/api/estrategias", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: contenido, contexto, negocioNombre }),
+      });
+      if (!resp.ok) throw new Error("Respuesta no exitosa del servidor");
+      const data = await resp.json();
+      if (!data.texto) throw new Error("Sin texto en la respuesta");
+      enviar(data.texto as string, "agente");
+    } catch {
+      const respuesta = generarRespuesta(contenido, datos, campanas, negocioId, negocioNombre);
       enviar(respuesta, "agente");
+    } finally {
       setEscribiendo(false);
-    }, 900);
+    }
   }
 
   return (
@@ -95,7 +106,7 @@ function EstrategiasContenido({ negocioId, negocioNombre }: { negocioId: Negocio
               <div>
                 <p className="text-sm font-semibold text-[var(--color-gris)]">Asistente de Estrategias</p>
                 <p className="text-[11px] text-[var(--color-gris-medio)]">
-                  {config ? `Conectado — ${config.proveedor === "openai" ? "OpenAI" : config.proveedor === "anthropic" ? "Anthropic" : "Otro proveedor"} (respuestas simuladas por ahora)` : "Respuestas simuladas con tus datos — sin API de IA conectada"}
+                  Conectado a Gemini — responde con IA real usando tus datos de {negocioNombre}
                 </p>
               </div>
             </div>

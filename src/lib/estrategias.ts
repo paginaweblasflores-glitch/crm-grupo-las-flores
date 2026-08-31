@@ -10,6 +10,34 @@ import {
 import { campanasPorNegocio } from "./mock/campanas";
 import { Campana } from "./types";
 
+// Resumen en texto plano de los datos reales del negocio, para dárselo como
+// contexto a la IA (Gemini, ver src/app/api/estrategias/route.ts) — así sus
+// respuestas se basan en números reales y no inventa cifras. Reutiliza las
+// mismas funciones de metrics.ts que ya usa generarRespuesta().
+export function construirContextoDatos(
+  datos: DatosMetricas,
+  campanasTodas: Campana[],
+  negocioId: NegocioId,
+  negocioNombre: string
+): string {
+  const mes = resumenPeriodo(datos, negocioId, "mes");
+  const tipo = clientesPorTipoPeriodo(datos, negocioId, "mes");
+  const cumple = resumenCumpleanosMes(datos, negocioId);
+  const tasaCumple = cumple.enviados === 0 ? 0 : Math.round((cumple.personasQueReservaron / cumple.enviados) * 100);
+  const origen = origenPrincipal(datos, negocioId);
+  const campanas = campanasPorNegocio(campanasTodas, negocioId);
+  const ultimaCampana = campanas[campanas.length - 1];
+
+  return [
+    `Negocio: ${negocioNombre}.`,
+    `Clientes nuevos este mes: ${mes.clientesNuevos} (${tipo.individuales} individuales, ${tipo.corporativos} corporativos).`,
+    origen ? `Canal principal de registro: "${origen.nombre}" (${origen.valor} clientes, histórico).` : "Sin datos de canal todavía.",
+    `Cumpleaños este mes: ${cumple.totalDelMes} clientes cumplen años, ${cumple.enviados} saludos enviados, ${cumple.personasQueReservaron} terminaron visitando (${tasaCumple}% de conversión).`,
+    ultimaCampana ? `Última campaña: "${ultimaCampana.nombre}" (estado: ${ultimaCampana.estado}).` : "Sin campañas registradas todavía.",
+    `Campañas totales del negocio: ${campanas.length}.`,
+  ].join("\n");
+}
+
 export function sugerenciasPara(): string[] {
   return [
     "Arma una campaña para el próximo mes",
