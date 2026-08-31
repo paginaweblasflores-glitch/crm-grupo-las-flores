@@ -86,6 +86,14 @@ export default function CumpleanosPage() {
   const hoy = proximosCumpleanosDe(todosLosClientes, BASE_DATE, 0);
   const proximos = proximosCumpleanosDe(todosLosClientes, BASE_DATE, 10).filter((p) => p.diffDias > 0);
   const seguimientos = seguimientosConNuevos(seguimientosPorNegocio(seguimientosReales, negocio.id), todosLosClientes, negocio.id);
+  // "Próximos cumpleaños" es una lista de ACCIÓN ("a quién todavía le falta
+  // el saludo") — a quien ya se le mandó no le queda nada pendiente ahí, su
+  // historia sigue en "Seguimiento" (más abajo), no duplicada acá. Los
+  // StatTiles de "Cumplen hoy"/"Próximos 10 días" sí siguen contando a
+  // todos por igual (hoy/proximos, sin filtrar) — son un dato informativo,
+  // no una lista de pendientes.
+  const idsYaSaludados = new Set(seguimientos.filter((s) => s.saludoEnviado).map((s) => s.clienteId));
+  const pendientesDeSaludar = [...hoy, ...proximos].filter((p) => !idsYaSaludados.has(p.cliente.id));
   const resumenMes = resumenCumpleanosMes({ clientesIndividuales, clientesCorporativos, seguimientos: seguimientosReales }, negocio.id);
 
   const config: ConfigSaludo = configsSaludo.find((c) => c.negocioId === negocio.id)
@@ -144,11 +152,15 @@ export default function CumpleanosPage() {
 
         <Card>
           <CardHeader title="Próximos cumpleaños" subtitle="Abre el chat para saludar sin salir del sistema — mismo lugar donde queda registrada la conversación" />
-          {proximos.length === 0 && hoy.length === 0 ? (
-            <p className="text-sm text-[var(--color-gris-medio)] py-6 text-center">Nadie cumple años en los próximos 10 días.</p>
+          {pendientesDeSaludar.length === 0 ? (
+            <p className="text-sm text-[var(--color-gris-medio)] py-6 text-center">
+              {proximos.length === 0 && hoy.length === 0
+                ? "Nadie cumple años en los próximos 10 días."
+                : "Ya se les mandó el saludo a todos los que cumplen años en los próximos 10 días."}
+            </p>
           ) : (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {[...hoy, ...proximos].map(({ cliente, diffDias }) => (
+              {pendientesDeSaludar.map(({ cliente, diffDias }) => (
                 <div key={cliente.id} className="rounded-xl border border-[var(--color-gris-claro)]/40 p-4">
                   <div className="flex items-start justify-between mb-2">
                     <p className="font-medium text-sm text-[var(--color-gris)]">{cliente.nombres} {cliente.apellidos}</p>
