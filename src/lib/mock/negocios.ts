@@ -9,13 +9,17 @@ export const NEGOCIO_TODAS: Negocio = {
   descripcionEstado: "Grupo Las Flores · Vista consolidada de todas las sedes",
 };
 
+// Colores oficiales por negocio (decisión de Mijael) — colorAcento es la
+// única fuente de este color en todo el sistema (badges, punto de color
+// junto al nombre, gráficos comparativos, selector de sede en el Topbar,
+// etc.) — cambiarlo acá los actualiza en todos esos lugares a la vez.
 export const NEGOCIOS_SEDES: Negocio[] = [
   {
     id: "las-flores",
     nombre: "Restaurante Las Flores",
     tipo: "restaurante",
     operando: true,
-    colorAcento: "#8c3a25",
+    colorAcento: "#3E6B4F", // verde
     descripcionEstado: "Web propia, en pruebas",
   },
   {
@@ -23,7 +27,7 @@ export const NEGOCIOS_SEDES: Negocio[] = [
     nombre: "Hotel Umaru",
     tipo: "hotel",
     operando: true,
-    colorAcento: "#5c7c8c",
+    colorAcento: "#8B5E34", // marrón tierra
     descripcionEstado: "Web gestionada por empresa externa en Lima",
   },
   {
@@ -31,7 +35,7 @@ export const NEGOCIOS_SEDES: Negocio[] = [
     nombre: "Mamina Restobar",
     tipo: "restobar",
     operando: true,
-    colorAcento: "#a0522d",
+    colorAcento: "#C9A227", // dorado
     descripcionEstado: "Restobar, coctelería y gastronomía nocturna",
   },
 ];

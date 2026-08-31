@@ -30,16 +30,6 @@ interface ClienteRegistrado {
 
 const MESES_LABEL = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"];
 
-// Colores del gráfico Anual "por negocio" — a pedido, distintos de los
-// colorAcento de marca que usa el resto del sistema (esos son para
-// identificar cada sede en tarjetas/badges; acá se pidieron específicos
-// para que las 3 barras se distingan bien una de otra en un mismo gráfico).
-const COLOR_ANUAL_POR_NEGOCIO: Record<string, string> = {
-  "las-flores": "#3E6B4F", // verde
-  umaru: "#8B5E34",        // marrón
-  mamina: "#2C2420",       // oscuro
-};
-
 interface AsesorEstadistica {
   usuario: Usuario;
   negocioNombre: string;
@@ -374,11 +364,7 @@ export function EstadisticasVendedores({
           <BarChartSerie
             data={desempenoMensualPorNegocio}
             xKey="mes"
-            series={negociosOperando.map((n) => ({
-              key: n.id,
-              nombre: n.nombre,
-              color: COLOR_ANUAL_POR_NEGOCIO[n.id] ?? n.colorAcento,
-            }))}
+            series={negociosOperando.map((n) => ({ key: n.id, nombre: n.nombre, color: n.colorAcento }))}
           />
         </Card>
       ) : (periodo === "mes" || periodo === "anio") && estadisticasOrdenadas.length > 0 && (
