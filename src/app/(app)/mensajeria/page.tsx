@@ -145,6 +145,11 @@ function MensajeriaInner() {
 
   const clienteActivo = clientes.find((c) => c.id === clienteId) ?? filtrados[0] ?? null;
   const seguimientoActivo = clienteActivo ? seguimientoPorCliente.get(clienteActivo.id) : undefined;
+  // "Mensajes programados" es la cola de lo que TODAVÍA falta enviar — en
+  // cuanto se manda (AutoEnvioCumpleanos lo marca saludoEnviado=true), sale
+  // de esta lista sola. Su historial se sigue viendo en la tabla
+  // "Seguimiento" del módulo Cumpleaños, no acá.
+  const seguimientosPendientes = seguimientos.filter((s) => !s.saludoEnviado);
 
   return (
     <>
@@ -161,12 +166,12 @@ function MensajeriaInner() {
             onClick={() => setVista("programados")}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${vista === "programados" ? "bg-[var(--color-terracota)] text-white" : "text-[var(--color-gris-medio)]"}`}
           >
-            <CalendarClock size={14} /> Mensajes programados ({seguimientos.length})
+            <CalendarClock size={14} /> Mensajes programados ({seguimientosPendientes.length})
           </button>
         </div>
 
         {vista === "programados" ? (
-          <MensajesProgramados seguimientos={seguimientos} negocioNombre={negocio.nombre} onVerChat={(id) => { setClienteId(id); setVista("chats"); }} />
+          <MensajesProgramados seguimientos={seguimientosPendientes} negocioNombre={negocio.nombre} onVerChat={(id) => { setClienteId(id); setVista("chats"); }} />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5 h-[calc(100vh-15rem)]">
             <Card padding="p-0" className="flex flex-col overflow-hidden">
@@ -257,7 +262,9 @@ function MensajesProgramados({
         </tbody>
       </Table>
       {seguimientos.length === 0 && (
-        <p className="text-center text-sm text-[var(--color-gris-medio)] py-10">Nadie cumple años este mes todavía.</p>
+        <p className="text-center text-sm text-[var(--color-gris-medio)] py-10">
+          No hay saludos pendientes de enviar — nadie cumple años este mes todavía, o ya se les mandó a todos.
+        </p>
       )}
     </Card>
   );
