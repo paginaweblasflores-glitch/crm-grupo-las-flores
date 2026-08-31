@@ -135,7 +135,6 @@ export default function CumpleanosPage() {
         />
 
         <ConfiguracionSaludoGeneral
-          negocioNombre={negocio.nombre}
           editable={editable}
           config={config}
           guardarConfig={guardarConfig}
@@ -265,9 +264,9 @@ function AutoEnvioCumpleanos({
 }
 
 function ConfiguracionSaludoGeneral({
-  negocioNombre, editable, config, guardarConfig,
+  editable, config, guardarConfig,
 }: {
-  negocioNombre: string; editable: boolean;
+  editable: boolean;
   config: ConfigSaludo; guardarConfig: (c: ConfigSaludo) => void;
 }) {
   const [abierto, setAbierto] = useState(false);
@@ -295,8 +294,15 @@ function ConfiguracionSaludoGeneral({
       </div>
 
       {!abierto && (
+        // Vista previa de la PLANTILLA general, no del mensaje de un cliente
+        // puntual — se muestra tal cual está guardada, con {nombre} y
+        // {negocio} todavía como texto literal (antes esto llamaba a
+        // interpolarPlantilla() pasándole "{nombre}" como si fuera el
+        // nombre real, para que ESE quedara sin tocar — pero la misma
+        // llamada sí reemplazaba {negocio} por el nombre real del negocio,
+        // mostrando una vista previa a medio interpolar).
         <p className="text-sm text-[var(--color-gris-medio)] bg-[var(--color-crema)] rounded-xl p-3 whitespace-pre-line">
-          {interpolarPlantilla(config.mensaje, "{nombre}", negocioNombre)}
+          {config.mensaje}
         </p>
       )}
 
