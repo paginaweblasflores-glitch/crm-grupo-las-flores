@@ -12,6 +12,7 @@ import { Table, Thead, Th, Tr, Td } from "@/components/ui/Table";
 import { exportarCSV } from "@/lib/export-csv";
 import { useData } from "@/lib/data-context";
 import { NuevoClienteForm } from "@/components/clientes/NuevoClienteForm";
+import { ModalConfirmar } from "@/components/ui/ModalConfirmar";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import { valorOGuion } from "@/lib/formato";
 import { ClienteIndividual, ClienteCorporativo } from "@/lib/types";
@@ -24,6 +25,8 @@ export default function ClientesPage() {
   const [formAbierto, setFormAbierto] = useState(false);
   const [editandoIndividual, setEditandoIndividual] = useState<ClienteIndividual | null>(null);
   const [editandoCorporativo, setEditandoCorporativo] = useState<ClienteCorporativo | null>(null);
+  const [eliminandoIndividual, setEliminandoIndividual] = useState<ClienteIndividual | null>(null);
+  const [eliminandoCorporativo, setEliminandoCorporativo] = useState<ClienteCorporativo | null>(null);
   const mostrarForm = formAbierto || editandoIndividual !== null || editandoCorporativo !== null;
   function cerrarForm() {
     setFormAbierto(false);
@@ -202,10 +205,7 @@ export default function ClientesPage() {
                               titulo="Eliminar cliente"
                               icono={<Trash2 size={14} />}
                               tono="rojo"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (confirm(`¿Eliminar a ${c.nombres} ${c.apellidos}? Esto no se puede deshacer.`)) void eliminarClienteIndividual(c.id);
-                              }}
+                              onClick={(e) => { e.stopPropagation(); setEliminandoIndividual(c); }}
                             />
                           </>
                         )}
@@ -257,9 +257,7 @@ export default function ClientesPage() {
                               titulo="Eliminar cliente"
                               icono={<Trash2 size={14} />}
                               tono="rojo"
-                              onClick={() => {
-                                if (confirm(`¿Eliminar a ${c.razonSocial}? Esto no se puede deshacer.`)) void eliminarClienteCorporativo(c.id);
-                              }}
+                              onClick={() => setEliminandoCorporativo(c)}
                             />
                           </>
                         )}
@@ -275,6 +273,25 @@ export default function ClientesPage() {
           )}
         </Card>
       </main>
+
+      {eliminandoIndividual && (
+        <ModalConfirmar
+          titulo="Eliminar cliente"
+          mensaje={`¿Eliminar a ${eliminandoIndividual.nombres} ${eliminandoIndividual.apellidos}? Esto no se puede deshacer.`}
+          textoConfirmar="Eliminar"
+          onCancelar={() => setEliminandoIndividual(null)}
+          onConfirmar={() => { void eliminarClienteIndividual(eliminandoIndividual.id); setEliminandoIndividual(null); }}
+        />
+      )}
+      {eliminandoCorporativo && (
+        <ModalConfirmar
+          titulo="Eliminar cliente"
+          mensaje={`¿Eliminar a ${eliminandoCorporativo.razonSocial}? Esto no se puede deshacer.`}
+          textoConfirmar="Eliminar"
+          onCancelar={() => setEliminandoCorporativo(null)}
+          onConfirmar={() => { void eliminarClienteCorporativo(eliminandoCorporativo.id); setEliminandoCorporativo(null); }}
+        />
+      )}
     </>
   );
 }

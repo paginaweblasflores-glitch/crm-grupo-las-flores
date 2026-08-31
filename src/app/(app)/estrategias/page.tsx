@@ -9,6 +9,7 @@ import { accesoA } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ModalConfirmar } from "@/components/ui/ModalConfirmar";
 import { useEstrategiasChat, useConfigIA } from "@/lib/store";
 import { sugerenciasPara, generarRespuesta, construirContextoDatos } from "@/lib/estrategias";
 import { NegocioId } from "@/lib/types";
@@ -57,6 +58,7 @@ function EstrategiasContenido({
   const { clientesIndividuales, clientesCorporativos, seguimientos, campanas, festividades, usuarios } = useData();
   const [texto, setTexto] = useState("");
   const [escribiendo, setEscribiendo] = useState(false);
+  const [confirmandoLimpiar, setConfirmandoLimpiar] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -122,7 +124,7 @@ function EstrategiasContenido({
             <div className="flex items-center gap-1">
               {mensajes.length > 0 && (
                 <button
-                  onClick={() => { if (confirm("¿Borrar toda la conversación de Estrategias con este negocio?")) limpiar(); }}
+                  onClick={() => setConfirmandoLimpiar(true)}
                   title="Limpiar chat"
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] hover:text-[var(--color-rojo)] transition-colors"
                 >
@@ -199,6 +201,16 @@ function EstrategiasContenido({
           </div>
         </Card>
       </main>
+
+      {confirmandoLimpiar && (
+        <ModalConfirmar
+          titulo="Limpiar chat"
+          mensaje="¿Borrar toda la conversación de Estrategias con este negocio? Esto no se puede deshacer."
+          textoConfirmar="Borrar"
+          onCancelar={() => setConfirmandoLimpiar(false)}
+          onConfirmar={() => { limpiar(); setConfirmandoLimpiar(false); }}
+        />
+      )}
     </>
   );
 }
