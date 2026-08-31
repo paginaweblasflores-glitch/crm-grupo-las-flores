@@ -108,6 +108,7 @@ export interface SeguimientoCumple {
   fechaCumple: string;
   celular: string;
   saludoEnviado: boolean;
+  saludoEnviadoEn?: string; // timestamp real (con hora) de cuándo se mandó — para el chat, no para filtrar
   reservacion: "si" | "no" | "pendiente";
   // Personalización del saludo para ESTE cliente — si no están definidos, se
   // usa la plantilla/hora general del negocio (ver config_saludo_cumpleanos).

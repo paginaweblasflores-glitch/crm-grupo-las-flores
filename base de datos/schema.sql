@@ -146,6 +146,10 @@ create table seguimiento_cumpleanos (
   celular text not null,
   -- Estado lo marca el sistema solo (AutoEnvioCumpleanos), nunca a mano.
   saludo_enviado boolean not null default false,
+  -- Hora real (con hora) en que se mandó el saludo — la usa el chat de
+  -- Mensajería para mostrar el mensaje con su hora verdadera, en vez de
+  -- fabricar una fecha relativa inventada.
+  saludo_enviado_en timestamptz,
   -- Reservación la actualiza Ventas a mano después de hablar con el cliente.
   reservacion text not null default 'pendiente' check (reservacion in ('si', 'no', 'pendiente')),
   -- Personalización del saludo para ESTE cliente — si son null, se usa la

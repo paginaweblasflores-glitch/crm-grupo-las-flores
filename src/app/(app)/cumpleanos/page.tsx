@@ -222,8 +222,9 @@ function AutoEnvioCumpleanos({
       if (h * 60 + (m || 0) > minutosAhora) return;
       const plantilla = s.mensajePersonalizado || config.mensaje;
       const texto = interpolarPlantilla(plantilla, s.nombre.split(" ")[0], negocioNombre);
+      const enviadoEn = new Date().toISOString();
       agregarMensajeChatDirecto(s.clienteId, texto, "negocio", `${s.id}-auto-saludo`);
-      void guardarSeguimiento(s, { saludoEnviado: true }, reales, crearSeguimiento, actualizarSeguimiento);
+      void guardarSeguimiento(s, { saludoEnviado: true, saludoEnviadoEn: enviadoEn }, reales, crearSeguimiento, actualizarSeguimiento);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aprobado, seguimientos.length, config.hora, config.mensaje, reales]);

@@ -1,10 +1,7 @@
 // Plantilla del mensaje de cumpleaños (mismo patrón que una plantilla real
-// aprobada de WhatsApp Business API: texto fijo + variables como {nombre})
-// y el "sembrado" de conversaciones ya avanzadas, para que la demo muestre
-// cómo se ve un caso ya respondido y confirmado, no solo casilleros vacíos.
+// aprobada de WhatsApp Business API: texto fijo + variables como {nombre}).
 
 import { Campana, Mensaje, SeguimientoCumple } from "./types";
-import { BASE_DATE } from "./mock/seed";
 
 // Plantilla y hora por defecto del saludo automático — editables desde
 // Cumpleaños (Ventas). {nombre} se reemplaza por el nombre del cliente,
@@ -22,47 +19,26 @@ export function plantillaCumpleanos(nombre: string, negocioNombre: string): stri
   return interpolarPlantilla(PLANTILLA_CUMPLEANOS_DEFECTO, nombre, negocioNombre);
 }
 
-function hace(dias: number, horas: number, minutos: number): string {
-  const d = new Date(BASE_DATE);
-  d.setDate(d.getDate() - dias);
-  d.setHours(horas, minutos, 0, 0);
-  return d.toISOString();
-}
-
-// Conversación determinística según el estado real del seguimiento — no es
-// aleatoria, así que siempre se ve igual entre recargas de la página. Solo
-// depende de saludoEnviado + reservacion (los dos únicos campos que existen
-// ahora) — sin el detalle de "visto"/"respuesta" que tenía antes.
+// El único mensaje que el chat puede dar por hecho: el saludo automático que
+// SÍ se mandó de verdad, con su hora real (saludoEnviadoEn). Antes esta
+// función también fabricaba una charla completa inventada (el cliente
+// "respondiendo" cosas que nunca escribió) cuando reservacion era "sí"/"no"
+// — tenía sentido con datos 100% de mentira, pero le pone palabras
+// inventadas en la boca a un cliente real. El estado de la reservación ya se
+// ve aparte, como badge, en la tabla de Cumpleaños — no hace falta
+// simularlo acá también.
 export function semillaConversacion(s: SeguimientoCumple, negocioNombre: string): Mensaje[] {
   if (!s.saludoEnviado) return [];
-
-  const mensajes: Mensaje[] = [
-    { id: `${s.id}-m1`, de: "negocio", texto: plantillaCumpleanos(s.nombre.split(" ")[0], negocioNombre), hora: hace(3, 9, 15) },
-  ];
-
-  if (s.reservacion === "pendiente") {
-    return mensajes;
-  }
-
-  if (s.reservacion === "no") {
-    mensajes.push({
-      id: `${s.id}-m2`,
-      de: "cliente",
-      texto: "¡Muchas gracias por acordarte! 🌸 Esta vez no podré pasar, pero en otra ocasión seguro sí.",
-      hora: hace(3, 9, 54),
-    });
-    return mensajes;
-  }
-
-  // reservacion === "si"
-  mensajes.push(
-    { id: `${s.id}-m2`, de: "cliente", texto: "¡Muchas gracias! Qué lindo detalle 🌸 ¿Tienen mesa disponible este fin de semana?", hora: hace(3, 9, 54) },
-    { id: `${s.id}-m3`, de: "negocio", texto: "¡Perfecto! Cuéntanos para cuántas personas sería la mesa.", hora: hace(3, 10, 5) },
-    { id: `${s.id}-m4`, de: "cliente", texto: "Seríamos 4 personas, ¿se podría el sábado a las 8pm?", hora: hace(3, 10, 22) },
-    { id: `${s.id}-m5`, de: "negocio", texto: "¡Reserva confirmada para el sábado 8pm, mesa para 4! Te esperamos 🎉", hora: hace(2, 16, 40) },
-    { id: `${s.id}-m6`, de: "cliente", texto: "Genial, muchas gracias, ahí estaremos 🙌", hora: hace(2, 16, 47) },
-  );
-  return mensajes;
+  return [{
+    id: `${s.id}-m1`,
+    de: "negocio",
+    texto: plantillaCumpleanos(s.nombre.split(" ")[0], negocioNombre),
+    // Si por algún motivo una fila vieja no tiene la hora real guardada
+    // (creada antes de este cambio), se usa el momento en que se está
+    // generando esta vista como último recurso — sigue siendo mejor que
+    // fabricar "hace 3 días" a ciegas.
+    hora: s.saludoEnviadoEn ?? new Date().toISOString(),
+  }];
 }
 
 // Mismo criterio que semillaConversacion: se genera al vuelo a partir del

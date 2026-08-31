@@ -158,6 +158,7 @@ export function mapSeguimiento(r: Record<string, unknown>): SeguimientoCumple {
     fechaCumple: r.fecha_cumple as string,
     celular: r.celular as string,
     saludoEnviado: r.saludo_enviado as boolean,
+    saludoEnviadoEn: (r.saludo_enviado_en as string) ?? undefined,
     reservacion: r.reservacion as SeguimientoCumple["reservacion"],
     mensajePersonalizado: (r.mensaje_personalizado as string) ?? undefined,
     horaPersonalizada: (r.hora_personalizada as string) ?? undefined,
@@ -369,6 +370,11 @@ export async function dbCrearSeguimiento(s: SeguimientoCumple): Promise<Seguimie
   const { data, error } = await supabase.from("seguimiento_cumpleanos").insert({
     negocio_id: s.negocioId, cliente_id: s.clienteId, cliente_tipo: s.clienteTipo, nombre: s.nombre,
     fecha_cumple: s.fechaCumple, celular: s.celular, saludo_enviado: s.saludoEnviado,
+    // Si se crea ya con el saludo marcado como enviado (caso normal: viene
+    // de guardarSeguimiento() cuando AutoEnvioCumpleanos manda el saludo a un
+    // cliente que todavía no tenía fila propia), se sella la hora real acá
+    // mismo — así el chat siempre tiene una hora verdadera, nunca inventada.
+    saludo_enviado_en: s.saludoEnviado ? (s.saludoEnviadoEn ?? new Date().toISOString()) : null,
     reservacion: s.reservacion, mensaje_personalizado: s.mensajePersonalizado ?? null,
     hora_personalizada: s.horaPersonalizada ?? null,
   }).select().single();
@@ -378,7 +384,13 @@ export async function dbCrearSeguimiento(s: SeguimientoCumple): Promise<Seguimie
 
 export async function dbActualizarSeguimiento(id: string, patch: Partial<SeguimientoCumple>): Promise<void> {
   const row: Record<string, unknown> = {};
-  if (patch.saludoEnviado !== undefined) row.saludo_enviado = patch.saludoEnviado;
+  if (patch.saludoEnviado !== undefined) {
+    row.saludo_enviado = patch.saludoEnviado;
+    // Misma idea que arriba: en cuanto se marca enviado, se sella la hora
+    // real de verdad — no se toca si ya se había sellado antes (evita que
+    // una actualización posterior sin relación pise la hora original).
+    if (patch.saludoEnviado) row.saludo_enviado_en = patch.saludoEnviadoEn ?? new Date().toISOString();
+  }
   if (patch.reservacion !== undefined) row.reservacion = patch.reservacion;
   if (patch.mensajePersonalizado !== undefined) row.mensaje_personalizado = patch.mensajePersonalizado;
   if (patch.horaPersonalizada !== undefined) row.hora_personalizada = patch.horaPersonalizada;
