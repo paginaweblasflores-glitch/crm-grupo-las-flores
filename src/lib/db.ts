@@ -296,6 +296,53 @@ export async function dbCrearClienteCorporativo(c: ClienteCorporativo): Promise<
   return mapClienteCorporativo(data);
 }
 
+export async function dbActualizarClienteIndividual(id: string, patch: Partial<ClienteIndividual>): Promise<void> {
+  const row: Record<string, unknown> = {};
+  if (patch.nombres !== undefined) row.nombres = patch.nombres;
+  if (patch.apellidos !== undefined) row.apellidos = patch.apellidos;
+  if (patch.fechaNacimiento !== undefined) row.fecha_nacimiento = patch.fechaNacimiento;
+  if (patch.celular !== undefined) row.celular = patch.celular;
+  if (patch.pais !== undefined) row.pais = patch.pais;
+  if (patch.departamento !== undefined) row.departamento = patch.departamento;
+  if (patch.provincia !== undefined) row.provincia = patch.provincia;
+  if (patch.distrito !== undefined) row.distrito = patch.distrito;
+  if (patch.tipoDocumento !== undefined) row.tipo_documento = patch.tipoDocumento;
+  if (patch.numeroDocumento !== undefined) row.numero_documento = patch.numeroDocumento;
+  if (patch.email !== undefined) row.email = patch.email;
+  if (patch.genero !== undefined) row.genero = patch.genero;
+  if (patch.aceptaComunicaciones !== undefined) row.acepta_comunicaciones = patch.aceptaComunicaciones;
+  const { error } = await supabase.from("clientes_individuales").update(row).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function dbEliminarClienteIndividual(id: string): Promise<void> {
+  const { error } = await supabase.from("clientes_individuales").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function dbActualizarClienteCorporativo(id: string, patch: Partial<ClienteCorporativo>): Promise<void> {
+  const row: Record<string, unknown> = {};
+  if (patch.razonSocial !== undefined) row.razon_social = patch.razonSocial;
+  if (patch.ruc !== undefined) row.ruc = patch.ruc;
+  if (patch.direccion !== undefined) row.direccion = patch.direccion;
+  if (patch.celular !== undefined) row.celular = patch.celular;
+  if (patch.fechaAniversario !== undefined) row.fecha_aniversario = patch.fechaAniversario || null;
+  if (patch.nombreRepresentante !== undefined) row.nombre_representante = patch.nombreRepresentante;
+  if (patch.cargoRepresentante !== undefined) row.cargo_representante = patch.cargoRepresentante;
+  if (patch.pais !== undefined) row.pais = patch.pais;
+  if (patch.departamento !== undefined) row.departamento = patch.departamento;
+  if (patch.provincia !== undefined) row.provincia = patch.provincia;
+  if (patch.distrito !== undefined) row.distrito = patch.distrito;
+  if (patch.aceptaComunicaciones !== undefined) row.acepta_comunicaciones = patch.aceptaComunicaciones;
+  const { error } = await supabase.from("clientes_corporativos").update(row).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function dbEliminarClienteCorporativo(id: string): Promise<void> {
+  const { error } = await supabase.from("clientes_corporativos").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 // ============================================================================
 // Campañas
 // ============================================================================

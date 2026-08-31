@@ -23,7 +23,8 @@ import {
 import {
   cargarTodo, type DatosApp, type ConfigSaludoRow, type AprobacionMesRow,
   dbCrearUsuario, dbActualizarUsuario, dbEliminarUsuario,
-  dbCrearClienteIndividual, dbCrearClienteCorporativo,
+  dbCrearClienteIndividual, dbActualizarClienteIndividual, dbEliminarClienteIndividual,
+  dbCrearClienteCorporativo, dbActualizarClienteCorporativo, dbEliminarClienteCorporativo,
   dbCrearCampana, dbActualizarCampana, dbEliminarCampana,
   dbCrearFestividad, dbActualizarFestividad, dbEliminarFestividad,
   dbCrearSeguimiento, dbActualizarSeguimiento,
@@ -128,7 +129,11 @@ interface DataContextValue extends DatosApp {
   eliminarUsuario: (id: string) => Promise<void>;
 
   crearClienteIndividual: (c: ClienteIndividual) => Promise<void>;
+  actualizarClienteIndividual: (id: string, patch: Partial<ClienteIndividual>) => Promise<void>;
+  eliminarClienteIndividual: (id: string) => Promise<void>;
   crearClienteCorporativo: (c: ClienteCorporativo) => Promise<void>;
+  actualizarClienteCorporativo: (id: string, patch: Partial<ClienteCorporativo>) => Promise<void>;
+  eliminarClienteCorporativo: (id: string) => Promise<void>;
 
   crearCampana: (c: Campana) => Promise<void>;
   actualizarCampana: (id: string, patch: Partial<Campana>) => Promise<void>;
@@ -196,9 +201,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const creado = await dbCrearClienteIndividual(c);
     setDatos((d) => ({ ...d, clientesIndividuales: [creado, ...d.clientesIndividuales] }));
   }, []);
+  const actualizarClienteIndividual = useCallback(async (id: string, patch: Partial<ClienteIndividual>) => {
+    await dbActualizarClienteIndividual(id, patch);
+    setDatos((d) => ({ ...d, clientesIndividuales: d.clientesIndividuales.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
+  }, []);
+  const eliminarClienteIndividual = useCallback(async (id: string) => {
+    await dbEliminarClienteIndividual(id);
+    setDatos((d) => ({ ...d, clientesIndividuales: d.clientesIndividuales.filter((c) => c.id !== id) }));
+  }, []);
   const crearClienteCorporativo = useCallback(async (c: ClienteCorporativo) => {
     const creado = await dbCrearClienteCorporativo(c);
     setDatos((d) => ({ ...d, clientesCorporativos: [creado, ...d.clientesCorporativos] }));
+  }, []);
+  const actualizarClienteCorporativo = useCallback(async (id: string, patch: Partial<ClienteCorporativo>) => {
+    await dbActualizarClienteCorporativo(id, patch);
+    setDatos((d) => ({ ...d, clientesCorporativos: d.clientesCorporativos.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
+  }, []);
+  const eliminarClienteCorporativo = useCallback(async (id: string) => {
+    await dbEliminarClienteCorporativo(id);
+    setDatos((d) => ({ ...d, clientesCorporativos: d.clientesCorporativos.filter((c) => c.id !== id) }));
   }, []);
 
   const crearCampana = useCallback(async (c: Campana) => {
@@ -260,7 +281,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     error,
     recargar,
     crearUsuario, actualizarUsuario, eliminarUsuario,
-    crearClienteIndividual, crearClienteCorporativo,
+    crearClienteIndividual, actualizarClienteIndividual, eliminarClienteIndividual,
+    crearClienteCorporativo, actualizarClienteCorporativo, eliminarClienteCorporativo,
     crearCampana, actualizarCampana, eliminarCampana,
     crearFestividad, actualizarFestividad, eliminarFestividad,
     crearSeguimiento, actualizarSeguimiento,

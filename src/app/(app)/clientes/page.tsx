@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, UserPlus, MessageCircle } from "lucide-react";
+import { Download, UserPlus, MessageCircle, Pencil, Trash2 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { puedeRegistrarClientes } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
@@ -14,6 +14,7 @@ import { useData } from "@/lib/data-context";
 import { NuevoClienteForm } from "@/components/clientes/NuevoClienteForm";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import { valorOGuion } from "@/lib/formato";
+import { ClienteIndividual, ClienteCorporativo } from "@/lib/types";
 
 export default function ClientesPage() {
   const { usuario, negocio } = useApp();
@@ -21,10 +22,19 @@ export default function ClientesPage() {
   const [tab, setTab] = useState<"individual" | "corporativo">("individual");
   const [busqueda, setBusqueda] = useState("");
   const [formAbierto, setFormAbierto] = useState(false);
+  const [editandoIndividual, setEditandoIndividual] = useState<ClienteIndividual | null>(null);
+  const [editandoCorporativo, setEditandoCorporativo] = useState<ClienteCorporativo | null>(null);
+  const mostrarForm = formAbierto || editandoIndividual !== null || editandoCorporativo !== null;
+  function cerrarForm() {
+    setFormAbierto(false);
+    setEditandoIndividual(null);
+    setEditandoCorporativo(null);
+  }
 
   const {
     clientesIndividuales, clientesCorporativos,
-    crearClienteIndividual, crearClienteCorporativo,
+    crearClienteIndividual, actualizarClienteIndividual, eliminarClienteIndividual,
+    crearClienteCorporativo, actualizarClienteCorporativo, eliminarClienteCorporativo,
   } = useData();
 
   // "Todas las sucursales" no es un negocio real donde se pueda registrar un
@@ -119,7 +129,7 @@ export default function ClientesPage() {
             <SearchInput value={busqueda} onChange={setBusqueda} placeholder="Buscar por nombre, teléfono, país o RUC…" />
             {puedeRegistrarClientes(usuario.rolTipo) && (
               <button
-                onClick={() => setFormAbierto((v) => !v)}
+                onClick={() => (mostrarForm ? cerrarForm() : setFormAbierto(true))}
                 className="flex items-center gap-2 bg-[var(--color-terracota)] text-white text-sm font-semibold rounded-xl px-4 py-2.5 hover:opacity-90 transition-opacity whitespace-nowrap"
               >
                 <UserPlus size={15} />
@@ -136,21 +146,23 @@ export default function ClientesPage() {
           </div>
         </div>
 
-        {formAbierto && (
+        {mostrarForm && (
           <NuevoClienteForm
             negocioId={negocio.id}
             registradoPor={usuario.id}
             celularExiste={celularExiste}
-            onCancelar={() => setFormAbierto(false)}
+            individualEditando={editandoIndividual ?? undefined}
+            corporativoEditando={editandoCorporativo ?? undefined}
+            onCancelar={cerrarForm}
             onGuardarIndividual={(c) => {
-              void crearClienteIndividual(c);
+              void (editandoIndividual ? actualizarClienteIndividual(c.id, c) : crearClienteIndividual(c));
               setTab("individual");
-              setFormAbierto(false);
+              cerrarForm();
             }}
             onGuardarCorporativo={(c) => {
-              void crearClienteCorporativo(c);
+              void (editandoCorporativo ? actualizarClienteCorporativo(c.id, c) : crearClienteCorporativo(c));
               setTab("corporativo");
-              setFormAbierto(false);
+              cerrarForm();
             }}
           />
         )}
@@ -176,7 +188,29 @@ export default function ClientesPage() {
                     <Td>{valorOGuion(c.departamento)}</Td>
                     <Td>{valorOGuion(c.provincia)}</Td>
                     <Td>{valorOGuion(c.distrito)}</Td>
-                    <Td><BotonWhatsApp celular={c.celular} /></Td>
+                    <Td>
+                      <div className="flex items-center gap-1">
+                        <BotonWhatsApp celular={c.celular} />
+                        {puedeRegistrarClientes(usuario.rolTipo) && (
+                          <>
+                            <BotonAccion
+                              titulo="Editar cliente"
+                              icono={<Pencil size={14} />}
+                              onClick={(e) => { e.stopPropagation(); setEditandoIndividual(c); }}
+                            />
+                            <BotonAccion
+                              titulo="Eliminar cliente"
+                              icono={<Trash2 size={14} />}
+                              tono="rojo"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`¿Eliminar a ${c.nombres} ${c.apellidos}? Esto no se puede deshacer.`)) void eliminarClienteIndividual(c.id);
+                              }}
+                            />
+                          </>
+                        )}
+                      </div>
+                    </Td>
                   </Tr>
                 ))}
               </tbody>
@@ -209,7 +243,28 @@ export default function ClientesPage() {
                     <Td>{valorOGuion(c.departamento)}</Td>
                     <Td>{valorOGuion(c.provincia)}</Td>
                     <Td>{valorOGuion(c.distrito)}</Td>
-                    <Td><BotonWhatsApp celular={c.celular} /></Td>
+                    <Td>
+                      <div className="flex items-center gap-1">
+                        <BotonWhatsApp celular={c.celular} />
+                        {puedeRegistrarClientes(usuario.rolTipo) && (
+                          <>
+                            <BotonAccion
+                              titulo="Editar cliente"
+                              icono={<Pencil size={14} />}
+                              onClick={() => setEditandoCorporativo(c)}
+                            />
+                            <BotonAccion
+                              titulo="Eliminar cliente"
+                              icono={<Trash2 size={14} />}
+                              tono="rojo"
+                              onClick={() => {
+                                if (confirm(`¿Eliminar a ${c.razonSocial}? Esto no se puede deshacer.`)) void eliminarClienteCorporativo(c.id);
+                              }}
+                            />
+                          </>
+                        )}
+                      </div>
+                    </Td>
                   </Tr>
                 ))}
               </tbody>
@@ -236,5 +291,25 @@ function BotonWhatsApp({ celular }: { celular: string }) {
     >
       <MessageCircle size={15} />
     </a>
+  );
+}
+
+function BotonAccion({
+  titulo, icono, onClick, tono = "gris",
+}: {
+  titulo: string; icono: React.ReactNode; onClick: (e: React.MouseEvent) => void; tono?: "gris" | "rojo";
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={titulo}
+      className={`inline-flex items-center justify-center w-7 h-7 rounded-lg transition-colors ${
+        tono === "rojo"
+          ? "text-[var(--color-gris-medio)] hover:bg-[var(--color-rojo)]/10 hover:text-[var(--color-rojo)]"
+          : "text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] hover:text-[var(--color-terracota)]"
+      }`}
+    >
+      {icono}
+    </button>
   );
 }

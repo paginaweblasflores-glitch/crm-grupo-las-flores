@@ -14,6 +14,7 @@ const GENEROS: Genero[] = ["Femenino", "Masculino", "Prefiere no decirlo"];
 
 export function NuevoClienteForm({
   negocioId, registradoPor, celularExiste, onGuardarIndividual, onGuardarCorporativo, onCancelar,
+  individualEditando, corporativoEditando,
 }: {
   negocioId: NegocioId;
   registradoPor: string;
@@ -23,39 +24,57 @@ export function NuevoClienteForm({
   onGuardarIndividual: (c: ClienteIndividual) => void;
   onGuardarCorporativo: (c: ClienteCorporativo) => void;
   onCancelar: () => void;
+  // Presente solo cuando se está EDITANDO un cliente ya existente (nunca los
+  // dos a la vez) — precarga el formulario y esconde el selector Natural/
+  // Corporativo, porque no se puede "convertir" un cliente de un tipo a otro
+  // (son tablas distintas, con campos distintos).
+  individualEditando?: ClienteIndividual;
+  corporativoEditando?: ClienteCorporativo;
 }) {
-  const [tipo, setTipo] = useState<"individual" | "corporativo">("individual");
+  const editando = individualEditando ?? corporativoEditando;
+  const [tipo, setTipo] = useState<"individual" | "corporativo">(corporativoEditando ? "corporativo" : "individual");
 
   return (
     <Card className="animate-fade-in">
       <div className="flex items-center justify-between mb-1">
-        <CardHeader title="Registrar cliente nuevo" subtitle="Directo en el sistema — ya no hace falta pasarlo a Excel después" />
+        <CardHeader
+          title={editando ? "Editar cliente" : "Registrar cliente nuevo"}
+          subtitle={editando ? "Los cambios se guardan directo en el sistema" : "Directo en el sistema — ya no hace falta pasarlo a Excel después"}
+        />
         <button onClick={onCancelar} className="text-[var(--color-gris-medio)] hover:text-[var(--color-gris)]">
           <X size={18} />
         </button>
       </div>
 
-      <div className="flex bg-[var(--color-crema)] rounded-xl p-1 mb-5 w-fit">
-        <button
-          type="button"
-          onClick={() => setTipo("individual")}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tipo === "individual" ? "bg-white shadow-sm text-[var(--color-terracota)]" : "text-[var(--color-gris-medio)]"}`}
-        >
-          <User size={14} /> Natural
-        </button>
-        <button
-          type="button"
-          onClick={() => setTipo("corporativo")}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tipo === "corporativo" ? "bg-white shadow-sm text-[var(--color-terracota)]" : "text-[var(--color-gris-medio)]"}`}
-        >
-          <Building2 size={14} /> Corporativo
-        </button>
-      </div>
+      {!editando && (
+        <div className="flex bg-[var(--color-crema)] rounded-xl p-1 mb-5 w-fit">
+          <button
+            type="button"
+            onClick={() => setTipo("individual")}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tipo === "individual" ? "bg-white shadow-sm text-[var(--color-terracota)]" : "text-[var(--color-gris-medio)]"}`}
+          >
+            <User size={14} /> Natural
+          </button>
+          <button
+            type="button"
+            onClick={() => setTipo("corporativo")}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${tipo === "corporativo" ? "bg-white shadow-sm text-[var(--color-terracota)]" : "text-[var(--color-gris-medio)]"}`}
+          >
+            <Building2 size={14} /> Corporativo
+          </button>
+        </div>
+      )}
 
       {tipo === "individual" ? (
-        <FormIndividual negocioId={negocioId} registradoPor={registradoPor} celularExiste={celularExiste} onGuardar={onGuardarIndividual} onCancelar={onCancelar} />
+        <FormIndividual
+          negocioId={negocioId} registradoPor={registradoPor} celularExiste={celularExiste}
+          onGuardar={onGuardarIndividual} onCancelar={onCancelar} editar={individualEditando}
+        />
       ) : (
-        <FormCorporativo negocioId={negocioId} registradoPor={registradoPor} celularExiste={celularExiste} onGuardar={onGuardarCorporativo} onCancelar={onCancelar} />
+        <FormCorporativo
+          negocioId={negocioId} registradoPor={registradoPor} celularExiste={celularExiste}
+          onGuardar={onGuardarCorporativo} onCancelar={onCancelar} editar={corporativoEditando}
+        />
       )}
     </Card>
   );
@@ -71,11 +90,11 @@ export function NuevoClienteForm({
 // calculado acá mismo en cada render (nunca con un efecto que limpie
 // estado): si el campo vuelve a mostrarse, recupera lo último que se había
 // escrito ahí en vez de reiniciarse al valor por defecto.
-function useUbicacion() {
-  const [pais, setPais] = useState<string>(PAISES[0]);
-  const [departamento, setDepartamento] = useState<string>(DEPARTAMENTOS_PERU[0]);
-  const [provincia, setProvincia] = useState<string>(PROVINCIAS_AYACUCHO[0]);
-  const [distrito, setDistrito] = useState<string>(DISTRITOS_AYACUCHO[0]);
+function useUbicacion(inicial?: { pais: string; departamento: string; provincia: string; distrito: string }) {
+  const [pais, setPais] = useState<string>(inicial?.pais || PAISES[0]);
+  const [departamento, setDepartamento] = useState<string>(inicial?.departamento || DEPARTAMENTOS_PERU[0]);
+  const [provincia, setProvincia] = useState<string>(inicial?.provincia || PROVINCIAS_AYACUCHO[0]);
+  const [distrito, setDistrito] = useState<string>(inicial?.distrito || DISTRITOS_AYACUCHO[0]);
 
   const departamentoEfectivo = pais === "Perú" ? departamento : "";
   const provinciaEfectiva = departamentoEfectivo === "Ayacucho" ? provincia : "";
@@ -131,19 +150,20 @@ function validarUbicacion(pais: string, departamento: string, provincia: string,
 }
 
 function FormIndividual({
-  negocioId, registradoPor, celularExiste, onGuardar, onCancelar,
+  negocioId, registradoPor, celularExiste, onGuardar, onCancelar, editar,
 }: {
   negocioId: NegocioId; registradoPor: string; celularExiste: (celular: string) => boolean;
   onGuardar: (c: ClienteIndividual) => void; onCancelar: () => void;
+  editar?: ClienteIndividual;
 }) {
-  const [nombres, setNombres] = useState("");
-  const [apellidos, setApellidos] = useState("");
-  const [celular, setCelular] = useState("");
-  const [email, setEmail] = useState("");
-  const [fechaNacimiento, setFechaNacimiento] = useState("");
-  const [genero, setGenero] = useState<Genero | "">("");
-  const ubicacion = useUbicacion();
-  const [aceptaComunicaciones, setAceptaComunicaciones] = useState(true);
+  const [nombres, setNombres] = useState(editar?.nombres ?? "");
+  const [apellidos, setApellidos] = useState(editar?.apellidos ?? "");
+  const [celular, setCelular] = useState(editar?.celular ?? "");
+  const [email, setEmail] = useState(editar?.email ?? "");
+  const [fechaNacimiento, setFechaNacimiento] = useState(editar?.fechaNacimiento ?? "");
+  const [genero, setGenero] = useState<Genero | "">(editar?.genero ?? "");
+  const ubicacion = useUbicacion(editar);
+  const [aceptaComunicaciones, setAceptaComunicaciones] = useState(editar?.aceptaComunicaciones ?? true);
   const [errores, setErrores] = useState<Errores>({});
 
   function validar(): Errores {
@@ -154,7 +174,7 @@ function FormIndividual({
     if (eApellidos) err.apellidos = eApellidos;
     const eCelular = celularPeru(celular);
     if (eCelular) err.celular = eCelular;
-    else if (celularExiste(celular)) err.celular = "Ese celular ya pertenece a un cliente registrado en el grupo.";
+    else if (celular !== editar?.celular && celularExiste(celular)) err.celular = "Ese celular ya pertenece a un cliente registrado en el grupo.";
     const eEmail = emailOpcional(email);
     if (eEmail) err.email = eEmail;
     const eFecha = fechaPasada(fechaNacimiento, "La fecha de nacimiento");
@@ -169,10 +189,21 @@ function FormIndividual({
     setErrores(err);
     if (Object.keys(err).length > 0) return;
     onGuardar({
-      id: `${negocioId}-cli-manual-${Date.now()}`,
+      // Editando: se conserva todo lo que no se toca en este formulario
+      // (id, numero, fechaRegistro, origen, registradoPor) — solo cambian
+      // los campos que sí se muestran acá.
+      ...(editar ?? {
+        id: `${negocioId}-cli-manual-${Date.now()}`,
+        negocioId,
+        numero: 0,
+        fechaRegistro: new Date().toISOString().slice(0, 10),
+        // Se registra desde este formulario → siempre es captación CRM
+        // (presencial). "web" solo lo pone la futura integración con la
+        // página de cada negocio, nunca alguien llenando este formulario.
+        origen: "crm" as const,
+        registradoPor,
+      }),
       negocioId,
-      numero: 0,
-      fechaRegistro: new Date().toISOString().slice(0, 10),
       nombres: nombres.trim(),
       apellidos: apellidos.trim(),
       fechaNacimiento,
@@ -181,11 +212,6 @@ function FormIndividual({
       departamento: ubicacion.departamento,
       provincia: ubicacion.provincia,
       distrito: ubicacion.distrito,
-      // Se registra desde este formulario → siempre es captación CRM
-      // (presencial). "web" solo lo pone la futura integración con la
-      // página de cada negocio, nunca alguien llenando este formulario.
-      origen: "crm",
-      registradoPor,
       email: email.trim() || undefined,
       genero: genero || undefined,
       aceptaComunicaciones,
@@ -232,30 +258,31 @@ function FormIndividual({
         Acepta recibir promociones y saludos de cumpleaños por WhatsApp
       </label>
 
-      <BotonesForm onCancelar={onCancelar} />
+      <BotonesForm onCancelar={onCancelar} editando={!!editar} />
     </form>
   );
 }
 
 function FormCorporativo({
-  negocioId, registradoPor, celularExiste, onGuardar, onCancelar,
+  negocioId, registradoPor, celularExiste, onGuardar, onCancelar, editar,
 }: {
   negocioId: NegocioId; registradoPor: string; celularExiste: (celular: string) => boolean;
   onGuardar: (c: ClienteCorporativo) => void; onCancelar: () => void;
+  editar?: ClienteCorporativo;
 }) {
-  const [razonSocial, setRazonSocial] = useState("");
-  const [ruc, setRuc] = useState("");
-  const [direccion, setDireccion] = useState("");
-  const [fechaAniversario, setFechaAniversario] = useState("");
-  const [nombreRepresentante, setNombreRepresentante] = useState("");
-  const [cargoRepresentante, setCargoRepresentante] = useState("Gerente General");
+  const [razonSocial, setRazonSocial] = useState(editar?.razonSocial ?? "");
+  const [ruc, setRuc] = useState(editar?.ruc ?? "");
+  const [direccion, setDireccion] = useState(editar?.direccion ?? "");
+  const [fechaAniversario, setFechaAniversario] = useState(editar?.fechaAniversario ?? "");
+  const [nombreRepresentante, setNombreRepresentante] = useState(editar?.nombreRepresentante ?? "");
+  const [cargoRepresentante, setCargoRepresentante] = useState(editar?.cargoRepresentante ?? "Gerente General");
   // Un solo celular, el del representante — en la práctica Ventas siempre
   // termina hablando con una persona puntual, nunca con "el teléfono de la
   // empresa" en abstracto, así que pedir los dos era redundante. Este es el
   // único número del cliente corporativo, y por eso es obligatorio.
-  const [celular, setCelular] = useState("");
-  const ubicacion = useUbicacion();
-  const [aceptaComunicaciones, setAceptaComunicaciones] = useState(true);
+  const [celular, setCelular] = useState(editar?.celular ?? "");
+  const ubicacion = useUbicacion(editar);
+  const [aceptaComunicaciones, setAceptaComunicaciones] = useState(editar?.aceptaComunicaciones ?? true);
   const [errores, setErrores] = useState<Errores>({});
 
   function validar(): Errores {
@@ -270,7 +297,7 @@ function FormCorporativo({
     if (eRepresentante) err.nombreRepresentante = eRepresentante;
     const eCelular = celularPeru(celular);
     if (eCelular) err.celular = eCelular;
-    else if (celularExiste(celular)) err.celular = "Ese celular ya pertenece a un cliente registrado en el grupo.";
+    else if (celular !== editar?.celular && celularExiste(celular)) err.celular = "Ese celular ya pertenece a un cliente registrado en el grupo.";
     Object.assign(err, validarUbicacion(ubicacion.pais, ubicacion.departamento, ubicacion.provincia, ubicacion.distrito));
     return err;
   }
@@ -281,10 +308,14 @@ function FormCorporativo({
     setErrores(err);
     if (Object.keys(err).length > 0) return;
     onGuardar({
-      id: `${negocioId}-corp-manual-${Date.now()}`,
+      ...(editar ?? {
+        id: `${negocioId}-corp-manual-${Date.now()}`,
+        negocioId,
+        numero: 0,
+        fechaRegistro: new Date().toISOString().slice(0, 10),
+        registradoPor,
+      }),
       negocioId,
-      numero: 0,
-      fechaRegistro: new Date().toISOString().slice(0, 10),
       razonSocial: razonSocial.trim(),
       ruc,
       direccion: direccion.trim(),
@@ -296,7 +327,6 @@ function FormCorporativo({
       departamento: ubicacion.departamento,
       provincia: ubicacion.provincia,
       distrito: ubicacion.distrito,
-      registradoPor,
       aceptaComunicaciones,
     });
   }
@@ -340,19 +370,19 @@ function FormCorporativo({
         Acepta recibir promociones y saludos por aniversario por WhatsApp
       </label>
 
-      <BotonesForm onCancelar={onCancelar} />
+      <BotonesForm onCancelar={onCancelar} editando={!!editar} />
     </form>
   );
 }
 
-function BotonesForm({ onCancelar }: { onCancelar: () => void }) {
+function BotonesForm({ onCancelar, editando }: { onCancelar: () => void; editando?: boolean }) {
   return (
     <div className="sm:col-span-2 flex justify-end gap-2 pt-1">
       <button type="button" onClick={onCancelar} className="text-sm font-medium text-[var(--color-gris-medio)] px-4 py-2">
         Cancelar
       </button>
       <button type="submit" className="bg-[var(--color-terracota)] text-white text-sm font-semibold rounded-xl px-5 py-2.5 hover:opacity-90 transition-opacity">
-        Guardar cliente
+        {editando ? "Guardar cambios" : "Guardar cliente"}
       </button>
     </div>
   );
