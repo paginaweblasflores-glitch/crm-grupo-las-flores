@@ -166,12 +166,17 @@ export async function cargarTodo(): Promise<DatosApp> {
     festividades, seguimientos, configsSaludo, aprobaciones,
   ] = await Promise.all([
     supabase.from("negocios").select("*"),
-    supabase.from("usuarios").select("*"),
-    supabase.from("clientes_individuales").select("*"),
-    supabase.from("clientes_corporativos").select("*"),
-    supabase.from("campanas").select("*"),
+    // El más reciente primero — el resto de la app (Clientes, Panel
+    // Gerencial, ranking de asesores, etc.) confía en el orden que ya trae
+    // este arreglo, no vuelve a ordenar por su cuenta. Sin esto, un cliente
+    // recién registrado aparecía al final de la lista en vez de arriba,
+    // porque Postgres no garantiza ningún orden si no se pide uno explícito.
+    supabase.from("usuarios").select("*").order("creado_en", { ascending: false }),
+    supabase.from("clientes_individuales").select("*").order("creado_en", { ascending: false }),
+    supabase.from("clientes_corporativos").select("*").order("creado_en", { ascending: false }),
+    supabase.from("campanas").select("*").order("creado_en", { ascending: false }),
     supabase.from("festividades").select("*"),
-    supabase.from("seguimiento_cumpleanos").select("*"),
+    supabase.from("seguimiento_cumpleanos").select("*").order("creado_en", { ascending: false }),
     supabase.from("config_saludo_cumpleanos").select("*"),
     supabase.from("aprobacion_cumpleanos_mes").select("*"),
   ]);

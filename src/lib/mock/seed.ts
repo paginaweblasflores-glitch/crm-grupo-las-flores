@@ -53,7 +53,18 @@ export function daysAheadISO(days: number): string {
   return daysAgoISO(-days);
 }
 
-export const BASE_DATE = new Date(2026, 7, 25); // 25 de agosto de 2026 (hoy, según contexto del proyecto)
+// "Hoy" para todo el sistema (periodos Diario/Semanal/Mensual/Anual,
+// cumpleaños, comparativos, etc.) — dinámico, la fecha real del día en que
+// se abre la app. Antes era una fecha congelada (25 de agosto de 2026) desde
+// que el proyecto era pura demostración con datos ficticios; ahora que hay
+// clientes reales registrándose en producción, congelar "hoy" hacía que un
+// registro real de HOY quedara fuera de cualquier ventana de periodo (ej.
+// "Ranking de asesores" de la semana) porque el sistema seguía pensando que
+// era el 25 de agosto. Se recorta a medianoche local (sin horas/minutos)
+// porque el resto del código ya asume eso — igual que la fecha congelada de
+// antes, solo que ahora se recalcula cada vez que carga la página.
+const hoy = new Date();
+export const BASE_DATE = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
 
 export function randPhone(): string {
   return "9" + Array.from({ length: 8 }, () => randInt(0, 9)).join("");

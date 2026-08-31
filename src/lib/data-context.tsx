@@ -50,7 +50,7 @@ function aplicarCambioRealtime(d: DatosApp, c: CambioRealtime): DatosApp {
       if (!c.nueva) return d;
       const fila = mapUsuario(c.nueva);
       const existe = d.usuarios.some((u) => u.id === fila.id);
-      return { ...d, usuarios: existe ? d.usuarios.map((u) => (u.id === fila.id ? fila : u)) : [...d.usuarios, fila] };
+      return { ...d, usuarios: existe ? d.usuarios.map((u) => (u.id === fila.id ? fila : u)) : [fila, ...d.usuarios] };
     }
     case "clientes_individuales": {
       const id = idDe(c.vieja);
@@ -90,7 +90,7 @@ function aplicarCambioRealtime(d: DatosApp, c: CambioRealtime): DatosApp {
       if (!c.nueva) return d;
       const fila = mapSeguimiento(c.nueva);
       const existe = d.seguimientos.some((x) => x.id === fila.id);
-      return { ...d, seguimientos: existe ? d.seguimientos.map((x) => (x.id === fila.id ? fila : x)) : [...d.seguimientos, fila] };
+      return { ...d, seguimientos: existe ? d.seguimientos.map((x) => (x.id === fila.id ? fila : x)) : [fila, ...d.seguimientos] };
     }
     // Las 2 tablas de config no tienen `id` propio — su llave es negocioId
     // (config_saludo_cumpleanos) o negocioId+año+mes (aprobacion_cumpleanos_mes).
@@ -181,7 +181,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const crearUsuario = useCallback(async (u: Usuario) => {
     const creado = await dbCrearUsuario(u);
-    setDatos((d) => ({ ...d, usuarios: [...d.usuarios, creado] }));
+    setDatos((d) => ({ ...d, usuarios: [creado, ...d.usuarios] }));
   }, []);
   const actualizarUsuario = useCallback(async (id: string, patch: Partial<Usuario>) => {
     await dbActualizarUsuario(id, patch);
@@ -229,7 +229,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const crearSeguimiento = useCallback(async (s: SeguimientoCumple) => {
     const creado = await dbCrearSeguimiento(s);
-    setDatos((d) => ({ ...d, seguimientos: [...d.seguimientos, creado] }));
+    setDatos((d) => ({ ...d, seguimientos: [creado, ...d.seguimientos] }));
     return creado;
   }, []);
   const actualizarSeguimiento = useCallback(async (id: string, patch: Partial<SeguimientoCumple>) => {
