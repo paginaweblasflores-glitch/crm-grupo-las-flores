@@ -30,6 +30,11 @@ interface ClienteRegistrado {
 
 const MESES_LABEL = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"];
 
+// Orden fijo de los negocios para el gráfico "por negocio" — Las Flores,
+// Umaru, Mamina, siempre en ese orden (leyenda y barras) — no alfabético
+// ni el que decida mostrar la librería del gráfico por su cuenta.
+const ORDEN_NEGOCIO: Record<string, number> = { "las-flores": 0, umaru: 1, mamina: 2 };
+
 interface AsesorEstadistica {
   usuario: Usuario;
   negocioNombre: string;
@@ -172,7 +177,8 @@ export function EstadisticasVendedores({
   // Mensual). Cuenta TODOS los clientes de ese negocio ese mes, sin
   // importar qué cuenta puntual los registró — así sigue siendo correcto
   // aunque un negocio llegue a tener más de un vendedor en el futuro.
-  const negociosOperando = NEGOCIOS.filter((n) => n.operando);
+  const negociosOperando = NEGOCIOS.filter((n) => n.operando)
+    .sort((a, b) => (ORDEN_NEGOCIO[a.id] ?? 99) - (ORDEN_NEGOCIO[b.id] ?? 99));
   const desempenoMensualPorNegocio = useMemo(() => {
     if (periodo !== "anio" || filtroSede !== "todos") return [];
     const anioActual = BASE_DATE.getFullYear();
