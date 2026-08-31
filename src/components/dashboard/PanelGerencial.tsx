@@ -443,7 +443,7 @@ export function PanelGerencial() {
                         href={`/clientes/${ultimoCliente.id}`}
                         className="flex items-center justify-between text-xs font-semibold text-[var(--color-terracota)] hover:underline pt-0.5"
                       >
-                        <span>Ver ficha 360°</span>
+                        <span>Ver ficha</span>
                         <ArrowRight size={12} />
                       </Link>
                     </div>
