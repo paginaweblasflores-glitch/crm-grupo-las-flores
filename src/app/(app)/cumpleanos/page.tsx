@@ -129,9 +129,10 @@ export default function CumpleanosPage() {
           actualizarSeguimiento={actualizarSeguimiento}
         />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatTile label="Cumplen hoy" value={hoy.length} icon={<Gift size={18} />} tono="terracota" />
           <StatTile label="Próximos 10 días" value={proximos.length} icon={<Gift size={18} />} tono="naranja" />
+          <StatTile label="Cumplen este mes" value={resumenMes.totalDelMes} icon={<Gift size={18} />} tono="verde" />
         </div>
 
         <AprobacionMes
