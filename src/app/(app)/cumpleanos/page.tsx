@@ -20,7 +20,7 @@ import { agregarMensajeChatDirecto } from "@/lib/store";
 import { useData } from "@/lib/data-context";
 import { PLANTILLA_CUMPLEANOS_DEFECTO, HORA_ENVIO_DEFECTO, interpolarPlantilla } from "@/lib/mensajes";
 import {
-  seguimientosConNuevos, seguimientoDefectoPara, proximosCumpleanosDe, clientesPorDia, esHoy,
+  seguimientosConNuevos, seguimientoDefectoPara, proximosCumpleanosDe, clientesPorDia, esHoy, pendientesDeSaludarDe,
 } from "@/lib/seguimiento-helpers";
 import { ClienteIndividual, SeguimientoCumple } from "@/lib/types";
 
@@ -28,6 +28,13 @@ const MESES_LABEL = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Setiembre", "Octubre", "Noviembre", "Diciembre",
 ];
+
+// Con miles de clientes reales, "Próximos cumpleaños" puede tener decenas
+// (hasta cientos) de pendientes — mostrarlos todos acá empujaba a
+// "Seguimiento" muy abajo de la página. Se muestra solo un adelanto (los
+// más próximos, ya vienen ordenados así) y el resto vive en su propia
+// página paginada — ver /cumpleanos/proximos.
+const VISTA_PREVIA_PENDIENTES = 6;
 
 interface ConfigSaludo { mensaje: string; hora: string }
 
@@ -91,9 +98,9 @@ export default function CumpleanosPage() {
   // historia sigue en "Seguimiento" (más abajo), no duplicada acá. Los
   // StatTiles de "Cumplen hoy"/"Próximos 10 días" sí siguen contando a
   // todos por igual (hoy/proximos, sin filtrar) — son un dato informativo,
-  // no una lista de pendientes.
-  const idsYaSaludados = new Set(seguimientos.filter((s) => s.saludoEnviado).map((s) => s.clienteId));
-  const pendientesDeSaludar = [...hoy, ...proximos].filter((p) => !idsYaSaludados.has(p.cliente.id));
+  // no una lista de pendientes. Misma función que usa /cumpleanos/proximos
+  // (la lista completa) — acá solo se muestran los primeros, ver más abajo.
+  const pendientesDeSaludar = pendientesDeSaludarDe(clientesIndividuales, seguimientosReales, negocio.id);
   const resumenMes = resumenCumpleanosMes({ clientesIndividuales, clientesCorporativos, seguimientos: seguimientosReales }, negocio.id);
 
   const config: ConfigSaludo = configsSaludo.find((c) => c.negocioId === negocio.id)
@@ -150,7 +157,17 @@ export default function CumpleanosPage() {
         />
 
         <Card>
-          <CardHeader title="Próximos cumpleaños" subtitle="Abre el chat para saludar sin salir del sistema — mismo lugar donde queda registrada la conversación" />
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <CardHeader title="Próximos cumpleaños" subtitle="Abre el chat para saludar sin salir del sistema — mismo lugar donde queda registrada la conversación" />
+            {pendientesDeSaludar.length > VISTA_PREVIA_PENDIENTES && (
+              <Link
+                href="/cumpleanos/proximos"
+                className="shrink-0 text-xs font-semibold text-[var(--color-terracota)] hover:underline whitespace-nowrap"
+              >
+                Ver todos ({pendientesDeSaludar.length}) →
+              </Link>
+            )}
+          </div>
           {pendientesDeSaludar.length === 0 ? (
             <p className="text-sm text-[var(--color-gris-medio)] py-6 text-center">
               {proximos.length === 0 && hoy.length === 0
@@ -159,7 +176,7 @@ export default function CumpleanosPage() {
             </p>
           ) : (
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {pendientesDeSaludar.map(({ cliente, diffDias }) => (
+              {pendientesDeSaludar.slice(0, VISTA_PREVIA_PENDIENTES).map(({ cliente, diffDias }) => (
                 <div key={cliente.id} className="rounded-xl border border-[var(--color-gris-claro)]/40 p-4">
                   <div className="flex items-start justify-between mb-2">
                     <p className="font-medium text-sm text-[var(--color-gris)]">{cliente.nombres} {cliente.apellidos}</p>

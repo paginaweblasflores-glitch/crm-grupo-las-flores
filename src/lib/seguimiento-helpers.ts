@@ -6,6 +6,8 @@
 
 import { ClienteIndividual, SeguimientoCumple, NegocioId } from "./types";
 import { BASE_DATE } from "./mock/seed";
+import { clientesIndividualesPorNegocio } from "./mock/clientes";
+import { seguimientosPorNegocio } from "./mock/seguimiento";
 
 export function mesDe(fechaISO: string): number {
   return Number(fechaISO.split("-")[1]);
@@ -77,4 +79,22 @@ export function clientesPorMes(clientes: ClienteIndividual[], mes: number): Clie
 // Los que cumplen años en un día exacto de ese mes.
 export function clientesPorDia(clientes: ClienteIndividual[], mes: number, dia: number): ClienteIndividual[] {
   return clientes.filter((c) => mesDe(c.fechaNacimiento) === mes && diaDe(c.fechaNacimiento) === dia);
+}
+
+// A quién todavía le falta el saludo de cumpleaños (hoy o en los próximos
+// 10 días) — la lista de ACCIÓN de "Próximos cumpleaños". Compartida entre
+// la página de Cumpleaños (la vista previa corta) y /cumpleanos/proximos
+// (la lista completa, paginada) para que las dos cuenten exactamente lo
+// mismo, sin duplicar la lógica.
+export function pendientesDeSaludarDe(
+  clientesIndividuales: ClienteIndividual[],
+  seguimientosReales: SeguimientoCumple[],
+  negocioId: NegocioId
+): { cliente: ClienteIndividual; diffDias: number }[] {
+  const clientes = clientesIndividualesPorNegocio(clientesIndividuales, negocioId);
+  const hoy = proximosCumpleanosDe(clientes, BASE_DATE, 0);
+  const proximos = proximosCumpleanosDe(clientes, BASE_DATE, 10).filter((p) => p.diffDias > 0);
+  const seguimientos = seguimientosConNuevos(seguimientosPorNegocio(seguimientosReales, negocioId), clientes, negocioId);
+  const idsYaSaludados = new Set(seguimientos.filter((s) => s.saludoEnviado).map((s) => s.clienteId));
+  return [...hoy, ...proximos].filter((p) => !idsYaSaludados.has(p.cliente.id));
 }
