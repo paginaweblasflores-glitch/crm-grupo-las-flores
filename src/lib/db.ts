@@ -7,7 +7,7 @@
 
 import { supabase } from "./supabase";
 import {
-  Negocio, NegocioId, Usuario, ClienteIndividual, ClienteCorporativo,
+  Negocio, NegocioId, Usuario, UsuarioNuevo, UsuarioPatch, ClienteIndividual, ClienteCorporativo,
   Campana, Festividad, SeguimientoCumple,
 } from "./types";
 
@@ -56,6 +56,9 @@ function mapNegocio(r: Record<string, unknown>): Negocio {
   };
 }
 
+// OJO: nunca mapea contraseña — esa columna ya no existe en "usuarios" (ver
+// usuario_credenciales en base de datos/schema.sql). Crear/editar una
+// cuenta ahora pasa por las rutas de servidor de más abajo, no por acá.
 export function mapUsuario(r: Record<string, unknown>): Usuario {
   return {
     id: r.id as string,
@@ -66,7 +69,6 @@ export function mapUsuario(r: Record<string, unknown>): Usuario {
     rolLabel: r.rol_label as string,
     iniciales: r.iniciales as string,
     usuario: r.usuario as string,
-    contrasena: r.contrasena as string,
     negocioId: r.negocio_id as NegocioId,
     creadoPor: (r.creado_por as string) ?? undefined,
   };
@@ -260,36 +262,40 @@ export async function cargarTodo(): Promise<DatosApp> {
 }
 
 // ============================================================================
-// Usuarios
+// Usuarios — a diferencia de todo lo demás en este archivo, estas 3 NO le
+// hablan a Supabase directo: la llave pública ya no tiene permiso de
+// escritura sobre "usuarios" (ver schema.sql) y jamás tuvo ni tendrá acceso
+// a usuario_credenciales. Pasan por rutas de servidor (src/app/api/usuarios),
+// que sí pueden — con la llave de servicio — y que además verifican que
+// quien lo pide sea Gerencial antes de hacer nada.
 // ============================================================================
-export async function dbCrearUsuario(u: Usuario): Promise<Usuario> {
-  const { data, error } = await supabase.from("usuarios").insert({
-    nombre: u.nombre, nombre_real: u.nombreReal ?? null, cargo: u.cargo, rol_tipo: u.rolTipo,
-    rol_label: u.rolLabel, iniciales: u.iniciales, usuario: u.usuario, contrasena: u.contrasena,
-    negocio_id: u.negocioId, creado_por: u.creadoPor ?? null,
-  }).select().single();
-  if (error) throw new Error(error.message);
-  return mapUsuario(data);
+async function parsearORespuestaDeError(res: Response): Promise<never> {
+  const cuerpo = await res.json().catch(() => null);
+  throw new Error((cuerpo && typeof cuerpo === "object" && "error" in cuerpo ? String(cuerpo.error) : null) ?? "No se pudo completar la operación.");
 }
 
-export async function dbActualizarUsuario(id: string, patch: Partial<Usuario>): Promise<void> {
-  const row: Record<string, unknown> = {};
-  if (patch.nombre !== undefined) row.nombre = patch.nombre;
-  if (patch.nombreReal !== undefined) row.nombre_real = patch.nombreReal;
-  if (patch.cargo !== undefined) row.cargo = patch.cargo;
-  if (patch.rolTipo !== undefined) row.rol_tipo = patch.rolTipo;
-  if (patch.rolLabel !== undefined) row.rol_label = patch.rolLabel;
-  if (patch.iniciales !== undefined) row.iniciales = patch.iniciales;
-  if (patch.usuario !== undefined) row.usuario = patch.usuario;
-  if (patch.contrasena !== undefined) row.contrasena = patch.contrasena;
-  if (patch.negocioId !== undefined) row.negocio_id = patch.negocioId;
-  const { error } = await supabase.from("usuarios").update(row).eq("id", id);
-  if (error) throw new Error(error.message);
+export async function dbCrearUsuario(u: UsuarioNuevo): Promise<Usuario> {
+  const res = await fetch("/api/usuarios", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(u),
+  });
+  if (!res.ok) return parsearORespuestaDeError(res);
+  return res.json();
+}
+
+export async function dbActualizarUsuario(id: string, patch: UsuarioPatch): Promise<void> {
+  const res = await fetch(`/api/usuarios/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) return parsearORespuestaDeError(res);
 }
 
 export async function dbEliminarUsuario(id: string): Promise<void> {
-  const { error } = await supabase.from("usuarios").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  const res = await fetch(`/api/usuarios/${id}`, { method: "DELETE" });
+  if (!res.ok) return parsearORespuestaDeError(res);
 }
 
 // ============================================================================

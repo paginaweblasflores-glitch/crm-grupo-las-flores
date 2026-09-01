@@ -19,6 +19,12 @@ export interface Negocio {
 // - ventas: el equipo de cada negocio (registra clientes, cumpleaños).
 export type RolTipo = "direccion" | "gerencial" | "ventas" | "administracion";
 
+// OJO: nunca lleva la contraseña — ni en texto plano ni como hash. Ese dato
+// vive aparte, en la tabla usuario_credenciales, y solo lo toca el servidor
+// (ver src/lib/usuarios-server.ts, src/app/api/auth y src/app/api/usuarios).
+// El cliente jamás lo recibe, así que este tipo no tiene ningún campo para
+// él — usar UsuarioNuevo/UsuarioPatch (abajo) para crear una cuenta o
+// cambiarle la contraseña.
 export interface Usuario {
   id: string;
   nombre: string; // nombre de la cuenta — de área/cargo ("Ventas Uno"), no de persona
@@ -28,10 +34,18 @@ export interface Usuario {
   rolLabel: string;
   iniciales: string;
   usuario: string; // usuario de acceso
-  contrasena: string; // solo para el prototipo — en producción esto lo maneja Supabase Auth
   negocioId: NegocioId; // negocio al que pertenece la cuenta (Dirección no tiene uno fijo, ve los tres)
   creadoPor?: string; // id de quién creó la cuenta (siempre Mijael/Gerencial, para cuentas nuevas)
 }
+
+// Payload para crear una cuenta — la contraseña va en texto plano acá
+// (viaja una sola vez, por HTTPS, hasta la ruta de servidor que la hashea;
+// nunca se guarda así) pero no forma parte de Usuario en ningún momento.
+export type UsuarioNuevo = Omit<Usuario, "id"> & { contrasena: string };
+
+// Payload para editar una cuenta — contrasena es opcional: solo se manda
+// cuando de verdad se quiere cambiar (en blanco = no tocarla).
+export type UsuarioPatch = Partial<Omit<Usuario, "id">> & { contrasena?: string };
 
 export type TipoDocumento = "DNI" | "Carné de extranjería" | "Pasaporte";
 export type Genero = "Femenino" | "Masculino";

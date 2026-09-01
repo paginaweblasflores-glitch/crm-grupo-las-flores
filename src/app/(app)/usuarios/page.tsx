@@ -9,7 +9,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CampoContrasena } from "@/components/ui/CampoContrasena";
-import { Usuario, NegocioId } from "@/lib/types";
+import { Usuario, UsuarioNuevo, UsuarioPatch, NegocioId } from "@/lib/types";
 import { requerido, Errores } from "@/lib/validacion";
 
 // Cargos sugeridos según el tipo de negocio — evita texto libre para lo más
@@ -63,8 +63,8 @@ function UsuariosContenido({
   usuarioId: string;
   usuarios: Usuario[];
   negocios: { id: NegocioId; nombre: string; operando: boolean }[];
-  crearUsuario: (u: Usuario) => void;
-  editarUsuario: (id: string, patch: Partial<Usuario>) => void;
+  crearUsuario: (u: UsuarioNuevo) => void;
+  editarUsuario: (id: string, patch: UsuarioPatch) => void;
   eliminarUsuario: (id: string) => void;
 }) {
   const [filtroNegocio, setFiltroNegocio] = useState<NegocioId>(negocios[0].id);
@@ -119,8 +119,9 @@ function UsuariosContenido({
                       <p className="text-sm font-medium text-[var(--color-gris)]">{u.nombre}</p>
                       <p className="text-xs text-[var(--color-gris-medio)]">{u.cargo} · usuario: {u.usuario}</p>
                     </div>
-                    <div className="w-36 shrink-0">
-                      <CampoContrasena value={u.contrasena} disabled />
+                    <div className="w-36 shrink-0 flex items-center gap-1.5 text-[11px] text-[var(--color-gris-medio)]" title="La contraseña está protegida — nadie, ni el sistema, puede verla otra vez. Para cambiarla, usa Editar.">
+                      <Lock size={13} />
+                      Contraseña protegida
                     </div>
                     {esGestionable ? (
                       <div className="flex items-center gap-1 shrink-0">
@@ -180,8 +181,8 @@ function UsuarioForm({
   negocios: { id: NegocioId; nombre: string; operando: boolean }[];
   usuarios: Usuario[];
   usuarioId: string;
-  onCrear: (u: Usuario, nombreNegocio: string) => void;
-  onGuardarEdicion: (id: string, patch: Partial<Usuario>) => void;
+  onCrear: (u: UsuarioNuevo, nombreNegocio: string) => void;
+  onGuardarEdicion: (id: string, patch: UsuarioPatch) => void;
   onCancelarEdicion: () => void;
 }) {
   const [form, setForm] = useState({
@@ -189,10 +190,11 @@ function UsuarioForm({
     cargo: editando?.cargo ?? "",
     cargoOtro: "",
     usuarioLogin: editando?.usuario ?? "",
-    // A diferencia de antes, este campo arranca con la contraseña actual
-    // (no vacío) — Gerencial la ve y la puede editar directamente, en vez
-    // de dejarla en blanco para "no cambiarla".
-    contrasena: editando?.contrasena ?? "",
+    // Siempre arranca en blanco, tanto al crear como al editar — la
+    // contraseña actual ya no existe del lado del cliente (queda protegida
+    // en el servidor, ver usuario_credenciales). Al editar, dejarlo en
+    // blanco significa "no cambiarla".
+    contrasena: "",
     negocioId: editando?.negocioId ?? negocios[0].id,
   });
   const [errores, setErrores] = useState<Errores>({});
@@ -210,8 +212,10 @@ function UsuarioForm({
     else if (usuarios.some((u) => u.id !== editando?.id && u.usuario.toLowerCase() === form.usuarioLogin.trim().toLowerCase())) {
       err.usuarioLogin = "Ese usuario ya existe — elige otro.";
     }
-    if (!form.contrasena) err.contrasena = "La contraseña es obligatoria.";
-    else if (form.contrasena.length < 6) err.contrasena = "Debe tener al menos 6 caracteres.";
+    // Al editar, la contraseña es opcional (en blanco = no cambiarla) —
+    // pero si se escribió algo, tiene que cumplir el mínimo igual.
+    if (!esEdicion && !form.contrasena) err.contrasena = "La contraseña es obligatoria.";
+    else if (form.contrasena && form.contrasena.length < 6) err.contrasena = "Debe tener al menos 6 caracteres.";
     const eCargo = requerido(form.cargo, "El cargo");
     if (eCargo) err.cargo = eCargo;
     else if (form.cargo === CARGO_OTRO && !form.cargoOtro.trim()) err.cargo = "Especifica el cargo.";
@@ -227,20 +231,20 @@ function UsuarioForm({
     const cargoFinal = form.cargo === CARGO_OTRO ? form.cargoOtro.trim() : form.cargo;
 
     if (editando) {
-      const patch: Partial<Usuario> = {
+      const patch: UsuarioPatch = {
         nombre: form.nombre.trim(),
         cargo: cargoFinal,
         iniciales: form.nombre.trim().split(" ").slice(0, 2).map((p) => p[0]?.toUpperCase()).join(""),
         usuario: form.usuarioLogin.trim(),
         negocioId: form.negocioId,
-        contrasena: form.contrasena,
       };
+      // Solo se manda si se escribió una — en blanco significa "no tocarla".
+      if (form.contrasena) patch.contrasena = form.contrasena;
       onGuardarEdicion(editando.id, patch);
       return;
     }
 
-    const nuevo: Usuario = {
-      id: `${form.usuarioLogin.trim().toLowerCase()}-${Date.now()}`,
+    const nuevo: UsuarioNuevo = {
       nombre: form.nombre.trim(),
       cargo: cargoFinal,
       rolTipo: "ventas",
@@ -312,8 +316,12 @@ function UsuarioForm({
         <Campo label="Usuario de acceso" requerido error={errores.usuarioLogin}>
           <input value={form.usuarioLogin} onChange={(e) => setForm((f) => ({ ...f, usuarioLogin: e.target.value }))} className="input" />
         </Campo>
-        <Campo label="Contraseña" requerido error={errores.contrasena}>
-          <CampoContrasena value={form.contrasena} onChange={(v) => setForm((f) => ({ ...f, contrasena: v }))} placeholder="Mínimo 6 caracteres" />
+        <Campo label={esEdicion ? "Nueva contraseña" : "Contraseña"} requerido={!esEdicion} error={errores.contrasena}>
+          <CampoContrasena
+            value={form.contrasena}
+            onChange={(v) => setForm((f) => ({ ...f, contrasena: v }))}
+            placeholder={esEdicion ? "Dejar en blanco para no cambiarla" : "Mínimo 6 caracteres"}
+          />
         </Campo>
         <button
           type="submit"

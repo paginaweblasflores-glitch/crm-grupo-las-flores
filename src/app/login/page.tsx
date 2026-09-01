@@ -26,15 +26,19 @@ export default function LoginPage() {
   const [contrasena, setContrasena] = useState("");
   const [verContrasena, setVerContrasena] = useState(false);
   const [error, setError] = useState(false);
+  const [verificando, setVerificando] = useState(false);
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const ok = iniciarSesion(usuario, contrasena);
+    if (verificando) return;
+    setVerificando(true);
+    const ok = await iniciarSesion(usuario, contrasena);
     if (ok) {
       router.push("/dashboard");
     } else {
       setError(true);
+      setVerificando(false);
     }
   }
 
@@ -129,10 +133,11 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full bg-[var(--color-terracota)] text-white text-sm font-bold rounded-xl py-3 hover:bg-[var(--color-terracota-oscuro)] transition-colors shadow-md hover:shadow-lg flex items-center justify-center gap-2 mt-2 cursor-pointer"
+            disabled={verificando}
+            className="w-full bg-[var(--color-terracota)] text-white text-sm font-bold rounded-xl py-3 hover:bg-[var(--color-terracota-oscuro)] transition-colors shadow-md hover:shadow-lg flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-70 disabled:cursor-wait"
           >
-            <span>Ingresar al Sistema</span>
-            <ArrowRight size={16} />
+            <span>{verificando ? "Verificando…" : "Ingresar al Sistema"}</span>
+            {!verificando && <ArrowRight size={16} />}
           </button>
         </form>
 

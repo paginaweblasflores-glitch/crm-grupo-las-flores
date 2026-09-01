@@ -9,12 +9,20 @@
 -- Cómo ejecutar: pega este archivo completo en Supabase → SQL Editor → Run.
 -- Después corre seed.sql (aparte) para cargar los datos de prueba.
 --
--- Seguridad: cada tabla tiene RLS (Row Level Security) activado con una
--- política abierta ("permitir todo") para que la app pueda leer/escribir
--- directo con la llave "anon" sin backend propio — es lo correcto para este
--- prototipo interno (nadie fuera del equipo tiene la URL ni la llave), pero
--- antes de manejar datos realmente sensibles habría que reemplazar esas
--- políticas por unas que sí validen quién es el usuario.
+-- Seguridad: cada tabla (salvo usuario_credenciales, ver más abajo) tiene
+-- RLS (Row Level Security) activado con una política abierta ("permitir
+-- todo") para que la app pueda leer/escribir directo con la llave "anon"
+-- sin backend propio. La única tabla realmente sensible — las contraseñas —
+-- quedó aparte en usuario_credenciales, totalmente cerrada incluso a esa
+-- llave pública (ver más abajo y src/app/api/auth, src/app/api/usuarios).
+-- El resto (clientes, campañas, festividades, etc.) sigue con la política
+-- abierta: cualquiera con la llave "anon" (visible en el propio código de
+-- la página, por diseño de Supabase) puede leer/escribir esas tablas sin
+-- pasar por el login del CRM. Es un riesgo real, no solo teórico, y sigue
+-- pendiente de una limitación de fondo (Supabase Auth + políticas RLS por
+-- rol, o mover cada lectura/escritura detrás de una ruta de servidor) antes
+-- de que esto deje de ser "nadie fuera del equipo conoce la URL" como única
+-- defensa.
 -- ============================================================================
 
 -- --- Negocios (las 3 sedes del grupo) ---------------------------------------
@@ -31,9 +39,11 @@ create table negocios (
 
 -- --- Usuarios (cuentas del sistema) -----------------------------------------
 -- Cuentas de ÁREA/CARGO, no de persona (excepto Gerente General, que además
--- guarda nombre_real). La contraseña queda en texto plano a propósito —
--- este prototipo no usa Supabase Auth todavía, es autenticación simple
--- contra esta tabla. No exponer esta tabla a nadie fuera del equipo.
+-- guarda nombre_real). NO lleva contraseña — ese dato vive aparte, ya como
+-- hash, en usuario_credenciales (ver más abajo), una tabla separada y
+-- cerrada incluso a la llave pública. Login real vía Supabase Auth queda
+-- como mejora futura; por ahora la autenticación es propia (ver
+-- src/app/api/auth), contra este par de tablas.
 create table usuarios (
   id uuid primary key default gen_random_uuid(),
   nombre text not null,
@@ -43,11 +53,27 @@ create table usuarios (
   rol_label text not null,
   iniciales text not null,
   usuario text not null unique,           -- usuario de acceso (login)
-  contrasena text not null,
   negocio_id text not null references negocios(id),
   creado_por uuid references usuarios(id),
   creado_en timestamptz not null default now()
 );
+
+-- Contraseñas — tabla aparte a propósito, para poder cerrarla del todo (ni
+-- siquiera la llave pública "anon" puede leerla o escribirla, y no está en
+-- la publicación de tiempo real) sin afectar en nada a "usuarios", que sí
+-- sigue siendo de lectura pública (nombre, cargo, rol — nada sensible) y
+-- sigue transmitiendo cambios en vivo normalmente.
+create table usuario_credenciales (
+  usuario_id uuid primary key references usuarios(id) on delete cascade,
+  contrasena_hash text not null,
+  actualizada_en timestamptz not null default now()
+);
+alter table usuario_credenciales enable row level security;
+-- Sin ninguna policy "permitir": sin políticas, RLS deniega todo por
+-- defecto. Se refuerza revocando además cualquier permiso de tabla a los
+-- roles públicos — solo la llave de servicio (que nunca llega al
+-- navegador) puede tocar esta tabla.
+revoke all on usuario_credenciales from anon, authenticated;
 
 -- --- Clientes individuales ---------------------------------------------------
 create table clientes_individuales (
@@ -196,7 +222,14 @@ alter table aprobacion_cumpleanos_mes enable row level security;
 alter table config_saludo_cumpleanos enable row level security;
 
 create policy "permitir todo (prototipo)" on negocios for all using (true) with check (true);
-create policy "permitir todo (prototipo)" on usuarios for all using (true) with check (true);
+-- usuarios: SOLO lectura para la llave pública (nombre, cargo, rol —
+-- ninguna contraseña, esa ya vive aparte en usuario_credenciales, sin
+-- ninguna policy). Crear/editar/eliminar una cuenta ahora pasa siempre por
+-- el servidor (src/app/api/usuarios, con la llave de servicio), que además
+-- valida que quien lo pide sea Gerencial — si la llave anon también
+-- pudiera escribir acá, cualquiera con esa llave podría crear una cuenta o
+-- cambiarle el rol a una existente sin pasar por esa validación.
+create policy "lectura publica" on usuarios for select using (true);
 create policy "permitir todo (prototipo)" on clientes_individuales for all using (true) with check (true);
 create policy "permitir todo (prototipo)" on clientes_corporativos for all using (true) with check (true);
 create policy "permitir todo (prototipo)" on festividades for all using (true) with check (true);

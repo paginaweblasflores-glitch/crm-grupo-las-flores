@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { CampoContrasena } from "@/components/ui/CampoContrasena";
 import { useConfigWhatsAppAPI, useConfigIA } from "@/lib/store";
 import { Errores } from "@/lib/validacion";
-import { Usuario } from "@/lib/types";
+import { Usuario, UsuarioPatch } from "@/lib/types";
 
 // Exclusivo de Gerencial (ver permissions.ts) — Dirección y Ventas no
 // administran su propia cuenta acá; las cuentas de Ventas las controla
@@ -64,7 +64,7 @@ function MiPerfil({
   usuario, editarUsuario,
 }: {
   usuario: Usuario;
-  editarUsuario: (id: string, patch: Partial<Usuario>) => void;
+  editarUsuario: (id: string, patch: UsuarioPatch) => void;
 }) {
   const [editando, setEditando] = useState(false);
   const [nueva, setNueva] = useState("");
@@ -105,11 +105,6 @@ function MiPerfil({
           <p className="font-semibold text-sm text-[var(--color-gris)] truncate">{usuario.nombreReal ?? usuario.nombre}</p>
           <p className="text-xs text-[var(--color-gris-medio)]">{usuario.cargo} · usuario: {usuario.usuario}</p>
         </div>
-      </div>
-
-      <div className="max-w-sm mb-4">
-        <label className="block text-xs font-semibold text-[var(--color-gris-medio)] mb-1">Contraseña actual</label>
-        <CampoContrasena value={usuario.contrasena} disabled />
       </div>
 
       {!editando ? (

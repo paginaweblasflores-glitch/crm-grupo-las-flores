@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Scripts de migración de un solo uso — se corren directo con
+    // `node --env-file=.env.local`, no forman parte del código de la app.
+    "base de datos/**/*.js",
   ]),
 ]);
 

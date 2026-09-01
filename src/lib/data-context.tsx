@@ -17,7 +17,7 @@
 
 import { createContext, useContext, useCallback, useEffect, useState, ReactNode } from "react";
 import {
-  Usuario, ClienteIndividual, ClienteCorporativo, Campana, Festividad, SeguimientoCumple,
+  UsuarioNuevo, UsuarioPatch, ClienteIndividual, ClienteCorporativo, Campana, Festividad, SeguimientoCumple,
   NegocioId,
 } from "./types";
 import {
@@ -124,8 +124,8 @@ interface DataContextValue extends DatosApp {
   error: string | null;
   recargar: () => void;
 
-  crearUsuario: (u: Usuario) => Promise<void>;
-  actualizarUsuario: (id: string, patch: Partial<Usuario>) => Promise<void>;
+  crearUsuario: (u: UsuarioNuevo) => Promise<void>;
+  actualizarUsuario: (id: string, patch: UsuarioPatch) => Promise<void>;
   eliminarUsuario: (id: string) => Promise<void>;
 
   crearClienteIndividual: (c: ClienteIndividual) => Promise<void>;
@@ -184,13 +184,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return cerrar;
   }, [listo]);
 
-  const crearUsuario = useCallback(async (u: Usuario) => {
+  const crearUsuario = useCallback(async (u: UsuarioNuevo) => {
     const creado = await dbCrearUsuario(u);
     setDatos((d) => ({ ...d, usuarios: [creado, ...d.usuarios] }));
   }, []);
-  const actualizarUsuario = useCallback(async (id: string, patch: Partial<Usuario>) => {
+  const actualizarUsuario = useCallback(async (id: string, patch: UsuarioPatch) => {
     await dbActualizarUsuario(id, patch);
-    setDatos((d) => ({ ...d, usuarios: d.usuarios.map((u) => (u.id === id ? { ...u, ...patch } : u)) }));
+    // "contrasena" nunca vive en el estado local (Usuario no tiene ese
+    // campo) — se quita antes de mezclar el resto del patch.
+    const patchSeguro = { ...patch };
+    delete patchSeguro.contrasena;
+    setDatos((d) => ({ ...d, usuarios: d.usuarios.map((u) => (u.id === id ? { ...u, ...patchSeguro } : u)) }));
   }, []);
   const eliminarUsuario = useCallback(async (id: string) => {
     await dbEliminarUsuario(id);
