@@ -2,6 +2,7 @@ import { NegocioId, ClienteIndividual, ClienteCorporativo, SeguimientoCumple } f
 import { BASE_DATE } from "./mock/seed";
 import { clientesIndividualesPorNegocio, corporativosPorNegocio } from "./mock/clientes";
 import { seguimientosPorNegocio, resumenCumpleanosHistoricoMes } from "./mock/seguimiento";
+import { esDeEsteMes } from "./seguimiento-helpers";
 import { NEGOCIOS } from "./mock/negocios";
 
 // Paquete de datos vivos (Supabase, vía useData()) que necesita casi toda
@@ -71,8 +72,17 @@ export function resumenCumpleanosMes(datos: DatosMetricas, negocioId: NegocioId)
   const seguimientos = seguimientosPorNegocio(datos.seguimientos, negocioId);
   const enviados = seguimientos.filter((s) => s.saludoEnviado).length;
   const reservaron = seguimientos.filter((s) => s.reservacion === "si");
+  // totalDelMes se calcula de la fecha de nacimiento real de cada cliente,
+  // NO contando filas de seguimiento_cumpleanos — esa tabla solo tiene fila
+  // para quien YA recibió un saludo o le tocaron la reservación a mano, así
+  // que con miles de clientes recién importados (casi ninguno con fila
+  // propia todavía) esto decía "0 clientes cumplen años este mes" aunque
+  // hubiera cientos de cumpleaños reales — mismo criterio que ya usan los
+  // StatTiles "Cumplen hoy"/"Próximos 10 días" de la página.
+  const clientesDelNegocio = clientesIndividualesPorNegocio(datos.clientesIndividuales, negocioId);
+  const totalDelMes = clientesDelNegocio.filter((c) => esDeEsteMes(c.fechaNacimiento)).length;
   return {
-    totalDelMes: seguimientos.length,
+    totalDelMes,
     enviados,
     personasQueReservaron: reservaron.length,
   };
