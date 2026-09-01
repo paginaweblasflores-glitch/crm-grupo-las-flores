@@ -9,6 +9,7 @@ import { Topbar } from "@/components/layout/Topbar";
 import { Card } from "@/components/ui/Card";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { Table, Thead, Th, Tr, Td } from "@/components/ui/Table";
+import { Paginador } from "@/components/ui/Paginador";
 import { exportarExcel } from "@/lib/exportar-excel";
 import { useData } from "@/lib/data-context";
 import { NuevoClienteForm } from "@/components/clientes/NuevoClienteForm";
@@ -79,6 +80,27 @@ export default function ClientesPage() {
   const celularExiste = (celular: string) => celularesExistentes.has(celular);
 
   const listaActiva = tab === "individual" ? individualesFiltrados : corporativosFiltrados;
+
+  // 100 por página — con miles de clientes reales (Restaurante Las Flores
+  // ya pasó los 8000), mostrarlos todos de una sola vez en la tabla se
+  // sentía lento y pesado de scrollear. La página se reinicia a la 1 cada
+  // vez que cambia la pestaña, la búsqueda o el negocio — quedarse "en la
+  // página 40" después de filtrar a 3 resultados sería confuso.
+  const POR_PAGINA = 100;
+  const [pagina, setPagina] = useState(1);
+  // Sincroniza la página con filtros que cambian fuera de este estado
+  // (pestaña, búsqueda, negocio) — no arranca un ciclo de renders en
+  // cascada, solo vuelve a la 1 cuando cambia alguno de esos tres.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    setPagina(1);
+  }, [tab, busqueda, negocio.id]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+  const totalPaginas = Math.max(1, Math.ceil(listaActiva.length / POR_PAGINA));
+  const paginaSegura = Math.min(pagina, totalPaginas);
+  const inicioPagina = (paginaSegura - 1) * POR_PAGINA;
+  const individualesPagina = individualesFiltrados.slice(inicioPagina, inicioPagina + POR_PAGINA);
+  const corporativosPagina = corporativosFiltrados.slice(inicioPagina, inicioPagina + POR_PAGINA);
 
   const fueraDeAlcance = negocio.id === "todas";
 
@@ -199,7 +221,7 @@ export default function ClientesPage() {
                 <Th>{" "}</Th>
               </Thead>
               <tbody className="uppercase">
-                {individualesFiltrados.map((c) => (
+                {individualesPagina.map((c) => (
                   <Tr key={c.id} onClick={() => router.push(`/clientes/${c.id}`)}>
                     <Td className="font-medium">{c.nombres} {c.apellidos}</Td>
                     <Td>{c.celular}</Td>
@@ -245,7 +267,7 @@ export default function ClientesPage() {
                 <Th>{" "}</Th>
               </Thead>
               <tbody className="uppercase">
-                {corporativosFiltrados.map((c) => (
+                {corporativosPagina.map((c) => (
                   <Tr key={c.id}>
                     <Td className="font-medium">{c.razonSocial}</Td>
                     <Td>{c.ruc}</Td>
@@ -283,6 +305,14 @@ export default function ClientesPage() {
           )}
           {listaActiva.length === 0 && (
             <p className="text-center text-sm text-[var(--color-gris-medio)] py-10">Sin resultados para esa búsqueda.</p>
+          )}
+          {listaActiva.length > 0 && (
+            <>
+              <p className="text-center text-xs text-[var(--color-gris-medio)] pt-3">
+                Mostrando {inicioPagina + 1}–{Math.min(inicioPagina + POR_PAGINA, listaActiva.length)} de {listaActiva.length}
+              </p>
+              <Paginador pagina={paginaSegura} totalPaginas={totalPaginas} onCambiar={setPagina} />
+            </>
           )}
         </Card>
       </main>

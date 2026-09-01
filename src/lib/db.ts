@@ -191,43 +191,69 @@ export interface DatosApp {
   aprobaciones: AprobacionMesRow[];
 }
 
+// PostgREST (el API que expone Supabase) nunca devuelve más de 1000 filas
+// por pedido, así se lo pida con select("*") sin ningún límite propio — es
+// un tope del servidor, no de este código. Sin esto, cualquier tabla que
+// pase de 1000 filas (clientes_individuales, apenas se sube una lista real
+// como la de Restaurante Las Flores) se cortaba en silencio: la app cargaba
+// solo las primeras 1000 y ya, sin ningún error que avisara — se veían
+// "1000" clientes en la pantalla cuando en la base había miles más.
+// Se pide en tandas de 1000 hasta que una tanda vuelve con menos de 1000
+// filas (esa es la señal de que ya no queda nada más por traer).
+const TAMANO_PAGINA = 1000;
+
+async function traerTodasLasFilas(
+  tabla: string,
+  orden?: { columna: string; ascendente: boolean }
+): Promise<Record<string, unknown>[]> {
+  const filas: Record<string, unknown>[] = [];
+  let desde = 0;
+  for (;;) {
+    let consulta = supabase.from(tabla).select("*").range(desde, desde + TAMANO_PAGINA - 1);
+    if (orden) consulta = consulta.order(orden.columna, { ascending: orden.ascendente });
+    const { data, error } = await consulta;
+    if (error) throw new Error(`Supabase (${tabla}): ${error.message}`);
+    if (!data || data.length === 0) break;
+    filas.push(...data);
+    if (data.length < TAMANO_PAGINA) break;
+    desde += TAMANO_PAGINA;
+  }
+  return filas;
+}
+
 export async function cargarTodo(): Promise<DatosApp> {
   const [
     negocios, usuarios, individuales, corporativos, campanas,
     festividades, seguimientos, configsSaludo, aprobaciones,
   ] = await Promise.all([
-    supabase.from("negocios").select("*"),
+    traerTodasLasFilas("negocios"),
     // El más reciente primero — el resto de la app (Clientes, Panel
     // Gerencial, ranking de asesores, etc.) confía en el orden que ya trae
     // este arreglo, no vuelve a ordenar por su cuenta. Sin esto, un cliente
     // recién registrado aparecía al final de la lista en vez de arriba,
     // porque Postgres no garantiza ningún orden si no se pide uno explícito.
-    supabase.from("usuarios").select("*").order("creado_en", { ascending: false }),
-    supabase.from("clientes_individuales").select("*").order("creado_en", { ascending: false }),
-    supabase.from("clientes_corporativos").select("*").order("creado_en", { ascending: false }),
-    supabase.from("campanas").select("*").order("creado_en", { ascending: false }),
-    supabase.from("festividades").select("*"),
-    supabase.from("seguimiento_cumpleanos").select("*").order("creado_en", { ascending: false }),
-    supabase.from("config_saludo_cumpleanos").select("*"),
-    supabase.from("aprobacion_cumpleanos_mes").select("*"),
+    traerTodasLasFilas("usuarios", { columna: "creado_en", ascendente: false }),
+    traerTodasLasFilas("clientes_individuales", { columna: "creado_en", ascendente: false }),
+    traerTodasLasFilas("clientes_corporativos", { columna: "creado_en", ascendente: false }),
+    traerTodasLasFilas("campanas", { columna: "creado_en", ascendente: false }),
+    traerTodasLasFilas("festividades"),
+    traerTodasLasFilas("seguimiento_cumpleanos", { columna: "creado_en", ascendente: false }),
+    traerTodasLasFilas("config_saludo_cumpleanos"),
+    traerTodasLasFilas("aprobacion_cumpleanos_mes"),
   ]);
 
-  for (const r of [negocios, usuarios, individuales, corporativos, campanas, festividades, seguimientos, configsSaludo, aprobaciones]) {
-    if (r.error) throw new Error(`Supabase: ${r.error.message}`);
-  }
-
   return {
-    negocios: (negocios.data ?? []).map(mapNegocio),
-    usuarios: (usuarios.data ?? []).map(mapUsuario),
-    clientesIndividuales: (individuales.data ?? []).map(mapClienteIndividual),
-    clientesCorporativos: (corporativos.data ?? []).map(mapClienteCorporativo),
-    campanas: (campanas.data ?? []).map(mapCampana),
-    festividades: (festividades.data ?? []).map(mapFestividad),
-    seguimientos: (seguimientos.data ?? []).map(mapSeguimiento),
-    configsSaludo: (configsSaludo.data ?? []).map((r) => ({
+    negocios: negocios.map(mapNegocio),
+    usuarios: usuarios.map(mapUsuario),
+    clientesIndividuales: individuales.map(mapClienteIndividual),
+    clientesCorporativos: corporativos.map(mapClienteCorporativo),
+    campanas: campanas.map(mapCampana),
+    festividades: festividades.map(mapFestividad),
+    seguimientos: seguimientos.map(mapSeguimiento),
+    configsSaludo: configsSaludo.map((r) => ({
       negocioId: r.negocio_id as NegocioId, mensaje: r.mensaje as string, hora: r.hora as string,
     })),
-    aprobaciones: (aprobaciones.data ?? []).map((r) => ({
+    aprobaciones: aprobaciones.map((r) => ({
       negocioId: r.negocio_id as NegocioId, anio: r.anio as number, mes: r.mes as number, aprobado: r.aprobado as boolean,
     })),
   };

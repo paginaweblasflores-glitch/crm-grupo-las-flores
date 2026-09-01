@@ -44,3 +44,9 @@ next-env.d.ts
 .claude/
 CLAUDE.md
 AGENTS.md
+
+# datos reales de clientes (nombres, celulares, fechas de nacimiento) — se
+# usan una sola vez para armar el .sql de importación y correrlo directo en
+# Supabase; nunca deben quedar en el historial de git (privado o no).
+Libro1.*
+base de datos/importar_*
