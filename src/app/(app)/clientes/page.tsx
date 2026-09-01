@@ -69,8 +69,9 @@ export default function ClientesPage() {
     );
   }, [corporativos, busqueda]);
 
-  // Celulares de los 3 negocios del grupo — un mismo número no debería
-  // registrarse dos veces como cliente distinto (SFIDA #3).
+  // Celulares de los 3 negocios del grupo — sigue usándose tal cual para
+  // clientes corporativos, donde el RUC ya es el identificador de verdad
+  // de la empresa y el celular repetido entre negocios sigue siendo raro.
   const celularesExistentes = useMemo(() => {
     const s = new Set<string>();
     clientesIndividuales.forEach((c) => s.add(c.celular));
@@ -78,6 +79,17 @@ export default function ClientesPage() {
     return s;
   }, [clientesIndividuales, clientesCorporativos]);
   const celularExiste = (celular: string) => celularesExistentes.has(celular);
+
+  // Para clientes individuales, en cambio, un mismo celular repetido YA NO
+  // basta para tratarlos como "el mismo cliente" — los datos reales que se
+  // subieron mostraron casos genuinos de dos personas distintas
+  // compartiendo un teléfono familiar. Ahora hace falta que coincidan
+  // celular Y fecha de nacimiento a la vez (de los 3 negocios del grupo,
+  // igual que antes) para bloquear el registro como duplicado.
+  const clienteIndividualDuplicado = (celular: string, fechaNacimiento: string, idExcluir?: string) =>
+    clientesIndividuales.some(
+      (c) => c.id !== idExcluir && c.celular === celular && c.fechaNacimiento === fechaNacimiento
+    );
 
   const listaActiva = tab === "individual" ? individualesFiltrados : corporativosFiltrados;
 
@@ -193,6 +205,7 @@ export default function ClientesPage() {
             negocioId={negocio.id}
             registradoPor={usuario.id}
             celularExiste={celularExiste}
+            individualDuplicado={clienteIndividualDuplicado}
             individualEditando={editandoIndividual ?? undefined}
             corporativoEditando={editandoCorporativo ?? undefined}
             onCancelar={cerrarForm}

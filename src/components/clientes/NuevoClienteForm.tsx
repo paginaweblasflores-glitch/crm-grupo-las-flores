@@ -13,14 +13,20 @@ import {
 const GENEROS: Genero[] = ["Femenino", "Masculino"];
 
 export function NuevoClienteForm({
-  negocioId, registradoPor, celularExiste, onGuardarIndividual, onGuardarCorporativo, onCancelar,
+  negocioId, registradoPor, celularExiste, individualDuplicado, onGuardarIndividual, onGuardarCorporativo, onCancelar,
   individualEditando, corporativoEditando,
 }: {
   negocioId: NegocioId;
   registradoPor: string;
-  // Verifica el celular contra la base de los 3 negocios del grupo — un mismo
-  // número no debería registrarse dos veces como cliente distinto (SFIDA #3).
+  // Para clientes corporativos: verifica el celular contra la base de los 3
+  // negocios del grupo — el RUC ya identifica a la empresa, pero un celular
+  // repetido igual conviene avisarlo.
   celularExiste: (celular: string) => boolean;
+  // Para clientes individuales: un celular repetido YA NO basta para
+  // tratarlos como el mismo cliente (puede ser un teléfono familiar
+  // compartido por dos personas distintas) — hace falta que coincidan
+  // celular Y fecha de nacimiento a la vez.
+  individualDuplicado: (celular: string, fechaNacimiento: string, idExcluir?: string) => boolean;
   onGuardarIndividual: (c: ClienteIndividual) => void;
   onGuardarCorporativo: (c: ClienteCorporativo) => void;
   onCancelar: () => void;
@@ -67,7 +73,7 @@ export function NuevoClienteForm({
 
       {tipo === "individual" ? (
         <FormIndividual
-          negocioId={negocioId} registradoPor={registradoPor} celularExiste={celularExiste}
+          negocioId={negocioId} registradoPor={registradoPor} individualDuplicado={individualDuplicado}
           onGuardar={onGuardarIndividual} onCancelar={onCancelar} editar={individualEditando}
         />
       ) : (
@@ -142,9 +148,10 @@ function validarUbicacion(departamento: string, provincia: string, distrito: str
 }
 
 function FormIndividual({
-  negocioId, registradoPor, celularExiste, onGuardar, onCancelar, editar,
+  negocioId, registradoPor, individualDuplicado, onGuardar, onCancelar, editar,
 }: {
-  negocioId: NegocioId; registradoPor: string; celularExiste: (celular: string) => boolean;
+  negocioId: NegocioId; registradoPor: string;
+  individualDuplicado: (celular: string, fechaNacimiento: string, idExcluir?: string) => boolean;
   onGuardar: (c: ClienteIndividual) => void; onCancelar: () => void;
   editar?: ClienteIndividual;
 }) {
@@ -166,11 +173,17 @@ function FormIndividual({
     if (eApellidos) err.apellidos = eApellidos;
     const eCelular = celularPeru(celular);
     if (eCelular) err.celular = eCelular;
-    else if (celular !== editar?.celular && celularExiste(celular)) err.celular = "Ese celular ya pertenece a un cliente registrado en el grupo.";
     const eEmail = emailOpcional(email);
     if (eEmail) err.email = eEmail;
     const eFecha = fechaPasada(fechaNacimiento, "La fecha de nacimiento");
     if (eFecha) err.fechaNacimiento = eFecha;
+    // Recién con las dos cosas válidas tiene sentido buscar el duplicado —
+    // un celular repetido ya no basta solo, hace falta que la fecha de
+    // nacimiento también coincida (puede ser un teléfono familiar
+    // compartido por dos personas distintas, no la misma).
+    if (!eCelular && !eFecha && individualDuplicado(celular, fechaNacimiento, editar?.id)) {
+      err.celular = "Ya existe un cliente registrado con este celular y esta fecha de nacimiento.";
+    }
     Object.assign(err, validarUbicacion(ubicacion.departamento, ubicacion.provincia, ubicacion.distrito));
     return err;
   }

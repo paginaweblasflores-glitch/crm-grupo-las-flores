@@ -84,7 +84,12 @@ create table clientes_individuales (
   nombres text not null,
   apellidos text not null,
   fecha_nacimiento date not null,
-  celular text not null unique,
+  -- Sin unique a propósito: dos clientes distintos pueden compartir un
+  -- mismo celular de verdad (un teléfono familiar/de la casa) — pasó con
+  -- datos reales. Lo que identifica a "el mismo cliente" es celular +
+  -- fecha de nacimiento juntos, y eso se valida en la app (ver
+  -- clientes/page.tsx y NuevoClienteForm.tsx), no acá con una restricción.
+  celular text not null,
   -- Procedencia en cascada Departamento → Provincia → Distrito. Sin campo de
   -- país: el negocio solo atiende clientes de Perú (decisión de Mijael).
   -- Solo departamento es obligatorio de verdad; el resto queda en '' cuando
