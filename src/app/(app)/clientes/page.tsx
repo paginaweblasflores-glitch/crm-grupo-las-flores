@@ -179,7 +179,7 @@ export default function ClientesPage() {
             </button>
           </div>
           <div className="flex items-center gap-3 flex-1 justify-end">
-            <SearchInput value={busqueda} onChange={setBusqueda} placeholder="Buscar por nombre, teléfono, país o RUC…" />
+            <SearchInput value={busqueda} onChange={setBusqueda} placeholder="Buscar por nombre, teléfono, distrito o RUC…" />
             {puedeRegistrarClientes(usuario.rolTipo) && (
               <button
                 onClick={() => (mostrarForm ? cerrarForm() : setFormAbierto(true))}
