@@ -14,7 +14,7 @@ import { StatTile } from "@/components/ui/StatTile";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge, type Tono } from "@/components/ui/Badge";
 import { campanaAlcanzaNegocio } from "@/lib/mock/campanas";
-import { NEGOCIOS, getNegocio } from "@/lib/mock/negocios";
+import { NEGOCIOS, getNegocio, nombreCombinadoNegocios } from "@/lib/mock/negocios";
 import { useConfigWhatsAppAPI, agregarMensajeChatDirecto } from "@/lib/store";
 import { useData } from "@/lib/data-context";
 import { requerido, Errores } from "@/lib/validacion";
@@ -34,6 +34,18 @@ interface ClienteResuelto {
 function etiquetaSucursales(negocios: Campana["negocios"]): string {
   if (negocios === "todas") return "Todas las sucursales";
   return negocios.map((id) => getNegocio(id)?.nombre ?? id).join(" + ");
+}
+
+// {negocio} en un mensaje de campaña se reemplaza por el nombre real del
+// negocio — igual que {negocio} en el saludo de cumpleaños, pero acá puede
+// resolver a más de un nombre a la vez (ver nombreCombinadoNegocios): "para
+// quién es esta campaña" cuando todavía no hay un cliente puntual (la
+// tarjeta de la lista, la vista previa del formulario), o el negocio real
+// de ESE cliente cuando el mensaje ya se le va a mandar a alguien en
+// concreto (WhatsApp individual, envío masivo) — ahí no tiene sentido
+// nombrarle a un cliente de Las Flores un negocio que nunca visitó.
+function personalizarMensaje(mensaje: string, nombreNegocio: string): string {
+  return mensaje.replaceAll("{negocio}", nombreNegocio);
 }
 
 export default function CampanasPage() {
@@ -121,7 +133,10 @@ function CampanasInner() {
   // el otro módulo, igual que ya pasa con el saludo de cumpleaños.
   function aprobarCampana(c: Campana) {
     const objetivo = idsParaPublicoYSucursales(c.publico, c.negocios);
-    objetivo.forEach((clienteId) => agregarMensajeChatDirecto(clienteId, c.mensaje, "negocio"));
+    objetivo.forEach((clienteId) => {
+      const nombreNegocio = getNegocio(clientesPorId.get(clienteId)?.negocioId ?? "")?.nombre ?? nombreCombinadoNegocios(c.negocios);
+      agregarMensajeChatDirecto(clienteId, personalizarMensaje(c.mensaje, nombreNegocio), "negocio");
+    });
     void actualizarCampana(c.id, {
       estado: "aprobada", aprobadaEn: new Date().toISOString().slice(0, 10),
       clientesObjetivo: objetivo, contactados: objetivo,
@@ -138,7 +153,8 @@ function CampanasInner() {
   // vuelve a hacer clic en un cliente que ya estaba contactado.
   function marcarContactado(c: Campana, clienteId: string) {
     if (c.contactados.includes(clienteId)) return;
-    agregarMensajeChatDirecto(clienteId, c.mensaje, "negocio");
+    const nombreNegocio = getNegocio(clientesPorId.get(clienteId)?.negocioId ?? "")?.nombre ?? nombreCombinadoNegocios(c.negocios);
+    agregarMensajeChatDirecto(clienteId, personalizarMensaje(c.mensaje, nombreNegocio), "negocio");
     void actualizarCampana(c.id, { contactados: [...c.contactados, clienteId] });
   }
 
@@ -289,6 +305,11 @@ function CampanaCard({
   // Si llega a más de una sede, cada cliente de la cola muestra de cuál es
   // — si es de una sola sede (el caso normal), no hace falta el detalle.
   const multiSede = c.negocios === "todas" || c.negocios.length > 1;
+  // Vista previa de la tarjeta: {negocio} resuelto al conjunto de sedes de
+  // la campaña (no hay un cliente puntual todavía acá) — cuando el mensaje
+  // sí se le manda a alguien en concreto (más abajo), se usa el negocio de
+  // ESE cliente, no este combinado.
+  const mensajeVistaPrevia = personalizarMensaje(c.mensaje, nombreCombinadoNegocios(c.negocios));
 
   return (
     <div className="px-5 py-4">
@@ -300,7 +321,7 @@ function CampanaCard({
             <Badge tono="naranja">{etiquetaSucursales(c.negocios)}</Badge>
           </div>
           <p className="text-sm font-semibold text-[var(--color-gris)]">{c.nombre}</p>
-          <p className="text-xs text-[var(--color-gris-medio)] mt-0.5 line-clamp-2 max-w-xl">{c.mensaje}</p>
+          <p className="text-xs text-[var(--color-gris-medio)] mt-0.5 line-clamp-2 max-w-xl">{mensajeVistaPrevia}</p>
         </div>
 
         {esPropia && (puedeCrear || puedeAprobar) && (
@@ -379,7 +400,7 @@ function CampanaCard({
                       // mensaje precargado, para contactar a esta persona
                       // en concreto.
                       <a
-                        href={enlaceWhatsApp(cliente.celular, c.mensaje)}
+                        href={enlaceWhatsApp(cliente.celular, personalizarMensaje(c.mensaje, negocioCliente?.nombre ?? nombreCombinadoNegocios(c.negocios)))}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => onMarcarContactado(id)}
@@ -415,9 +436,13 @@ function CampanaForm({
   const [todasLasSucursales, setTodasLasSucursales] = useState(campana ? campana.negocios === "todas" : false);
   // Por defecto, solo la sede activa — Gerencial puede agregar más si
   // quiere que la campaña llegue a otras sucursales (ver
-  // `puedeElegirSucursales`; Ventas solo opera la suya).
+  // `puedeElegirSucursales`; Ventas solo opera la suya). El default de "la
+  // sede activa" solo aplica a una campaña NUEVA — si se está editando una
+  // que ya era "todas", arranca vacío: si no, el primer clic en una sede
+  // puntual la SACABA en vez de agregarla (ya estaba ahí, precargada sin
+  // que se viera), y la campaña terminaba sin ninguna sede elegida.
   const [sucursalesElegidas, setSucursalesElegidas] = useState<NegocioId[]>(
-    campana && campana.negocios !== "todas" ? campana.negocios : [negocioActivo]
+    campana && campana.negocios !== "todas" ? campana.negocios : campana ? [] : [negocioActivo]
   );
   const [errores, setErrores] = useState<Errores>({});
 
@@ -517,8 +542,15 @@ function CampanaForm({
         </div>
         <div className="sm:col-span-2">
           <Campo label="Mensaje" requerido error={errores.mensaje}>
-            <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} rows={3} placeholder="Escribe el mensaje que se manda por WhatsApp…" className="input" />
+            <textarea value={mensaje} onChange={(e) => setMensaje(e.target.value)} rows={3} placeholder="Escribe el mensaje que se manda por WhatsApp… puedes usar {negocio} para el nombre del negocio" className="input" />
           </Campo>
+          {mensaje.includes("{negocio}") && (
+            <p className="text-[11px] text-[var(--color-gris-medio)] mt-1.5">
+              Vista previa: <span className="italic">
+                {personalizarMensaje(mensaje, nombreCombinadoNegocios(todasLasSucursales ? "todas" : sucursalesElegidas))}
+              </span>
+            </p>
+          )}
         </div>
         <div className="sm:col-span-2 flex justify-end gap-2 pt-1">
           <button type="button" onClick={onCancelar} className="text-sm font-medium text-[var(--color-gris-medio)] px-4 py-2">Cancelar</button>
