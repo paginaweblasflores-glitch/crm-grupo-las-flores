@@ -1,5 +1,4 @@
-import { SeguimientoCumple, ClienteIndividual, NegocioId } from "@/lib/types";
-import { mulberry32 } from "./seed";
+import { SeguimientoCumple, NegocioId } from "@/lib/types";
 
 // Función pura — recibe el arreglo ya cargado (useData()) en vez de leerlo
 // de una variable compartida a nivel de módulo (ver mock/clientes.ts para
@@ -9,50 +8,24 @@ export function seguimientosPorNegocio(seguimientos: SeguimientoCumple[], negoci
   return seguimientos.filter((s) => s.negocioId === negocioId);
 }
 
-// --- Historial de 12 meses (Panel Ejecutivo, filtro Anual) ------------------
-// Simulado a propósito: el sistema recién arranca, así que no hay datos
-// reales de meses anteriores todavía — apenas se acumule suficiente
-// historia real, esto se puede reemplazar por un resumen agregado de
-// verdad. Offset fijo por negocio para armar una semilla propia por
-// (negocio, mes).
-const NEGOCIO_SEED_OFFSET: Partial<Record<NegocioId, number>> = { "las-flores": 1, umaru: 2 };
-
-// Historial de conversión de saludos de cumpleaños para un mes calendario
-// específico (por número de mes, no por año — el cumpleaños se repite cada
-// año, así que "nació en marzo" basta para saber si cae en la ventana).
-// Mamina se excluye igual que en el mes en curso: su saludo automático de
-// cumpleaños todavía no está operando, así que su historial es honestamente
-// cero, no simulado. No devuelve filas individuales (SeguimientoCumple[])
-// porque el único consumidor es un gráfico de tendencia — solo hacen falta
-// los 2 totales agregados.
-export function resumenCumpleanosHistoricoMes(clientes: ClienteIndividual[], negocioId: NegocioId, mes: number): { enviados: number; convertidos: number } {
-  // "todas" suma Las Flores + Umaru (Mamina siempre da 0 por el guard de
-  // abajo) — necesario para que el Panel Gerencial pueda pedir el histórico
-  // agregado del grupo con el mismo negocioId que usa en el resto del panel.
-  if (negocioId === "todas") {
-    const a = resumenCumpleanosHistoricoMes(clientes, "las-flores", mes);
-    const b = resumenCumpleanosHistoricoMes(clientes, "umaru", mes);
-    return { enviados: a.enviados + b.enviados, convertidos: a.convertidos + b.convertidos };
-  }
-  const offset = NEGOCIO_SEED_OFFSET[negocioId];
-  if (offset === undefined) return { enviados: 0, convertidos: 0 };
-  const clientesDelMes = clientes.filter((c) => {
-    if (c.negocioId !== negocioId) return false;
-    const [, mesNac] = c.fechaNacimiento.split("-").map(Number);
-    return mesNac === mes;
+// --- Historial de 12 meses (Panel Ejecutivo/Gerencial, filtro Anual) -------
+// Agregado 100% real de `seguimiento_cumpleanos`, agrupado por el mes en que
+// el saludo se mandó de verdad (saludoEnviadoEn), no por mes de nacimiento.
+// Antes esto era simulado con un generador aleatorio (el sistema recién
+// arrancaba y no había historial real) — con clientes reales ya importados
+// eso quedó dando cifras inventadas (ej. "901 convertidos de 5351 enviados")
+// mientras la tabla real seguía en 0 filas. Con datos reales el resultado es
+// honesto solo: 0 en todos los meses hasta que el saludo automático empiece
+// a mandarse de verdad, y se va llenando solo con esos envíos reales — sin
+// necesitar ningún caso especial por negocio (si un negocio todavía no tiene
+// el saludo automático activo, simplemente no tiene filas ese mes).
+export function resumenCumpleanosHistoricoMes(seguimientos: SeguimientoCumple[], negocioId: NegocioId, mes: number): { enviados: number; convertidos: number } {
+  const delMes = seguimientosPorNegocio(seguimientos, negocioId).filter((s) => {
+    if (!s.saludoEnviado || !s.saludoEnviadoEn) return false;
+    return new Date(s.saludoEnviadoEn).getMonth() + 1 === mes;
   });
-  const rand = mulberry32(20260826 + offset * 1000 + mes);
-  let enviados = 0;
-  let convertidos = 0;
-  // Mismas probabilidades que el generador anterior (0.85 / 0.75 / 0.4 /
-  // 0.55), para que el histórico simulado sea consistente con el mes en
-  // curso real.
-  for (let i = 0; i < clientesDelMes.length; i++) {
-    if (rand() >= 0.85) continue; // saludoEnviado
-    enviados++;
-    if (rand() >= 0.75) continue; // "visto"
-    if (rand() >= 0.4) continue; // respuesta "sí"
-    if (rand() < 0.55) convertidos++; // reservación "sí"
-  }
-  return { enviados, convertidos };
+  return {
+    enviados: delMes.length,
+    convertidos: delMes.filter((s) => s.reservacion === "si").length,
+  };
 }

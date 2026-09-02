@@ -363,33 +363,18 @@ export function resumenCrecimientoGrupo(datos: DatosMetricas, periodo: Periodo):
 
 export interface PuntoFidelizacion { mes: string; convertidos: number; enviados: number; [key: string]: string | number; }
 
-// Tendencia de 12 meses de "Fidelización", del grupo o de UN negocio (mismo
-// patrón de ventana rodante que serieClientesPorPeriodo). Cada uno de los
-// 12 meses de la ventana aparece una sola vez, así que basta
-// el número de mes calendario (sin año) para ubicar a quién le tocaba
-// cumplir años ese mes — ver resumenCumpleanosHistoricoMes en
-// mock/seguimiento.ts. `negocioId` por defecto es "todas" (Panel Ejecutivo);
-// el Panel Gerencial la llama con un negocio específico para su propio
-// histórico.
+// Tendencia de 12 meses de "Fidelización", del grupo o de UN negocio —
+// agregado real de seguimiento_cumpleanos por mes de ENVÍO real
+// (resumenCumpleanosHistoricoMes en mock/seguimiento.ts), no simulado. Un
+// mes futuro da 0 solo (no puede haber un saludoEnviadoEn en el futuro), sin
+// necesitar ningún guard explícito — mismo criterio que ya usa Crecimiento.
+// `negocioId` por defecto es "todas" (Panel Ejecutivo); el Panel Gerencial
+// la llama con un negocio específico para su propio histórico.
 export function historialFidelizacionGrupo(datos: DatosMetricas, negocioId: NegocioId = "todas"): PuntoFidelizacion[] {
-  const activos = negocioId === "todas"
-    ? NEGOCIOS.filter((n) => n.operando)
-    : NEGOCIOS.filter((n) => n.id === negocioId);
-  // Enero a diciembre del año en curso, no una ventana rodante de 12 meses —
-  // "Anual" significa lo mismo acá que en Crecimiento (año de calendario).
-  // A diferencia de Crecimiento, un mes futuro NO da 0 solo:
-  // resumenCumpleanosHistoricoMes filtra por mes de NACIMIENTO (sin año, se
-  // repite cada año), así que alguien nacido en diciembre aparecería aunque
-  // diciembre de este año no haya llegado — por eso el guard explícito.
   const out: PuntoFidelizacion[] = [];
   for (let mesIdx = 0; mesIdx < 12; mesIdx++) {
-    const esFuturo = mesIdx > BASE_DATE.getMonth();
-    const totales = esFuturo ? [] : activos.map((n) => resumenCumpleanosHistoricoMes(datos.clientesIndividuales, n.id, mesIdx + 1));
-    out.push({
-      mes: MESES_LABEL[mesIdx],
-      enviados: totales.reduce((a, t) => a + t.enviados, 0),
-      convertidos: totales.reduce((a, t) => a + t.convertidos, 0),
-    });
+    const t = resumenCumpleanosHistoricoMes(datos.seguimientos, negocioId, mesIdx + 1);
+    out.push({ mes: MESES_LABEL[mesIdx], enviados: t.enviados, convertidos: t.convertidos });
   }
   return out;
 }
@@ -404,7 +389,7 @@ export function resumenCumpleanosPeriodo(datos: DatosMetricas, negocioId: Negoci
     let enviados = 0;
     let convertidos = 0;
     for (let mes = 1; mes <= BASE_DATE.getMonth() + 1; mes++) {
-      const t = resumenCumpleanosHistoricoMes(datos.clientesIndividuales, negocioId, mes);
+      const t = resumenCumpleanosHistoricoMes(datos.seguimientos, negocioId, mes);
       enviados += t.enviados;
       convertidos += t.convertidos;
     }
