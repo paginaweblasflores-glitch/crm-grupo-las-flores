@@ -17,6 +17,7 @@ import { campanaAlcanzaNegocio } from "@/lib/mock/campanas";
 import { NEGOCIOS, getNegocio, nombreCombinadoNegocios } from "@/lib/mock/negocios";
 import { useConfigWhatsAppAPI, agregarMensajeChatDirecto } from "@/lib/store";
 import { useData } from "@/lib/data-context";
+import { WHATSAPP_CONECTADA } from "@/lib/config";
 import { requerido, Errores } from "@/lib/validacion";
 import { Campana, NegocioId } from "@/lib/types";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
@@ -214,6 +215,17 @@ function CampanasInner() {
           <StatTile label="Clientes contactados" value={totalContactados} icon={<MessageCircle size={18} />} tono="verde" />
         </div>
 
+        {!WHATSAPP_CONECTADA && (
+          <Card>
+            <p className="text-xs text-[var(--color-gris-medio)]">
+              <span className="font-semibold text-[var(--color-gris)]">&quot;Aprobar y enviar&quot; está en pausa</span> hasta
+              terminar de conectar y probar la API de WhatsApp Business — ese botón marca a todo el segmento como
+              contactado al instante. Contactar uno por uno desde cada tarjeta sigue funcionando siempre (abre el
+              WhatsApp real de esa persona).
+            </p>
+          </Card>
+        )}
+
         {(formAbierto || editando) && (
           <CampanaForm
             negocioActivo={negocio.id}
@@ -267,6 +279,7 @@ function CampanasInner() {
                     clientesPorId={clientesPorId}
                     puedeCrear={puedeCrear}
                     puedeAprobar={puedeAprobar}
+                    conectada={WHATSAPP_CONECTADA}
                     onEditar={() => setEditando(c)}
                     onAprobar={() => aprobarCampana(c)}
                     onEliminar={() => void eliminarCampana(c.id)}
@@ -283,12 +296,20 @@ function CampanasInner() {
 }
 
 function CampanaCard({
-  campana: c, clientesPorId, puedeCrear, puedeAprobar, onEditar, onAprobar, onEliminar, onMarcarContactado,
+  campana: c, clientesPorId, puedeCrear, puedeAprobar, conectada, onEditar, onAprobar, onEliminar, onMarcarContactado,
 }: {
   campana: Campana;
   clientesPorId: Map<string, ClienteResuelto>;
   puedeCrear: boolean;
   puedeAprobar: boolean;
+  // Mientras la API de WhatsApp no esté conectada y probada (ver
+  // src/lib/config.ts), "Aprobar y enviar" queda visible pero deshabilitado
+  // — ese botón marca a TODO el segmento como contactado al instante
+  // (simulado), y ya causó una vez que una campaña completa (8311 clientes
+  // reales) quedara marcada como "enviada" antes de tiempo. Marcar
+  // contactado UNO por uno (más abajo) sigue activo siempre: ese sí abre el
+  // WhatsApp real de la persona, no finge nada.
+  conectada: boolean;
   onEditar: () => void;
   onAprobar: () => void;
   onEliminar: () => void;
@@ -337,7 +358,13 @@ function CampanaCard({
             {c.estado === "borrador" && puedeAprobar && (
               <button
                 onClick={onAprobar}
-                className="flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-1.5 bg-[var(--color-verde)] text-white hover:opacity-90 transition-opacity"
+                disabled={!conectada}
+                title={!conectada ? "Se habilita cuando la API de WhatsApp Business quede conectada y probada" : undefined}
+                className={`flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-1.5 transition-opacity ${
+                  conectada
+                    ? "bg-[var(--color-verde)] text-white hover:opacity-90"
+                    : "bg-[var(--color-gris-claro)]/60 text-[var(--color-gris-medio)] cursor-not-allowed"
+                }`}
               >
                 <CheckCircle2 size={13} /> Aprobar y enviar
               </button>
