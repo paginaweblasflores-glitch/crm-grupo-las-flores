@@ -17,9 +17,10 @@ import { pendientesDeSaludarDe } from "@/lib/seguimiento-helpers";
 // sin saludar todavía) — separada de la página principal de Cumpleaños
 // porque con miles de clientes reales esta lista puede tener decenas o
 // cientos de pendientes; mostrarlos todos en la misma página empujaba
-// "Seguimiento" muy abajo. Acá vive la lista completa, paginada; la página
+// "Seguimiento" muy abajo. Acá vive la lista completa, paginada (con
+// tamaño de página elegible desde el propio Paginador); la página
 // principal solo muestra un adelanto con un link para venir acá.
-const POR_PAGINA = 24;
+const POR_PAGINA_DEFECTO = 25;
 
 export default function ProximosCumpleanosPage() {
   const { usuario, negocio } = useApp();
@@ -64,16 +65,17 @@ function ProximosContenido({
 }) {
   const pendientes = pendientesDeSaludarDe(clientesIndividuales, seguimientosReales, negocioId);
 
+  const [porPagina, setPorPagina] = useState(POR_PAGINA_DEFECTO);
   const [pagina, setPagina] = useState(1);
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setPagina(1);
-  }, [negocioId]);
+  }, [negocioId, porPagina]);
   /* eslint-enable react-hooks/set-state-in-effect */
-  const totalPaginas = Math.max(1, Math.ceil(pendientes.length / POR_PAGINA));
+  const totalPaginas = Math.max(1, Math.ceil(pendientes.length / porPagina));
   const paginaSegura = Math.min(pagina, totalPaginas);
-  const inicio = (paginaSegura - 1) * POR_PAGINA;
-  const pendientesPagina = pendientes.slice(inicio, inicio + POR_PAGINA);
+  const inicio = (paginaSegura - 1) * porPagina;
+  const pendientesPagina = pendientes.slice(inicio, inicio + porPagina);
 
   return (
     <>
@@ -111,10 +113,14 @@ function ProximosContenido({
                   </div>
                 ))}
               </div>
-              <p className="text-center text-xs text-[var(--color-gris-medio)] pt-4">
-                Mostrando {inicio + 1}–{Math.min(inicio + POR_PAGINA, pendientes.length)} de {pendientes.length}
-              </p>
-              <Paginador pagina={paginaSegura} totalPaginas={totalPaginas} onCambiar={setPagina} />
+              <Paginador
+                pagina={paginaSegura}
+                totalPaginas={totalPaginas}
+                onCambiar={setPagina}
+                total={pendientes.length}
+                porPagina={porPagina}
+                onCambiarPorPagina={setPorPagina}
+              />
             </>
           )}
         </Card>

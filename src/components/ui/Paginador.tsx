@@ -16,54 +16,95 @@ function numerosAMostrar(pagina: number, total: number): (number | "...")[] {
   return resultado;
 }
 
+// Mismo set de opciones en toda la app (Clientes, Próximos cumpleaños, y lo
+// que se agregue después) — igual que el "Filas por página" de Google
+// Analytics/Search Console. 500 como tope: de ahí para arriba ya está
+// "Exportar a Excel" para ver todo de una.
+export const OPCIONES_POR_PAGINA = [5, 10, 25, 50, 100, 250, 500];
+
 export function Paginador({
   pagina, totalPaginas, onCambiar,
+  total, porPagina, onCambiarPorPagina, opciones = OPCIONES_POR_PAGINA,
 }: {
   pagina: number;
   totalPaginas: number;
   onCambiar: (pagina: number) => void;
+  // Total de filas y tamaño de página — quien llama sigue haciendo el
+  // slice() de su propia lista con `porPagina` (acá no se conoce la lista,
+  // solo los números), pero el texto "Mostrando X–Y de Z" y el selector de
+  // tamaño viven acá, en un solo lugar, para no repetirlos en cada página.
+  total: number;
+  porPagina: number;
+  onCambiarPorPagina: (porPagina: number) => void;
+  opciones?: number[];
 }) {
-  if (totalPaginas <= 1) return null;
+  if (total === 0) return null;
+
+  const inicio = (pagina - 1) * porPagina + 1;
+  const fin = Math.min(pagina * porPagina, total);
 
   return (
-    <nav className="flex items-center justify-center gap-1 py-4" aria-label="Paginación">
-      <button
-        onClick={() => onCambiar(pagina - 1)}
-        disabled={pagina === 1}
-        className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] disabled:opacity-30 disabled:hover:bg-transparent"
-        title="Página anterior"
-      >
-        <ChevronLeft size={16} />
-      </button>
+    <div className="flex flex-wrap items-center justify-between gap-3 pt-3 pb-1 px-1">
+      <label className="flex items-center gap-2 text-xs text-[var(--color-gris-medio)]">
+        Filas por página
+        <select
+          value={porPagina}
+          onChange={(e) => onCambiarPorPagina(Number(e.target.value))}
+          className="border border-[var(--color-gris-claro)]/60 rounded-lg pl-2 pr-1 py-1 text-xs font-semibold text-[var(--color-gris)] bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-terracota)]"
+        >
+          {opciones.map((n) => (
+            <option key={n} value={n}>{n}</option>
+          ))}
+        </select>
+      </label>
 
-      {numerosAMostrar(pagina, totalPaginas).map((p, i) =>
-        p === "..." ? (
-          <span key={`puntos-${i}`} className="w-8 h-8 flex items-center justify-center text-xs text-[var(--color-gris-medio)]">
-            …
-          </span>
-        ) : (
-          <button
-            key={p}
-            onClick={() => onCambiar(p)}
-            className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-colors ${
-              p === pagina
-                ? "bg-[var(--color-terracota)] text-white"
-                : "text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)]"
-            }`}
-          >
-            {p}
-          </button>
-        )
-      )}
+      <div className="flex items-center gap-4">
+        <span className="text-xs text-[var(--color-gris-medio)] whitespace-nowrap">
+          {inicio}–{fin} de {total}
+        </span>
 
-      <button
-        onClick={() => onCambiar(pagina + 1)}
-        disabled={pagina === totalPaginas}
-        className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] disabled:opacity-30 disabled:hover:bg-transparent"
-        title="Página siguiente"
-      >
-        <ChevronRight size={16} />
-      </button>
-    </nav>
+        {totalPaginas > 1 && (
+          <nav className="flex items-center gap-1" aria-label="Paginación">
+            <button
+              onClick={() => onCambiar(pagina - 1)}
+              disabled={pagina === 1}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] disabled:opacity-30 disabled:hover:bg-transparent"
+              title="Página anterior"
+            >
+              <ChevronLeft size={16} />
+            </button>
+
+            {numerosAMostrar(pagina, totalPaginas).map((p, i) =>
+              p === "..." ? (
+                <span key={`puntos-${i}`} className="w-8 h-8 flex items-center justify-center text-xs text-[var(--color-gris-medio)]">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => onCambiar(p)}
+                  className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-semibold transition-colors ${
+                    p === pagina
+                      ? "bg-[var(--color-terracota)] text-white"
+                      : "text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)]"
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            )}
+
+            <button
+              onClick={() => onCambiar(pagina + 1)}
+              disabled={pagina === totalPaginas}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--color-gris-medio)] hover:bg-[var(--color-crema)] disabled:opacity-30 disabled:hover:bg-transparent"
+              title="Página siguiente"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </nav>
+        )}
+      </div>
+    </div>
   );
 }
