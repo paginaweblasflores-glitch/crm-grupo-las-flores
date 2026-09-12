@@ -93,14 +93,14 @@ export default function ClientesPage() {
 
   const listaActiva = tab === "individual" ? individualesFiltrados : corporativosFiltrados;
 
-  // 100 por página de entrada — con miles de clientes reales (Restaurante
+  // 10 por página de entrada — con miles de clientes reales (Restaurante
   // Las Flores ya pasó los 8000), mostrarlos todos de una sola vez en la
   // tabla se sentía lento y pesado de scrollear. Ventas/Gerencial pueden
   // cambiarlo desde el propio Paginador (5 a 500). La página se reinicia a
   // la 1 cada vez que cambia la pestaña, la búsqueda, el negocio o el
   // tamaño de página — quedarse "en la página 40" después de filtrar a 3
   // resultados (o de pasar a mostrar 500 a la vez) sería confuso.
-  const [porPagina, setPorPagina] = useState(100);
+  const [porPagina, setPorPagina] = useState(10);
   const [pagina, setPagina] = useState(1);
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {

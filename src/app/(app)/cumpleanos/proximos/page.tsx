@@ -20,7 +20,7 @@ import { pendientesDeSaludarDe } from "@/lib/seguimiento-helpers";
 // "Seguimiento" muy abajo. Acá vive la lista completa, paginada (con
 // tamaño de página elegible desde el propio Paginador); la página
 // principal solo muestra un adelanto con un link para venir acá.
-const POR_PAGINA_DEFECTO = 25;
+const POR_PAGINA_DEFECTO = 10;
 
 export default function ProximosCumpleanosPage() {
   const { usuario, negocio } = useApp();
