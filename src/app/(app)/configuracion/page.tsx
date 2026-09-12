@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Lock, Check, X, Plug, Sparkles } from "lucide-react";
+import { Lock, Check, X, Plug, Sparkles, Trash2 } from "lucide-react";
 import { useApp } from "@/lib/app-context";
 import { accesoA } from "@/lib/permissions";
 import { Topbar } from "@/components/layout/Topbar";
@@ -9,7 +9,8 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge, type Tono } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CampoContrasena } from "@/components/ui/CampoContrasena";
-import { useConfigWhatsAppAPI, useConfigIA } from "@/lib/store";
+import { ModalConfirmar } from "@/components/ui/ModalConfirmar";
+import { useConfigWhatsAppAPI, useConfigIA, contarChatsSimulados, limpiarChatSimulado } from "@/lib/store";
 import { Errores } from "@/lib/validacion";
 import { Usuario, UsuarioPatch } from "@/lib/types";
 
@@ -55,8 +56,76 @@ export default function ConfiguracionPage() {
         </div>
         <IntegracionWhatsApp />
         <IntegracionIA />
+        <LimpiarChatSimulado />
       </main>
     </>
+  );
+}
+
+// El chat de Mensajería es simulado a propósito (ver store.ts) y vive solo
+// en el navegador de cada quien, no en Supabase — cuando un saludo de
+// cumpleaños o campaña se "envió" de mentira antes de que la API real de
+// WhatsApp estuviera conectada, ese mensaje se queda guardado ahí aunque
+// después se limpie la fila real en la base de datos. Este botón lo borra
+// del navegador donde se aprieta — hay que apretarlo en cada dispositivo que
+// haya tenido Mensajería abierta mientras se simulaba el envío.
+function LimpiarChatSimulado() {
+  const [cantidad, setCantidad] = useState<number | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
+  const [borrado, setBorrado] = useState<number | null>(null);
+
+  // Lee localStorage (fuente externa al navegador, no a Supabase) al montar
+  // y de nuevo justo después de borrar, para que el contador se actualice
+  // solo — mismo patrón ya usado en store.ts para hidratar sin romper SSR.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    setCantidad(contarChatsSimulados());
+  }, [borrado]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  if (cantidad === null) return null;
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <CardHeader
+          title="Chat simulado de Mensajería"
+          subtitle={
+            cantidad === 0
+              ? "No hay conversaciones simuladas guardadas en este navegador."
+              : `${cantidad} conversaci${cantidad === 1 ? "ón" : "ones"} simulada${cantidad === 1 ? "" : "s"} guardada${cantidad === 1 ? "" : "s"} en este navegador.`
+          }
+        />
+        <Badge tono={cantidad === 0 ? "gris" : "naranja" as Tono}>{cantidad === 0 ? "Vacío" : "Con datos simulados"}</Badge>
+      </div>
+      {cantidad > 0 && (
+        <button
+          onClick={() => setConfirmando(true)}
+          className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-rojo)] hover:underline"
+        >
+          <Trash2 size={13} /> Borrar todo el chat simulado de este navegador
+        </button>
+      )}
+      {borrado !== null && (
+        <p className="text-xs font-medium text-[var(--color-verde)] mt-2">
+          Se borraron {borrado} conversaci{borrado === 1 ? "ón" : "ones"} de este navegador.
+        </p>
+      )}
+
+      {confirmando && (
+        <ModalConfirmar
+          titulo="Borrar chat simulado"
+          mensaje={`Se van a borrar las ${cantidad} conversaciones simuladas guardadas en este navegador (saludos de cumpleaños y campañas mostrados como "enviados" en Mensajería). No afecta a otros navegadores ni a la base de datos real — esto no se puede deshacer.`}
+          textoConfirmar="Borrar"
+          onCancelar={() => setConfirmando(false)}
+          onConfirmar={() => {
+            const n = limpiarChatSimulado();
+            setBorrado(n);
+            setConfirmando(false);
+          }}
+        />
+      )}
+    </Card>
   );
 }
 
