@@ -16,5 +16,6 @@ truncate table
   festividades,
   seguimiento_cumpleanos,
   aprobacion_cumpleanos_mes,
-  config_saludo_cumpleanos
+  config_saludo_cumpleanos,
+  mensajes
 cascade;

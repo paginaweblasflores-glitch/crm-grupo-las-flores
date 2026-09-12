@@ -16,7 +16,6 @@ import { seguimientosPorNegocio } from "@/lib/mock/seguimiento";
 import { clientesIndividualesPorNegocio } from "@/lib/mock/clientes";
 import { BASE_DATE } from "@/lib/mock/seed";
 import { resumenCumpleanosMes } from "@/lib/metrics";
-import { agregarMensajeChatDirecto } from "@/lib/store";
 import { useData } from "@/lib/data-context";
 import { WHATSAPP_CONECTADA } from "@/lib/config";
 import { PLANTILLA_CUMPLEANOS_DEFECTO, HORA_ENVIO_DEFECTO, interpolarPlantilla } from "@/lib/mensajes";
@@ -65,7 +64,7 @@ export default function CumpleanosPage() {
   const router = useRouter();
   const {
     clientesIndividuales, clientesCorporativos, seguimientos: seguimientosReales, configsSaludo, aprobaciones, listo: datosListos,
-    crearSeguimiento, actualizarSeguimiento, guardarConfigSaludo, aprobarMes,
+    crearSeguimiento, actualizarSeguimiento, guardarConfigSaludo, aprobarMes, crearMensaje,
   } = useData();
 
   // "Todas las sucursales" no es un negocio real — se redirige a Panel Principal.
@@ -128,6 +127,7 @@ export default function CumpleanosPage() {
           reales={seguimientosReales}
           crearSeguimiento={crearSeguimiento}
           actualizarSeguimiento={actualizarSeguimiento}
+          crearMensaje={crearMensaje}
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -221,18 +221,22 @@ export default function CumpleanosPage() {
 // Supabase), así que aprobar agosto no dispara el envío en septiembre.
 //
 // Esto es independiente de Campañas: una campaña también puede escribirle a
-// este mismo cliente (agregarMensajeChatDirecto), pero eso no toca
+// este mismo cliente (crearMensaje, con origen "campana"), pero eso no toca
 // `saludoEnviado` ni la fila de seguimiento — son dos fuentes de mensajes
-// distintas que comparten el chat, no el seguimiento. El seguimiento de
-// cumpleaños (esta tabla) solo se mueve por el saludo de cumpleaños, nunca
-// por una campaña.
+// distintas que comparten la tabla `mensajes`, no el seguimiento. El
+// seguimiento de cumpleaños (esta tabla) solo se mueve por el saludo de
+// cumpleaños, nunca por una campaña.
 function AutoEnvioCumpleanos({
-  negocioNombre, seguimientos, config, aprobado, reales, crearSeguimiento, actualizarSeguimiento,
+  negocioNombre, seguimientos, config, aprobado, reales, crearSeguimiento, actualizarSeguimiento, crearMensaje,
 }: {
   negocioNombre: string; seguimientos: SeguimientoCumple[];
   config: ConfigSaludo; aprobado: boolean; reales: SeguimientoCumple[];
   crearSeguimiento: (s: SeguimientoCumple) => Promise<SeguimientoCumple>;
   actualizarSeguimiento: (id: string, patch: Partial<SeguimientoCumple>) => Promise<void>;
+  crearMensaje: (m: {
+    negocioId: SeguimientoCumple["negocioId"]; clienteId: string; clienteTipo: SeguimientoCumple["clienteTipo"];
+    de: "negocio" | "cliente"; texto: string; origen: "cumpleanos" | "campana" | "manual"; origenId?: string; hora?: string;
+  }) => Promise<void>;
 }) {
   const [, forceTick] = useState(0);
   // Guarda de la sesión: qué seguimientos ya se mandaron a crear/actualizar
@@ -279,7 +283,10 @@ function AutoEnvioCumpleanos({
       const enviado = new Date(ahora);
       enviado.setHours(h, m || 0, 0, 0);
       const enviadoEn = enviado.toISOString();
-      agregarMensajeChatDirecto(s.clienteId, texto, "negocio", `${s.id}-auto-saludo`, enviadoEn);
+      void crearMensaje({
+        negocioId: s.negocioId, clienteId: s.clienteId, clienteTipo: s.clienteTipo,
+        de: "negocio", texto, origen: "cumpleanos", origenId: s.id, hora: enviadoEn,
+      });
       void guardarSeguimiento(s, { saludoEnviado: true, saludoEnviadoEn: enviadoEn }, reales, crearSeguimiento, actualizarSeguimiento);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

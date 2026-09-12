@@ -18,7 +18,7 @@
 import { createContext, useContext, useCallback, useEffect, useState, ReactNode } from "react";
 import {
   UsuarioNuevo, UsuarioPatch, ClienteIndividual, ClienteCorporativo, Campana, Festividad, SeguimientoCumple,
-  NegocioId,
+  Mensaje, NegocioId,
 } from "./types";
 import {
   cargarTodo, type DatosApp, type ConfigSaludoRow, type AprobacionMesRow,
@@ -28,9 +28,9 @@ import {
   dbCrearCampana, dbActualizarCampana, dbEliminarCampana,
   dbCrearFestividad, dbActualizarFestividad, dbEliminarFestividad,
   dbCrearSeguimiento, dbActualizarSeguimiento,
-  dbGuardarConfigSaludo, dbAprobarMes,
+  dbGuardarConfigSaludo, dbAprobarMes, dbCrearMensaje,
   suscribirCambios, type CambioRealtime,
-  mapUsuario, mapClienteIndividual, mapClienteCorporativo, mapCampana, mapFestividad, mapSeguimiento,
+  mapUsuario, mapClienteIndividual, mapClienteCorporativo, mapCampana, mapFestividad, mapSeguimiento, mapMensaje,
 } from "./db";
 
 // Aplica un evento de Supabase Realtime al estado local — el mecanismo que
@@ -104,6 +104,17 @@ function aplicarCambioRealtime(d: DatosApp, c: CambioRealtime): DatosApp {
       const fila: ConfigSaludoRow = { negocioId, mensaje: c.nueva.mensaje as string, hora: c.nueva.hora as string };
       return { ...d, configsSaludo: [...sinEsta, fila] };
     }
+    case "mensajes": {
+      const id = idDe(c.vieja);
+      if (c.tipo === "DELETE") return id ? { ...d, mensajes: d.mensajes.filter((x) => x.id !== id) } : d;
+      if (!c.nueva) return d;
+      const fila = mapMensaje(c.nueva);
+      const existe = d.mensajes.some((x) => x.id === fila.id);
+      // Los mensajes se leen en orden ascendente (más viejo primero, ver
+      // cargarTodo) — uno nuevo va al FINAL, no al principio como el resto
+      // de las tablas (esas se muestran más-reciente-primero).
+      return { ...d, mensajes: existe ? d.mensajes.map((x) => (x.id === fila.id ? fila : x)) : [...d.mensajes, fila] };
+    }
     case "aprobacion_cumpleanos_mes": {
       const base = c.nueva ?? c.vieja;
       const negocioId = base?.negocio_id as NegocioId | undefined;
@@ -148,6 +159,11 @@ interface DataContextValue extends DatosApp {
 
   guardarConfigSaludo: (negocioId: NegocioId, mensaje: string, hora: string) => Promise<void>;
   aprobarMes: (negocioId: NegocioId, anio: number, mes: number) => Promise<void>;
+
+  crearMensaje: (m: {
+    negocioId: NegocioId; clienteId: string; clienteTipo: Mensaje["clienteTipo"];
+    de: Mensaje["de"]; texto: string; origen: Mensaje["origen"]; origenId?: string; hora?: string;
+  }) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -155,6 +171,7 @@ const DataContext = createContext<DataContextValue | null>(null);
 const VACIO: DatosApp = {
   negocios: [], usuarios: [], clientesIndividuales: [], clientesCorporativos: [],
   campanas: [], festividades: [], seguimientos: [], configsSaludo: [], aprobaciones: [],
+  mensajes: [],
 };
 
 export function DataProvider({ children }: { children: ReactNode }) {
@@ -279,6 +296,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // `dbCrearMensaje` devuelve null si ya existía un mensaje con el mismo
+  // (clienteId, origen, origenId) — dos sesiones disparando el mismo saludo/
+  // campaña casi al mismo tiempo, por ejemplo. En ese caso no hay nada nuevo
+  // que agregar al estado local (el Realtime de la sesión que sí lo creó ya
+  // se encarga de que este cliente lo vea llegar).
+  const crearMensaje = useCallback(async (m: Parameters<DataContextValue["crearMensaje"]>[0]) => {
+    const creado = await dbCrearMensaje(m);
+    if (!creado) return;
+    setDatos((d) => ({ ...d, mensajes: [...d.mensajes, creado] }));
+  }, []);
+
   const value: DataContextValue = {
     ...datos,
     listo,
@@ -291,6 +319,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     crearFestividad, actualizarFestividad, eliminarFestividad,
     crearSeguimiento, actualizarSeguimiento,
     guardarConfigSaludo, aprobarMes,
+    crearMensaje,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

@@ -213,6 +213,32 @@ create table config_saludo_cumpleanos (
   hora text not null default '09:00'      -- 'HH:mm'
 );
 
+-- --- Mensajería real (chat de Mensajería) --------------------------------------
+-- Reemplaza el chat que antes se guardaba solo en localStorage del
+-- navegador — cada mensaje (saludo de cumpleaños, campaña, o escrito a mano
+-- en Mensajería) es ahora una fila real, la misma para cualquier
+-- dispositivo/sesión que la vea. cliente_id es polimórfico, igual que
+-- seguimiento_cumpleanos (sin foreign key directa).
+create table mensajes (
+  id uuid primary key default gen_random_uuid(),
+  negocio_id text not null references negocios(id),
+  cliente_id uuid not null,
+  cliente_tipo text not null default 'individual' check (cliente_tipo in ('individual', 'corporativo')),
+  de text not null check (de in ('negocio', 'cliente')),
+  texto text not null,
+  -- De dónde vino — solo para trazabilidad/depuración, nunca se muestra al
+  -- cliente. origen_id es el id del seguimiento o la campaña que lo generó
+  -- (null si "manual", escrito a mano desde Mensajería).
+  origen text not null check (origen in ('cumpleanos', 'campana', 'manual')),
+  origen_id uuid,
+  creado_en timestamptz not null default now()
+);
+create index idx_mensajes_cliente on mensajes(cliente_id, creado_en desc);
+create index idx_mensajes_negocio on mensajes(negocio_id, creado_en desc);
+-- Evita mandar el mismo saludo/campaña dos veces al mismo cliente si dos
+-- sesiones disparan el mismo envío casi al mismo tiempo.
+create unique index idx_mensajes_origen_unico on mensajes(cliente_id, origen, origen_id) where origen_id is not null;
+
 -- ============================================================================
 -- Row Level Security — abierto para el prototipo (ver nota de seguridad arriba)
 -- ============================================================================
@@ -225,6 +251,7 @@ alter table campanas enable row level security;
 alter table seguimiento_cumpleanos enable row level security;
 alter table aprobacion_cumpleanos_mes enable row level security;
 alter table config_saludo_cumpleanos enable row level security;
+alter table mensajes enable row level security;
 
 create policy "permitir todo (prototipo)" on negocios for all using (true) with check (true);
 -- usuarios: SOLO lectura para la llave pública (nombre, cargo, rol —
@@ -242,6 +269,7 @@ create policy "permitir todo (prototipo)" on campanas for all using (true) with 
 create policy "permitir todo (prototipo)" on seguimiento_cumpleanos for all using (true) with check (true);
 create policy "permitir todo (prototipo)" on aprobacion_cumpleanos_mes for all using (true) with check (true);
 create policy "permitir todo (prototipo)" on config_saludo_cumpleanos for all using (true) with check (true);
+create policy "permitir todo (prototipo)" on mensajes for all using (true) with check (true);
 
 -- ============================================================================
 -- Tiempo real (Supabase Realtime) — sin esto, un cambio hecho en una sesión
@@ -259,3 +287,4 @@ alter publication supabase_realtime add table festividades;
 alter publication supabase_realtime add table seguimiento_cumpleanos;
 alter publication supabase_realtime add table config_saludo_cumpleanos;
 alter publication supabase_realtime add table aprobacion_cumpleanos_mes;
+alter publication supabase_realtime add table mensajes;

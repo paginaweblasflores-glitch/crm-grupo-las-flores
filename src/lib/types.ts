@@ -179,10 +179,23 @@ export interface Festividad {
   descripcion?: string;
 }
 
-// --- Mensajería / chat simulado (reemplaza salir a WhatsApp) ---------------
+// --- Mensajería ------------------------------------------------------------
+// Un mensaje real de Supabase (tabla `mensajes`) — ya no vive en el
+// localStorage del navegador (ver commit que migró esto). Cada uno queda
+// asociado a un cliente y a de dónde vino (`origen`), para que Mensajería
+// pueda listar "quién tiene conversación" con una simple consulta por
+// cliente, en vez de recalcular cruces cliente×campaña en el navegador.
 export interface Mensaje {
   id: string;
+  negocioId: NegocioId;
+  clienteId: string;
+  clienteTipo: "individual" | "corporativo";
   de: "negocio" | "cliente";
   texto: string;
-  hora: string; // ISO timestamp
+  // De dónde vino este mensaje — solo para trazabilidad, nunca se muestra al
+  // cliente. `origenId` es el id del seguimiento de cumpleaños o la campaña
+  // que lo generó (undefined si es "manual", escrito a mano en Mensajería).
+  origen: "cumpleanos" | "campana" | "manual";
+  origenId?: string;
+  hora: string; // ISO timestamp (creado_en)
 }

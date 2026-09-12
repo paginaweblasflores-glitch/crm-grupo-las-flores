@@ -8,7 +8,7 @@
 import { supabase } from "./supabase";
 import {
   Negocio, NegocioId, Usuario, UsuarioNuevo, UsuarioPatch, ClienteIndividual, ClienteCorporativo,
-  Campana, Festividad, SeguimientoCumple,
+  Campana, Festividad, SeguimientoCumple, Mensaje,
 } from "./types";
 
 // Normaliza un nombre de persona a "Cada Palabra Capitalizada" sin importar
@@ -165,6 +165,20 @@ export function mapSeguimiento(r: Record<string, unknown>): SeguimientoCumple {
   };
 }
 
+export function mapMensaje(r: Record<string, unknown>): Mensaje {
+  return {
+    id: r.id as string,
+    negocioId: r.negocio_id as NegocioId,
+    clienteId: r.cliente_id as string,
+    clienteTipo: r.cliente_tipo as Mensaje["clienteTipo"],
+    de: r.de as Mensaje["de"],
+    texto: r.texto as string,
+    origen: r.origen as Mensaje["origen"],
+    origenId: (r.origen_id as string) ?? undefined,
+    hora: r.creado_en as string,
+  };
+}
+
 export interface ConfigSaludoRow {
   negocioId: NegocioId;
   mensaje: string;
@@ -191,6 +205,7 @@ export interface DatosApp {
   seguimientos: SeguimientoCumple[];
   configsSaludo: ConfigSaludoRow[];
   aprobaciones: AprobacionMesRow[];
+  mensajes: Mensaje[];
 }
 
 // PostgREST (el API que expone Supabase) nunca devuelve más de 1000 filas
@@ -226,7 +241,7 @@ async function traerTodasLasFilas(
 export async function cargarTodo(): Promise<DatosApp> {
   const [
     negocios, usuarios, individuales, corporativos, campanas,
-    festividades, seguimientos, configsSaludo, aprobaciones,
+    festividades, seguimientos, configsSaludo, aprobaciones, mensajes,
   ] = await Promise.all([
     traerTodasLasFilas("negocios"),
     // El más reciente primero — el resto de la app (Clientes, Panel
@@ -242,6 +257,9 @@ export async function cargarTodo(): Promise<DatosApp> {
     traerTodasLasFilas("seguimiento_cumpleanos", { columna: "creado_en", ascendente: false }),
     traerTodasLasFilas("config_saludo_cumpleanos"),
     traerTodasLasFilas("aprobacion_cumpleanos_mes"),
+    // Orden ascendente (más viejo primero) — así una conversación se lee de
+    // corrido de arriba hacia abajo, igual que en WhatsApp/Telegram.
+    traerTodasLasFilas("mensajes", { columna: "creado_en", ascendente: true }),
   ]);
 
   return {
@@ -258,6 +276,7 @@ export async function cargarTodo(): Promise<DatosApp> {
     aprobaciones: aprobaciones.map((r) => ({
       negocioId: r.negocio_id as NegocioId, anio: r.anio as number, mes: r.mes as number, aprobado: r.aprobado as boolean,
     })),
+    mensajes: mensajes.map(mapMensaje),
   };
 }
 
@@ -474,6 +493,36 @@ export async function dbActualizarSeguimiento(id: string, patch: Partial<Seguimi
 }
 
 // ============================================================================
+// Mensajería
+// ============================================================================
+// El índice único de la tabla (cliente_id, origen, origen_id) evita que el
+// mismo saludo de cumpleaños o mensaje de campaña se duplique si dos
+// sesiones lo disparan casi al mismo tiempo — Postgres devuelve un error de
+// "unique_violation" (23505) en ese caso, que acá se trata como éxito
+// silencioso (ya existe, no hay nada más que hacer), no como una falla real.
+export async function dbCrearMensaje(m: {
+  negocioId: NegocioId;
+  clienteId: string;
+  clienteTipo: Mensaje["clienteTipo"];
+  de: Mensaje["de"];
+  texto: string;
+  origen: Mensaje["origen"];
+  origenId?: string;
+  hora?: string;
+}): Promise<Mensaje | null> {
+  const { data, error } = await supabase.from("mensajes").insert({
+    negocio_id: m.negocioId, cliente_id: m.clienteId, cliente_tipo: m.clienteTipo,
+    de: m.de, texto: m.texto, origen: m.origen, origen_id: m.origenId ?? null,
+    creado_en: m.hora ?? new Date().toISOString(),
+  }).select().single();
+  if (error) {
+    if (error.code === "23505") return null;
+    throw new Error(error.message);
+  }
+  return mapMensaje(data);
+}
+
+// ============================================================================
 // Configuración del saludo automático + aprobación mensual
 // ============================================================================
 export async function dbGuardarConfigSaludo(negocioId: NegocioId, mensaje: string, hora: string): Promise<void> {
@@ -509,6 +558,7 @@ export const TABLAS_TIEMPO_REAL = [
   "seguimiento_cumpleanos",
   "config_saludo_cumpleanos",
   "aprobacion_cumpleanos_mes",
+  "mensajes",
 ] as const;
 
 export type TablaTiempoReal = (typeof TABLAS_TIEMPO_REAL)[number];
@@ -521,7 +571,7 @@ export interface CambioRealtime {
   vieja: Record<string, unknown> | null; // fila vieja (UPDATE/DELETE) — solo trae las columnas de la llave primaria
 }
 
-// Un solo canal para las 8 tablas — devuelve la función para cerrarlo
+// Un solo canal para las 9 tablas — devuelve la función para cerrarlo
 // (llamarla al desmontar el DataProvider).
 export function suscribirCambios(onCambio: (c: CambioRealtime) => void): () => void {
   let canal = supabase.channel("crm-cambios");

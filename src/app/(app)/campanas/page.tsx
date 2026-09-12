@@ -15,7 +15,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge, type Tono } from "@/components/ui/Badge";
 import { campanaAlcanzaNegocio } from "@/lib/mock/campanas";
 import { NEGOCIOS, getNegocio, nombreCombinadoNegocios } from "@/lib/mock/negocios";
-import { useConfigWhatsAppAPI, agregarMensajeChatDirecto } from "@/lib/store";
+import { useConfigWhatsAppAPI } from "@/lib/store";
 import { useData } from "@/lib/data-context";
 import { WHATSAPP_CONECTADA } from "@/lib/config";
 import { requerido, Errores } from "@/lib/validacion";
@@ -67,7 +67,7 @@ function CampanasInner() {
   const [editando, setEditando] = useState<Campana | null>(null);
   const {
     campanas: todasLasCampanas, clientesIndividuales, clientesCorporativos,
-    crearCampana, actualizarCampana, eliminarCampana,
+    crearCampana, actualizarCampana, eliminarCampana, crearMensaje,
   } = useData();
   const { config: configWhatsApp, listo: listoConfigWhatsApp } = useConfigWhatsAppAPI();
 
@@ -128,15 +128,26 @@ function CampanasInner() {
   // cliente sigue ahí y sigue siendo real, para cuando alguien quiera
   // contactar a una persona puntual de verdad.
   //
-  // Cada cliente del segmento recibe además el mensaje de la campaña en su
-  // chat de Mensajería (agregarMensajeChatDirecto) — así el envío masivo no
+  // Cada cliente del segmento recibe además el mensaje de la campaña como
+  // una fila real en `mensajes` (origen "campana") — así el envío masivo no
   // solo mueve el % de la tarjeta, se ve reflejado como conversación real en
-  // el otro módulo, igual que ya pasa con el saludo de cumpleaños.
+  // Mensajería, igual que ya pasa con el saludo de cumpleaños. El índice
+  // único de la tabla (cliente_id + origen + origen_id) hace que aprobar dos
+  // veces por accidente no le duplique el mensaje a nadie.
   function aprobarCampana(c: Campana) {
+    // Mismo seguro real que AutoEnvioCumpleanos (ver src/lib/config.ts):
+    // aunque el botón ya esté deshabilitado en la tarjeta, esto no manda
+    // nada mientras la API de WhatsApp no esté conectada de verdad.
+    if (!WHATSAPP_CONECTADA) return;
     const objetivo = idsParaPublicoYSucursales(c.publico, c.negocios);
     objetivo.forEach((clienteId) => {
-      const nombreNegocio = getNegocio(clientesPorId.get(clienteId)?.negocioId ?? "")?.nombre ?? nombreCombinadoNegocios(c.negocios);
-      agregarMensajeChatDirecto(clienteId, personalizarMensaje(c.mensaje, nombreNegocio), "negocio");
+      const resuelto = clientesPorId.get(clienteId);
+      if (!resuelto) return;
+      const nombreNegocio = getNegocio(resuelto.negocioId)?.nombre ?? nombreCombinadoNegocios(c.negocios);
+      void crearMensaje({
+        negocioId: resuelto.negocioId, clienteId, clienteTipo: resuelto.tipo === "Corporativo" ? "corporativo" : "individual",
+        de: "negocio", texto: personalizarMensaje(c.mensaje, nombreNegocio), origen: "campana", origenId: c.id,
+      });
     });
     void actualizarCampana(c.id, {
       estado: "aprobada", aprobadaEn: new Date().toISOString().slice(0, 10),
@@ -149,13 +160,23 @@ function CampanasInner() {
   // verdad (eso solo lo sabe quien lo envía a mano). Lo puede marcar
   // cualquiera que vea el módulo, no solo Gerencial — contactar clientes es
   // el trabajo diario de Ventas, igual que ya hace uno por uno en Clientes.
+  // A diferencia de "Aprobar y enviar", esto SÍ sigue funcionando aunque
+  // WHATSAPP_CONECTADA esté apagado — es una acción real de una sola
+  // persona (abre su WhatsApp de verdad), no un envío masivo simulado.
   // Mismo reflejo en Mensajería que el envío masivo, pero solo la primera
-  // vez que se marca a ese cliente — para no duplicar el mensaje si alguien
-  // vuelve a hacer clic en un cliente que ya estaba contactado.
+  // vez que se marca a ese cliente — el índice único de `mensajes` evita
+  // duplicar el mensaje si alguien vuelve a hacer clic en un cliente que ya
+  // estaba contactado.
   function marcarContactado(c: Campana, clienteId: string) {
     if (c.contactados.includes(clienteId)) return;
-    const nombreNegocio = getNegocio(clientesPorId.get(clienteId)?.negocioId ?? "")?.nombre ?? nombreCombinadoNegocios(c.negocios);
-    agregarMensajeChatDirecto(clienteId, personalizarMensaje(c.mensaje, nombreNegocio), "negocio");
+    const resuelto = clientesPorId.get(clienteId);
+    if (resuelto) {
+      const nombreNegocio = getNegocio(resuelto.negocioId)?.nombre ?? nombreCombinadoNegocios(c.negocios);
+      void crearMensaje({
+        negocioId: resuelto.negocioId, clienteId, clienteTipo: resuelto.tipo === "Corporativo" ? "corporativo" : "individual",
+        de: "negocio", texto: personalizarMensaje(c.mensaje, nombreNegocio), origen: "campana", origenId: c.id,
+      });
+    }
     void actualizarCampana(c.id, { contactados: [...c.contactados, clienteId] });
   }
 
