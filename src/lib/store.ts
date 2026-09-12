@@ -115,28 +115,6 @@ export function useChat(clienteId: string, semilla: Mensaje[] = []) {
   return { mensajes, enviar, listo };
 }
 
-// Cuántas conversaciones simuladas hay guardadas en ESTE navegador — para
-// mostrarlo antes de borrar (ver ConfirmarLimpiarChat en configuracion/page.tsx).
-export function contarChatsSimulados(): number {
-  if (typeof window === "undefined") return 0;
-  return Object.keys(window.localStorage).filter((k) => k.startsWith("crm-chat-")).length;
-}
-
-// Borra TODO el chat simulado de Mensajería (todas las claves crm-chat-*) en
-// ESTE navegador — pensado para cuando un saludo de cumpleaños o campaña se
-// "envió" de mentira mientras la API real de WhatsApp no estaba conectada
-// (ver WHATSAPP_CONECTADA en lib/config.ts) y ya se limpió la fila real en
-// Supabase, pero el chat sigue mostrando el mensaje viejo porque ese texto
-// vive solo acá, en localStorage, no en la base de datos. Solo afecta a
-// ESTE navegador — cada dispositivo que haya abierto Mensajería tiene su
-// propia copia y hay que limpiarlo por separado ahí también.
-export function limpiarChatSimulado(): number {
-  if (typeof window === "undefined") return 0;
-  const claves = Object.keys(window.localStorage).filter((k) => k.startsWith("crm-chat-"));
-  claves.forEach((k) => window.localStorage.removeItem(k));
-  return claves.length;
-}
-
 // --- Chat de Estrategias (asistente de IA) ----------------------------------
 export interface MensajeEstrategia {
   id: string;
