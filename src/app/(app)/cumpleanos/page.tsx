@@ -18,6 +18,7 @@ import { BASE_DATE } from "@/lib/mock/seed";
 import { resumenCumpleanosMes } from "@/lib/metrics";
 import { agregarMensajeChatDirecto } from "@/lib/store";
 import { useData } from "@/lib/data-context";
+import { WHATSAPP_CONECTADA } from "@/lib/config";
 import { PLANTILLA_CUMPLEANOS_DEFECTO, HORA_ENVIO_DEFECTO, interpolarPlantilla } from "@/lib/mensajes";
 import {
   seguimientosConNuevos, seguimientoDefectoPara, proximosCumpleanosDe, clientesPorDia, esHoy, pendientesDeSaludarDe,
@@ -140,6 +141,7 @@ export default function CumpleanosPage() {
           aprobado={aprobado}
           aprobar={aprobar}
           puedeAprobar={esAdmin}
+          conectada={WHATSAPP_CONECTADA}
         />
 
         <ConfiguracionSaludoGeneral
@@ -249,6 +251,11 @@ function AutoEnvioCumpleanos({
   }, []);
 
   useEffect(() => {
+    // WHATSAPP_CONECTADA es el seguro de verdad, no solo el botón de
+    // AprobacionMes: aunque alguna fila de aprobacion_cumpleanos_mes
+    // quedara marcada aprobado=true (de antes, o por un bug futuro), acá
+    // no se manda nada mientras la API real no esté conectada y probada.
+    if (!WHATSAPP_CONECTADA) return;
     if (!aprobado) return;
     const ahora = new Date();
     const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
@@ -530,9 +537,14 @@ function ClienteDelDia({
 // automático no se está mandando — por eso esta tarjeta se muestra para los
 // dos roles, solo que Ventas ve el estado, no el botón.
 function AprobacionMes({
-  totalDelMes, aprobado, aprobar, puedeAprobar,
+  totalDelMes, aprobado, aprobar, puedeAprobar, conectada,
 }: {
   totalDelMes: number; aprobado: boolean; aprobar: () => void; puedeAprobar: boolean;
+  // Mientras la API de WhatsApp no esté conectada y probada (ver
+  // src/lib/config.ts), el botón se ve pero no se puede usar — ni Gerencial
+  // puede aprobar por accidente el envío automático antes de que esté listo
+  // de verdad.
+  conectada: boolean;
 }) {
   return (
     <Card>
@@ -541,11 +553,13 @@ function AprobacionMes({
           <p className="text-sm font-semibold text-[var(--color-gris)]">Aprobación del envío automático de este mes</p>
           <p className="text-xs text-[var(--color-gris-medio)] mt-0.5">
             {totalDelMes} clientes cumplen años este mes.{" "}
-            {aprobado
-              ? "El saludo se manda solo, cada quien el día de su cumpleaños."
-              : puedeAprobar
-                ? "Revisa el detalle abajo y aprueba para que el saludo se mande solo, cada quien el día de su cumpleaños."
-                : "El saludo automático de este mes todavía no se manda — falta que Gerencial lo apruebe."}
+            {!conectada
+              ? "El envío automático está en pausa hasta terminar de conectar y probar la API de WhatsApp Business — el botón se habilita solo cuando esté lista."
+              : aprobado
+                ? "El saludo se manda solo, cada quien el día de su cumpleaños."
+                : puedeAprobar
+                  ? "Revisa el detalle abajo y aprueba para que el saludo se mande solo, cada quien el día de su cumpleaños."
+                  : "El saludo automático de este mes todavía no se manda — falta que Gerencial lo apruebe."}
           </p>
         </div>
         {aprobado ? (
@@ -553,12 +567,20 @@ function AprobacionMes({
         ) : puedeAprobar ? (
           <button
             onClick={aprobar}
-            className="flex items-center gap-1.5 bg-[var(--color-terracota)] text-white text-xs font-semibold rounded-lg px-3.5 py-2 hover:opacity-90 transition-opacity"
+            disabled={!conectada}
+            title={!conectada ? "Se habilita cuando la API de WhatsApp Business quede conectada y probada" : undefined}
+            className={`flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3.5 py-2 transition-opacity ${
+              conectada
+                ? "bg-[var(--color-terracota)] text-white hover:opacity-90"
+                : "bg-[var(--color-gris-claro)]/60 text-[var(--color-gris-medio)] cursor-not-allowed"
+            }`}
           >
             <CheckCircle2 size={14} /> Aprobar mes
           </button>
         ) : (
-          <Badge tono="naranja"><Lock size={12} /> Pendiente de aprobación</Badge>
+          <Badge tono={conectada ? "naranja" : "gris"}>
+            <Lock size={12} /> {conectada ? "Pendiente de aprobación" : "Pendiente de conectar WhatsApp"}
+          </Badge>
         )}
       </div>
     </Card>
