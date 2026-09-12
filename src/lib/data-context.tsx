@@ -123,7 +123,10 @@ function aplicarCambioRealtime(d: DatosApp, c: CambioRealtime): DatosApp {
       if (!negocioId || anio === undefined || mes === undefined) return d;
       const sinEsta = d.aprobaciones.filter((x) => !(x.negocioId === negocioId && x.anio === anio && x.mes === mes));
       if (c.tipo === "DELETE" || !c.nueva) return { ...d, aprobaciones: sinEsta };
-      const fila: AprobacionMesRow = { negocioId, anio, mes, aprobado: c.nueva.aprobado as boolean };
+      const fila: AprobacionMesRow = {
+        negocioId, anio, mes, aprobado: c.nueva.aprobado as boolean,
+        aprobadoEn: (c.nueva.aprobado_en as string) ?? undefined,
+      };
       return { ...d, aprobaciones: [...sinEsta, fila] };
     }
     default:
@@ -288,10 +291,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
   }, []);
   const aprobarMes = useCallback(async (negocioId: NegocioId, anio: number, mes: number) => {
-    await dbAprobarMes(negocioId, anio, mes);
+    // Un solo reloj para la fila de Supabase y el estado local optimista —
+    // ver comentario de dbAprobarMes.
+    const aprobadoEn = new Date().toISOString();
+    await dbAprobarMes(negocioId, anio, mes, aprobadoEn);
     setDatos((d) => {
       const sinEsta = d.aprobaciones.filter((a) => !(a.negocioId === negocioId && a.anio === anio && a.mes === mes));
-      const fila: AprobacionMesRow = { negocioId, anio, mes, aprobado: true };
+      const fila: AprobacionMesRow = { negocioId, anio, mes, aprobado: true, aprobadoEn };
       return { ...d, aprobaciones: [...sinEsta, fila] };
     });
   }, []);

@@ -190,6 +190,11 @@ export interface AprobacionMesRow {
   anio: number;
   mes: number;
   aprobado: boolean;
+  // Momento real en que Gerencial aprobó — AutoEnvioCumpleanos lo usa para
+  // saber si la aprobación llegó antes o después de la hora programada de
+  // HOY (ver cumpleanos/page.tsx): si llega después, el saludo de hoy se
+  // pierde igual que los días anteriores, no se manda "tarde" al aprobar.
+  aprobadoEn?: string;
 }
 
 // ============================================================================
@@ -275,6 +280,7 @@ export async function cargarTodo(): Promise<DatosApp> {
     })),
     aprobaciones: aprobaciones.map((r) => ({
       negocioId: r.negocio_id as NegocioId, anio: r.anio as number, mes: r.mes as number, aprobado: r.aprobado as boolean,
+      aprobadoEn: (r.aprobado_en as string) ?? undefined,
     })),
     mensajes: mensajes.map(mapMensaje),
   };
@@ -531,9 +537,13 @@ export async function dbGuardarConfigSaludo(negocioId: NegocioId, mensaje: strin
   if (error) throw new Error(error.message);
 }
 
-export async function dbAprobarMes(negocioId: NegocioId, anio: number, mes: number): Promise<void> {
+// `aprobadoEn` lo calcula quien llama (data-context), una sola vez, para
+// que el mismo instante quede tanto en la fila de Supabase como en el
+// estado local optimista — sin eso, dos relojes (el de acá y el de la
+// actualización local) podrían diferir por unos milisegundos.
+export async function dbAprobarMes(negocioId: NegocioId, anio: number, mes: number, aprobadoEn: string): Promise<void> {
   const { error } = await supabase.from("aprobacion_cumpleanos_mes")
-    .upsert({ negocio_id: negocioId, anio, mes, aprobado: true, aprobado_en: new Date().toISOString() });
+    .upsert({ negocio_id: negocioId, anio, mes, aprobado: true, aprobado_en: aprobadoEn });
   if (error) throw new Error(error.message);
 }
 

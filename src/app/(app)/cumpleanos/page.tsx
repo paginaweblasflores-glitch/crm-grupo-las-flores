@@ -109,7 +109,8 @@ export default function CumpleanosPage() {
 
   const anio = BASE_DATE.getFullYear();
   const mesActual = BASE_DATE.getMonth() + 1;
-  const aprobado = aprobaciones.some((a) => a.negocioId === negocio.id && a.anio === anio && a.mes === mesActual && a.aprobado);
+  const aprobacionActual = aprobaciones.find((a) => a.negocioId === negocio.id && a.anio === anio && a.mes === mesActual);
+  const aprobado = aprobacionActual?.aprobado ?? false;
   const aprobar = () => void aprobarMes(negocio.id, anio, mesActual);
 
   const guardar = (s: SeguimientoCumple, patch: Partial<SeguimientoCumple>) =>
@@ -124,6 +125,7 @@ export default function CumpleanosPage() {
           seguimientos={seguimientos}
           config={config}
           aprobado={aprobado}
+          aprobadoEn={aprobacionActual?.aprobadoEn}
           reales={seguimientosReales}
           crearSeguimiento={crearSeguimiento}
           actualizarSeguimiento={actualizarSeguimiento}
@@ -220,6 +222,15 @@ export default function CumpleanosPage() {
 // aprobación se reinicia sola cada mes calendario (negocio + año + mes en
 // Supabase), así que aprobar agosto no dispara el envío en septiembre.
 //
+// Regla de negocio explícita (confirmada con Mijael): si la aprobación llega
+// HOY MISMO pero después de la hora programada de un cliente (ej. aprueba a
+// las 2pm con la hora general en 9:00), ese cliente se queda SIN saludo hoy
+// — exactamente igual que los días anteriores a la aprobación, no se manda
+// "tarde" solo porque recién se aprobó. Recién mañana vuelve a intentarse,
+// puntual a su hora. Si en cambio la aprobación ya estaba dada de un día
+// anterior, la hora de hoy dispara normal en cuanto llega (`aprobadoEn` no
+// es de hoy, así que no aplica el corte).
+//
 // Esto es independiente de Campañas: una campaña también puede escribirle a
 // este mismo cliente (crearMensaje, con origen "campana"), pero eso no toca
 // `saludoEnviado` ni la fila de seguimiento — son dos fuentes de mensajes
@@ -227,10 +238,10 @@ export default function CumpleanosPage() {
 // seguimiento de cumpleaños (esta tabla) solo se mueve por el saludo de
 // cumpleaños, nunca por una campaña.
 function AutoEnvioCumpleanos({
-  negocioNombre, seguimientos, config, aprobado, reales, crearSeguimiento, actualizarSeguimiento, crearMensaje,
+  negocioNombre, seguimientos, config, aprobado, aprobadoEn, reales, crearSeguimiento, actualizarSeguimiento, crearMensaje,
 }: {
   negocioNombre: string; seguimientos: SeguimientoCumple[];
-  config: ConfigSaludo; aprobado: boolean; reales: SeguimientoCumple[];
+  config: ConfigSaludo; aprobado: boolean; aprobadoEn?: string; reales: SeguimientoCumple[];
   crearSeguimiento: (s: SeguimientoCumple) => Promise<SeguimientoCumple>;
   actualizarSeguimiento: (id: string, patch: Partial<SeguimientoCumple>) => Promise<void>;
   crearMensaje: (m: {
@@ -238,7 +249,14 @@ function AutoEnvioCumpleanos({
     de: "negocio" | "cliente"; texto: string; origen: "cumpleanos" | "campana" | "manual"; origenId?: string; hora?: string;
   }) => Promise<void>;
 }) {
-  const [, forceTick] = useState(0);
+  // El VALOR de tick no se usa en el render — solo entra en la lista de
+  // dependencias del efecto de abajo para forzar que se vuelva a evaluar
+  // cada minuto aunque nada más haya cambiado (sin esto, el setInterval
+  // solo volvía a renderizar el componente, pero el efecto de envío no se
+  // repetía si `seguimientos`/`config`/`reales` seguían siendo las mismas
+  // referencias — una pestaña dejada abierta desde antes de la hora
+  // programada podía no mandar nada hasta que algo más tocara esos datos).
+  const [tick, forceTick] = useState(0);
   // Guarda de la sesión: qué seguimientos ya se mandaron a crear/actualizar
   // desde este montaje del componente, para no volver a mandarlos si el
   // efecto se dispara dos veces seguidas ANTES de que `reales` (el estado
@@ -263,14 +281,38 @@ function AutoEnvioCumpleanos({
     if (!aprobado) return;
     const ahora = new Date();
     const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes();
+    // Si `aprobadoEn` cae en el día de HOY, se guarda a qué hora del día fue
+    // — para poder cortar el envío de hoy si esa hora ya pasó la hora
+    // programada de algún cliente (ver comentario de la función). Si
+    // `aprobadoEn` es de un día anterior, `minutosAprobacionHoy` queda en
+    // null y no se aplica ningún corte — la aprobación ya estaba dada antes
+    // de que empezara el día de hoy.
+    let minutosAprobacionHoy: number | null = null;
+    if (aprobadoEn) {
+      const fechaAprobacion = new Date(aprobadoEn);
+      const esDeHoy = fechaAprobacion.getFullYear() === ahora.getFullYear()
+        && fechaAprobacion.getMonth() === ahora.getMonth()
+        && fechaAprobacion.getDate() === ahora.getDate();
+      if (esDeHoy) minutosAprobacionHoy = fechaAprobacion.getHours() * 60 + fechaAprobacion.getMinutes();
+    }
     seguimientos.forEach((s) => {
       if (!esHoy(s.fechaCumple)) return;
       if (s.saludoEnviado) return;
       if (enProceso.current.has(s.id)) return;
-      enProceso.current.add(s.id);
       const horaProgramada = s.horaPersonalizada || config.hora;
       const [h, m] = horaProgramada.split(":").map(Number);
-      if (h * 60 + (m || 0) > minutosAhora) return;
+      const minutosProgramados = h * 60 + (m || 0);
+      if (minutosProgramados > minutosAhora) return;
+      // La aprobación llegó hoy mismo, pero después de la hora programada de
+      // ESTE cliente — la ventana de hoy ya se cerró para él, no se manda
+      // "tarde" solo porque recién se aprobó. Mañana vuelve a intentarse.
+      if (minutosAprobacionHoy !== null && minutosAprobacionHoy > minutosProgramados) return;
+      // Recién acá se marca "en proceso" — antes de este punto el
+      // seguimiento no se descarta por horario, se descarta por ahora
+      // (podría volver a evaluarse el minuto siguiente); de acá para abajo
+      // sí se va a mandar de verdad, así que hay que evitar un segundo
+      // disparo concurrente del mismo efecto.
+      enProceso.current.add(s.id);
       const plantilla = s.mensajePersonalizado || config.mensaje;
       const texto = interpolarPlantilla(plantilla, s.nombre.split(" ")[0], negocioNombre);
       // La hora "real" del saludo es la HORA PROGRAMADA (ej. 9:00 en punto),
@@ -290,7 +332,7 @@ function AutoEnvioCumpleanos({
       void guardarSeguimiento(s, { saludoEnviado: true, saludoEnviadoEn: enviadoEn }, reales, crearSeguimiento, actualizarSeguimiento);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aprobado, seguimientos.length, config.hora, config.mensaje, reales]);
+  }, [aprobado, aprobadoEn, seguimientos.length, config.hora, config.mensaje, reales, tick]);
 
   return null;
 }
