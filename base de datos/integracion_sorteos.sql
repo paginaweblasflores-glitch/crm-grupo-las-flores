@@ -60,6 +60,27 @@ create index if not exists idx_clientes_individuales_sorteo
   on clientes_individuales(sorteo_slug) where sorteo_slug is not null;
 
 -- 3) duplicados: mismo negocio + mismo celular + misma fecha de nacimiento --------
+-- Restricción UNIQUE antigua solo sobre celular (si todavía existe): bloquearía a
+-- la misma persona en dos negocios y a familiares con el mismo número.
+do $$
+declare
+  nombre_constraint text;
+begin
+  for nombre_constraint in
+    select tc.constraint_name
+    from information_schema.table_constraints tc
+    join information_schema.key_column_usage kcu
+      on tc.constraint_name = kcu.constraint_name and tc.table_schema = kcu.table_schema
+    where tc.table_schema = 'public'
+      and tc.table_name = 'clientes_individuales'
+      and tc.constraint_type = 'UNIQUE'
+    group by tc.constraint_name
+    having count(*) = 1 and max(kcu.column_name) = 'celular'
+  loop
+    execute format('alter table clientes_individuales drop constraint %I', nombre_constraint);
+  end loop;
+end $$;
+
 drop index if exists idx_clientes_individuales_celular_nacimiento; -- versión anterior (todo el grupo)
 create unique index if not exists idx_clientes_individuales_negocio_celular_nacimiento
   on clientes_individuales(negocio_id, celular, fecha_nacimiento);
