@@ -232,7 +232,49 @@ export function resumenPeriodo(datos: DatosMetricas, negocioId: NegocioId, perio
 export const ORIGEN_LABEL: Record<string, string> = {
   crm: "CRM (presencial)",
   web: "Sitio web",
+  sorteo: "Sorteo",
 };
+
+export interface ResumenSorteo {
+  slug: string;
+  nombre: string;
+  negocioId: NegocioId;
+  clientes: number;
+  porcentaje: number; // del total de clientes captados por sorteos en este alcance
+}
+
+// Cuántos clientes NUEVOS captó cada sorteo — un sorteo, una fila. Solo cuenta
+// a quien el sorteo trajo por primera vez: una persona que ya era cliente
+// (mismo celular + fecha de nacimiento) no se vuelve a crear, así que no suma
+// acá (el webhook la responde como "duplicado"). Se agrupa por el slug
+// (identificador estable); el nombre que se muestra es el del registro más
+// reciente de ese sorteo, por si se le corrige el nombre en el sistema de
+// sorteos. El donut de "De dónde vienen los clientes" ya junta todos los
+// sorteos en una sola porción ("Sorteo") — esto es el detalle por sorteo.
+export function clientesPorSorteo(datos: DatosMetricas, negocioId: NegocioId): ResumenSorteo[] {
+  const grupos = new Map<string, { nombre: string; negocioId: NegocioId; clientes: number; ultimo: string }>();
+  clientesIndividualesPorNegocio(datos.clientesIndividuales, negocioId).forEach((c) => {
+    if (c.origen !== "sorteo" || !c.sorteoSlug) return;
+    const marca = c.creadoEn ?? c.fechaRegistro;
+    const grupo = grupos.get(c.sorteoSlug);
+    if (!grupo) {
+      grupos.set(c.sorteoSlug, { nombre: c.sorteoNombre ?? c.sorteoSlug, negocioId: c.negocioId, clientes: 1, ultimo: marca });
+      return;
+    }
+    grupo.clientes += 1;
+    if (marca > grupo.ultimo) {
+      grupo.ultimo = marca;
+      grupo.nombre = c.sorteoNombre ?? grupo.nombre;
+    }
+  });
+  const total = [...grupos.values()].reduce((a, g) => a + g.clientes, 0);
+  return [...grupos.entries()]
+    .map(([slug, g]) => ({
+      slug, nombre: g.nombre, negocioId: g.negocioId, clientes: g.clientes,
+      porcentaje: total === 0 ? 0 : Math.round((g.clientes / total) * 100),
+    }))
+    .sort((a, b) => b.clientes - a.clientes);
+}
 
 export function distribucionOrigen(datos: DatosMetricas, negocioId: NegocioId) {
   const conteo: Record<string, number> = {};

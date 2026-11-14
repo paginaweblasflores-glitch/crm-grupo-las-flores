@@ -89,6 +89,8 @@ export function mapClienteIndividual(r: Record<string, unknown>): ClienteIndivid
     provincia: r.provincia as string,
     distrito: r.distrito as string,
     origen: r.origen as ClienteIndividual["origen"],
+    sorteoSlug: (r.sorteo_slug as string) ?? undefined,
+    sorteoNombre: (r.sorteo_nombre as string) ?? undefined,
     registradoPor: (r.registrado_por as string) ?? undefined,
     tipoDocumento: (r.tipo_documento as ClienteIndividual["tipoDocumento"]) ?? undefined,
     numeroDocumento: (r.numero_documento as string) ?? undefined,

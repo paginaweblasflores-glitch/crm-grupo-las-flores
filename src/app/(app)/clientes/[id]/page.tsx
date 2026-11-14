@@ -121,7 +121,10 @@ function FichaIndividual({
 
           <div className="mt-5 pt-4 border-t border-[var(--color-gris-claro)]/30 text-xs text-[var(--color-gris-medio)] space-y-1.5">
             <p>Registrado: {new Date(cliente.fechaRegistro).toLocaleDateString("es-PE")}</p>
-            <p>Origen: {ORIGEN_LABEL[cliente.origen] ?? cliente.origen}</p>
+            <p>
+              Origen: {ORIGEN_LABEL[cliente.origen] ?? cliente.origen}
+              {cliente.origen === "sorteo" && cliente.sorteoNombre ? ` · ${cliente.sorteoNombre}` : ""}
+            </p>
           </div>
         </Card>
       </main>

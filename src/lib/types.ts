@@ -71,12 +71,17 @@ export interface ClienteIndividual {
   provincia: string;
   distrito: string;
   // "crm" = registrado desde este formulario (Ventas/Gerencial, presencial)
-  // — se marca solo, nadie lo elige a mano. "web" queda reservado para la
-  // futura integración con las páginas web de cada negocio: el cliente
-  // llega por código, ya etiquetado como "web" + su negocioId (ver
-  // `origenWebPorNegocio` en metrics.ts) — no hace falta un valor de origen
-  // distinto por sede, el negocioId ya lo distingue.
-  origen: "crm" | "web";
+  // — se marca solo, nadie lo elige a mano. "web" = llegó por código desde
+  // la web pública del negocio (POST /api/clientes/webhook), ya etiquetado
+  // como "web" + su negocioId (ver `origenWebPorNegocio` en metrics.ts) — no
+  // hace falta un valor de origen distinto por sede, el negocioId ya lo
+  // distingue. "sorteo" = llegó por código desde el sistema de sorteos
+  // (POST /api/clientes/webhook-sorteo) — ahí SÍ hace falta saber de cuál
+  // sorteo (sorteoSlug / sorteoNombre), porque hay varios y se comparan entre
+  // sí (ver `clientesPorSorteo` en metrics.ts).
+  origen: "crm" | "web" | "sorteo";
+  sorteoSlug?: string; // solo si origen === "sorteo" — identificador estable del sorteo
+  sorteoNombre?: string; // solo si origen === "sorteo" — nombre para mostrar (ej. "NAVIDAD CON LAS FLORES")
   registradoPor?: string; // nombre de quién lo registró (cuando se agrega desde el sistema)
   // Campos investigados y agregados sobre el estándar del Excel original:
   tipoDocumento?: TipoDocumento;

@@ -4,6 +4,9 @@
 // Facebook + celular). Un solo aviso por cliente — así se puede hacer
 // seguimiento y fidelización desde acá sin tener que registrarlos a mano.
 //
+// (El sistema de sorteos tiene su propio endpoint, /api/clientes/webhook-
+// sorteo, con su propio secreto — ver la explicación al inicio de esa ruta.)
+//
 // Autenticación: header "Authorization: Bearer <WEBSITE_WEBHOOK_SECRET>" —
 // clave compartida guardada en las variables de entorno (nunca en el
 // código), la misma que se le entrega al equipo de la web para que la use
@@ -18,13 +21,13 @@
 // de guardar un cliente con una fecha inventada.
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { verificarBearer } from "@/lib/webhook-auth";
+import { errorFechaNacimiento, esDuplicadoDeLaBase, fechaHoyLima } from "@/lib/clientes-webhook";
 
 // La web pública que manda estos avisos es solo la de Restaurante Las
 // Flores — este webhook es exclusivo de ese negocio (Umaru/Mamina no tienen
 // web propia todavía).
 const NEGOCIO_ID = "las-flores";
-
-const FECHA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 // Separa "Nombre Nombre Apellido Apellido" en nombres/apellidos — mismo
 // criterio que tipearía alguien de Ventas a mano: con 1 sola palabra, se usa
@@ -51,13 +54,8 @@ interface BodyWebhook {
 }
 
 export async function POST(req: NextRequest) {
-  const secreto = process.env.WEBSITE_WEBHOOK_SECRET;
-  if (!secreto) {
-    return NextResponse.json({ error: "El servidor no tiene configurado WEBSITE_WEBHOOK_SECRET." }, { status: 500 });
-  }
-  if (req.headers.get("authorization") !== `Bearer ${secreto}`) {
-    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
-  }
+  const noAutorizado = verificarBearer(req, "WEBSITE_WEBHOOK_SECRET");
+  if (noAutorizado) return noAutorizado;
 
   let body: BodyWebhook;
   try {
@@ -72,7 +70,7 @@ export async function POST(req: NextRequest) {
   }
 
   const fechaNacimiento = body.fecha_de_nacimiento?.trim();
-  if (!fechaNacimiento || !FECHA_REGEX.test(fechaNacimiento)) {
+  if (!fechaNacimiento || errorFechaNacimiento(fechaNacimiento)) {
     return NextResponse.json({ error: "Falta o es inválida fecha_de_nacimiento (formato YYYY-MM-DD)." }, { status: 400 });
   }
 
@@ -87,12 +85,13 @@ export async function POST(req: NextRequest) {
     .select("id")
     .eq("negocio_id", NEGOCIO_ID)
     .eq("celular", celular)
-    .maybeSingle();
+    .limit(1);
 
   if (errorBusqueda) {
-    return NextResponse.json({ error: errorBusqueda.message }, { status: 500 });
+    console.error("[webhook-web] No se pudo buscar duplicados:", errorBusqueda.message);
+    return NextResponse.json({ error: "No se pudo procesar el registro. Reintenta más tarde." }, { status: 500 });
   }
-  if (existente) {
+  if ((existente ?? []).length > 0) {
     return NextResponse.json({ ok: true, duplicado: true });
   }
 
@@ -101,6 +100,7 @@ export async function POST(req: NextRequest) {
   const { error: errorCrear } = await supabaseAdmin.from("clientes_individuales").insert({
     negocio_id: NEGOCIO_ID,
     numero: 0,
+    fecha_registro: fechaHoyLima(),
     nombres,
     apellidos,
     fecha_nacimiento: fechaNacimiento,
@@ -110,8 +110,15 @@ export async function POST(req: NextRequest) {
     registrado_por: null,
   });
 
+  // Dos avisos iguales al mismo tiempo, o el mismo celular + fecha ya
+  // registrado en OTRO negocio del grupo (el índice único es de todo el
+  // grupo): la base deja entrar solo a uno — el otro es un duplicado, no una falla.
+  if (esDuplicadoDeLaBase(errorCrear)) {
+    return NextResponse.json({ ok: true, duplicado: true });
+  }
   if (errorCrear) {
-    return NextResponse.json({ error: errorCrear.message }, { status: 500 });
+    console.error("[webhook-web] No se pudo crear el cliente:", errorCrear.message);
+    return NextResponse.json({ error: "No se pudo procesar el registro. Reintenta más tarde." }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });

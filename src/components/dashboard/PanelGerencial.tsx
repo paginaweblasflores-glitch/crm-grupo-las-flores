@@ -15,7 +15,7 @@ import { BASE_DATE } from "@/lib/mock/seed";
 import {
   clientesPorTipoPeriodo, serieClientesPorPeriodo,
   PERIODOS, Periodo, rangoDelPeriodo, etiquetaPeriodoAnterior,
-  distribucionOrigen, origenWebPorNegocio, ORIGEN_LABEL,
+  distribucionOrigen, origenWebPorNegocio, clientesPorSorteo, ORIGEN_LABEL,
   resumenCumpleanosMes, resumenCumpleanosPeriodo, historialFidelizacionGrupo,
 } from "@/lib/metrics";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -177,6 +177,7 @@ export function PanelGerencial() {
   // --- De dónde vienen más registros --------------------------------------
   const origenClientes = distribucionOrigen(datos, negocio.id);
   const desgloseWeb = esTodas ? origenWebPorNegocio(datos) : [];
+  const porSorteo = clientesPorSorteo(datos, negocio.id);
 
   return (
     <div className="space-y-6" id="reporte">
@@ -474,9 +475,44 @@ export function PanelGerencial() {
         <DonutChart data={origenClientes} />
       </Card>
 
+      {/* Detalle del "Sorteo" del donut de arriba: el donut junta todos los
+          sorteos en una sola porción; acá se ve cuántos clientes nuevos trajo
+          cada uno (ej. el de Navidad). Solo aparece si ya llegó alguno por un
+          sorteo — sin sorteos activos no hay nada que comparar. */}
+      {porSorteo.length > 0 && (
+        <Card>
+          <CardHeader
+            title="Clientes por sorteo"
+            subtitle={`Clientes nuevos que llegó a captar cada sorteo · ${negocio.nombre} — quien ya era cliente no se cuenta de nuevo`}
+          />
+          <div className="space-y-4 mt-1">
+            {porSorteo.map((s) => {
+              const sede = getNegocio(s.negocioId);
+              return (
+                <div key={s.slug}>
+                  <div className="flex items-center justify-between gap-3 text-sm mb-1.5">
+                    <span className="font-medium text-[var(--color-gris)] min-w-0 truncate">
+                      {s.nombre}
+                      {esTodas && sede && <span className="text-xs text-[var(--color-gris-medio)] font-normal"> · {sede.nombre}</span>}
+                    </span>
+                    <span className="text-[var(--color-gris-medio)] shrink-0">{s.clientes.toLocaleString("es-PE")} clientes · {s.porcentaje}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-[var(--color-crema-oscuro)] overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${s.porcentaje}%`, backgroundColor: sede?.colorAcento ?? "#8C3A25" }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       {/* Solo en "Todas las sucursales": el desglose de Web por sede es un
           detalle adicional que solo tiene sentido comparando entre negocios
-          — el donut de arriba (CRM vs. Web) ya se ve igual en las 4 vistas. */}
+          — el donut de arriba (CRM, Web y Sorteo) ya se ve igual en las 4 vistas. */}
       {esTodas && (
         <Card>
           <CardHeader title="Web por sede" subtitle="Clientes que se registraron por la web de cada negocio (vs. presencial en el CRM)" />

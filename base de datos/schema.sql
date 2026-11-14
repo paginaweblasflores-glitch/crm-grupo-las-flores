@@ -84,11 +84,13 @@ create table clientes_individuales (
   nombres text not null,
   apellidos text not null,
   fecha_nacimiento date not null,
-  -- Sin unique a propósito: dos clientes distintos pueden compartir un
-  -- mismo celular de verdad (un teléfono familiar/de la casa) — pasó con
-  -- datos reales. Lo que identifica a "el mismo cliente" es celular +
-  -- fecha de nacimiento juntos, y eso se valida en la app (ver
-  -- clientes/page.tsx y NuevoClienteForm.tsx), no acá con una restricción.
+  -- El celular solo NO es único a propósito: dos clientes distintos pueden
+  -- compartir un mismo celular de verdad (un teléfono familiar/de la casa) —
+  -- pasó con datos reales. Lo que identifica a "el mismo cliente" es celular +
+  -- fecha de nacimiento JUNTOS: la app lo valida en el formulario (ver
+  -- clientes/page.tsx y NuevoClienteForm.tsx) y la base lo garantiza con el
+  -- índice único idx_clientes_individuales_celular_nacimiento (más abajo),
+  -- que también cubre a las integraciones automáticas (web, sorteos).
   celular text not null,
   -- Procedencia en cascada Departamento → Provincia → Distrito. Sin campo de
   -- país: el negocio solo atiende clientes de Perú (decisión de Mijael).
@@ -97,9 +99,14 @@ create table clientes_individuales (
   departamento text not null default '',
   provincia text not null default '',
   distrito text not null default '',
-  -- 'crm' = registrado desde el formulario (presencial). 'web' = capturado
-  -- por la futura integración con la página de cada negocio.
-  origen text not null default 'crm' check (origen in ('crm', 'web')),
+  -- 'crm' = registrado desde el formulario (presencial). 'web' = llegó por la
+  -- web pública del negocio (POST /api/clientes/webhook). 'sorteo' = llegó
+  -- por el sistema de sorteos (POST /api/clientes/webhook-sorteo) — en ese
+  -- caso lleva además de qué sorteo vino (sorteo_slug / sorteo_nombre).
+  origen text not null default 'crm' check (origen in ('crm', 'web', 'sorteo')),
+  sorteo_slug text,
+  sorteo_nombre text,
+  constraint clientes_individuales_sorteo_coherente check ((origen = 'sorteo') = (sorteo_slug is not null)),
   registrado_por uuid references usuarios(id),
   tipo_documento text check (tipo_documento in ('DNI', 'Carné de extranjería', 'Pasaporte')),
   numero_documento text,
@@ -109,6 +116,8 @@ create table clientes_individuales (
   creado_en timestamptz not null default now()
 );
 create index idx_clientes_individuales_negocio on clientes_individuales(negocio_id);
+create index idx_clientes_individuales_sorteo on clientes_individuales(sorteo_slug) where sorteo_slug is not null;
+create unique index idx_clientes_individuales_celular_nacimiento on clientes_individuales(celular, fecha_nacimiento);
 
 -- --- Clientes corporativos ----------------------------------------------------
 create table clientes_corporativos (
