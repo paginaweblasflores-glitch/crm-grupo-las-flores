@@ -55,9 +55,20 @@ export const PROVINCIAS_AYACUCHO = [
 // Distritos de la provincia de Huamanga — es la única provincia con detalle
 // a nivel de distrito (el negocio opera ahí); el resto de provincias/
 // departamentos/países solo llegan hasta su propio nivel en la cascada.
+//
+// Los primeros 8 son la lista original y NO se reordenan: el primero
+// ("Huamanga", que en rigor es el nombre de la provincia y no un distrito)
+// es el valor por defecto del formulario y ya lo usan clientes reales, así
+// que se conserva. Los 9 del final completan los 16 distritos reales de la
+// provincia — los manda el sistema de sorteos (que los ofrece todos en su
+// formulario), y sin estar acá la ficha los trataría como "Otro". "Andrés
+// Avelino Cáceres" se escribe sin "Dorregaray": es como ya lo tiene el CRM y
+// como lo traduce el sistema de sorteos al enviarlo.
 export const DISTRITOS_AYACUCHO = [
   "Huamanga", "Ayacucho", "Andrés Avelino Cáceres", "Jesús Nazareno",
   "Carmen Alto", "San Juan Bautista", "Socos", "Acocro",
+  "Acos Vinchos", "Chiara", "Ocros", "Pacaycasa", "Quinua",
+  "San José de Ticllas", "Santiago de Pischa", "Tambillo", "Vinchos",
 ] as const;
 
 export const PRODUCTOS_CARTA = [
