@@ -495,7 +495,7 @@ export function PanelGerencial() {
                       {s.nombre}
                       {esTodas && sede && <span className="text-xs text-[var(--color-gris-medio)] font-normal"> · {sede.nombre}</span>}
                     </span>
-                    <span className="text-[var(--color-gris-medio)] shrink-0">{s.clientes.toLocaleString("es-PE")} clientes · {s.porcentaje}%</span>
+                    <span className="text-[var(--color-gris-medio)] shrink-0">{s.clientes.toLocaleString("es-PE")} {s.clientes === 1 ? "cliente" : "clientes"} · {s.porcentaje}%</span>
                   </div>
                   <div className="h-2 rounded-full bg-[var(--color-crema-oscuro)] overflow-hidden">
                     <div
