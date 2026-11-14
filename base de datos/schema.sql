@@ -87,10 +87,12 @@ create table clientes_individuales (
   -- El celular solo NO es único a propósito: dos clientes distintos pueden
   -- compartir un mismo celular de verdad (un teléfono familiar/de la casa) —
   -- pasó con datos reales. Lo que identifica a "el mismo cliente" es celular +
-  -- fecha de nacimiento JUNTOS: la app lo valida en el formulario (ver
-  -- clientes/page.tsx y NuevoClienteForm.tsx) y la base lo garantiza con el
-  -- índice único idx_clientes_individuales_celular_nacimiento (más abajo),
-  -- que también cubre a las integraciones automáticas (web, sorteos).
+  -- fecha de nacimiento JUNTOS, dentro del mismo negocio (Las Flores y Umaru
+  -- son negocios separados: la misma persona puede ser cliente de los dos).
+  -- La app lo valida en el formulario (ver clientes/page.tsx y
+  -- NuevoClienteForm.tsx) y la base lo garantiza con el índice único
+  -- idx_clientes_individuales_negocio_celular_nacimiento (más abajo), que
+  -- también cubre a las integraciones automáticas (web, sorteos).
   celular text not null,
   -- Procedencia en cascada Departamento → Provincia → Distrito. Sin campo de
   -- país: el negocio solo atiende clientes de Perú (decisión de Mijael).
@@ -117,7 +119,7 @@ create table clientes_individuales (
 );
 create index idx_clientes_individuales_negocio on clientes_individuales(negocio_id);
 create index idx_clientes_individuales_sorteo on clientes_individuales(sorteo_slug) where sorteo_slug is not null;
-create unique index idx_clientes_individuales_celular_nacimiento on clientes_individuales(celular, fecha_nacimiento);
+create unique index idx_clientes_individuales_negocio_celular_nacimiento on clientes_individuales(negocio_id, celular, fecha_nacimiento);
 
 -- --- Clientes corporativos ----------------------------------------------------
 create table clientes_corporativos (

@@ -110,9 +110,9 @@ export async function POST(req: NextRequest) {
     registrado_por: null,
   });
 
-  // Dos avisos iguales al mismo tiempo, o el mismo celular + fecha ya
-  // registrado en OTRO negocio del grupo (el índice único es de todo el
-  // grupo): la base deja entrar solo a uno — el otro es un duplicado, no una falla.
+  // Dos avisos iguales al mismo tiempo: la base deja entrar solo a uno
+  // (índice único por negocio + celular + fecha de nacimiento) — el otro es
+  // un duplicado, no una falla.
   if (esDuplicadoDeLaBase(errorCrear)) {
     return NextResponse.json({ ok: true, duplicado: true });
   }

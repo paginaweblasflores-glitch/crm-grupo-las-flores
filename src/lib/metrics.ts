@@ -244,9 +244,11 @@ export interface ResumenSorteo {
 }
 
 // Cuántos clientes NUEVOS captó cada sorteo — un sorteo, una fila. Solo cuenta
-// a quien el sorteo trajo por primera vez: una persona que ya era cliente
-// (mismo celular + fecha de nacimiento) no se vuelve a crear, así que no suma
-// acá (el webhook la responde como "duplicado"). Se agrupa por el slug
+// a quien el sorteo trajo por primera vez a ESE negocio: una persona que ya
+// era cliente de ese negocio (mismo celular + fecha de nacimiento) no se
+// vuelve a crear, así que no suma acá (el webhook la responde como
+// "duplicado"). Si ya era cliente del OTRO negocio, sí suma: para el negocio
+// del sorteo es un cliente nuevo. Se agrupa por el slug
 // (identificador estable); el nombre que se muestra es el del registro más
 // reciente de ese sorteo, por si se le corrige el nombre en el sistema de
 // sorteos. El donut de "De dónde vienen los clientes" ya junta todos los

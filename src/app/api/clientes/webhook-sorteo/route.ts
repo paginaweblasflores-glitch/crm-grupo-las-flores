@@ -7,15 +7,17 @@
 // puede rotar sin tocar a la web), manda datos distintos (nombres y apellidos
 // ya separados, distrito, qué sorteo y para qué negocio — la web siempre es de
 // Las Flores) y aplica la regla de duplicados del CRM (celular + fecha de
-// nacimiento, en todo el grupo) en vez de solo celular. Lo común vive en
+// nacimiento, dentro del mismo negocio) en vez de solo celular. Lo común vive en
 // lib/webhook-auth.ts y lib/clientes-webhook.ts.
 //
 // Contrato completo (campos, respuestas, reintentos, pruebas): ver
 // sorteo-las-flores/integracion-crm/INDICACIONES-CRM.md.
 //
-// Regla clave: si la persona YA existe en el CRM (mismo celular y misma fecha
-// de nacimiento), NO se crea ni se modifica nada — se responde 200 con
-// resultado "duplicado". No es un error: el sorteo no debe reintentar.
+// Regla clave: si la persona YA existe en ESE negocio (mismo celular y misma
+// fecha de nacimiento), NO se crea ni se modifica nada — se responde 200 con
+// resultado "duplicado". No es un error: el sorteo no debe reintentar. Si en
+// cambio ya es cliente del OTRO negocio (Las Flores vs. Umaru), sí se crea:
+// son negocios separados y cada uno tiene a sus clientes.
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { verificarBearer } from "@/lib/webhook-auth";
@@ -163,7 +165,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, resultado, ...(d.modoPrueba ? { modo_prueba: true } : {}) });
   };
 
-  const { existe, error: errorBusqueda } = await existeCliente(d.celular, d.fechaNacimiento);
+  const { existe, error: errorBusqueda } = await existeCliente(d.negocioId, d.celular, d.fechaNacimiento);
   if (errorBusqueda) {
     console.error("[webhook-sorteo] No se pudo buscar duplicados:", errorBusqueda);
     return NextResponse.json({ ok: false, error: "No se pudo procesar el registro. Reintenta más tarde." }, { status: 500 });

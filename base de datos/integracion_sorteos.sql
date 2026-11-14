@@ -13,12 +13,16 @@
 --      con origen 'sorteo' puede (y debe) llevarlos.
 --   3. Hace cumplir en la base de datos la regla de duplicados del CRM: no
 --      puede haber dos clientes con el mismo celular Y la misma fecha de
---      nacimiento. Hasta ahora esa regla solo la validaba el formulario manual
---      (clientes/page.tsx) — con una integración automática recibiendo
---      registros de otro sistema, la base tiene que garantizarla ella misma
---      (también si dos peticiones iguales llegan al mismo tiempo).
+--      nacimiento EN EL MISMO NEGOCIO (Las Flores y Umaru son negocios
+--      separados: la misma persona puede ser cliente de los dos). Hasta ahora
+--      esa regla solo la validaba el formulario manual (clientes/page.tsx) —
+--      con una integración automática recibiendo registros de otro sistema, la
+--      base tiene que garantizarla ella misma (también si dos peticiones
+--      iguales llegan al mismo tiempo).
 --      Verificado antes de escribir esto, con la base real: 0 pares repetidos,
 --      así que el índice se puede crear sin tocar ningún dato.
+--      (Si ya corriste una versión anterior de este archivo que creaba el
+--      índice sobre todo el grupo, corre además duplicados_por_negocio.sql.)
 
 -- 1) origen: permitir 'sorteo' -------------------------------------------------
 -- El nombre de la restricción se busca en vez de asumirlo (mismo criterio que
@@ -55,6 +59,7 @@ alter table clientes_individuales
 create index if not exists idx_clientes_individuales_sorteo
   on clientes_individuales(sorteo_slug) where sorteo_slug is not null;
 
--- 3) duplicados: mismo celular + misma fecha de nacimiento ------------------------
-create unique index if not exists idx_clientes_individuales_celular_nacimiento
-  on clientes_individuales(celular, fecha_nacimiento);
+-- 3) duplicados: mismo negocio + mismo celular + misma fecha de nacimiento --------
+drop index if exists idx_clientes_individuales_celular_nacimiento; -- versión anterior (todo el grupo)
+create unique index if not exists idx_clientes_individuales_negocio_celular_nacimiento
+  on clientes_individuales(negocio_id, celular, fecha_nacimiento);

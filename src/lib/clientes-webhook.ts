@@ -48,19 +48,22 @@ export function limpiarTexto(valor: unknown): string {
   return valor.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-// ¿Ya existe un cliente con este celular Y esta fecha de nacimiento? Es la
-// regla de duplicados del CRM (la misma del formulario manual de Clientes):
-// el celular solo no basta porque hay familias que comparten teléfono. Se
-// busca en TODO el grupo, no solo en un negocio — una persona que ya es
-// cliente de Las Flores no se vuelve a registrar por entrar de nuevo por
-// Umaru, igual que en el formulario manual.
+// ¿Ya existe, EN ESE NEGOCIO, un cliente con este celular Y esta fecha de
+// nacimiento? Es la regla de duplicados del CRM (la misma del formulario
+// manual de Clientes): el celular solo no basta porque hay familias que
+// comparten teléfono, y se mira dentro del negocio porque Las Flores y Umaru
+// son negocios separados — la misma persona puede ser cliente de los dos
+// (cada uno la atiende y le escribe por su cuenta); lo que no puede haber es
+// el mismo cliente dos veces en un mismo negocio.
 export async function existeCliente(
+  negocioId: string,
   celular: string,
   fechaNacimiento: string
 ): Promise<{ existe: boolean; error: string | null }> {
   const { data, error } = await supabaseAdmin
     .from("clientes_individuales")
     .select("id")
+    .eq("negocio_id", negocioId)
     .eq("celular", celular)
     .eq("fecha_nacimiento", fechaNacimiento)
     .limit(1);
@@ -69,8 +72,8 @@ export async function existeCliente(
 }
 
 // 23505 = unique_violation de Postgres. Con el índice único
-// (celular, fecha_nacimiento) de integracion_sorteos.sql, si dos peticiones
-// iguales llegan al mismo tiempo las dos pasan la revisión previa de
+// (negocio_id, celular, fecha_nacimiento) de integracion_sorteos.sql, si dos
+// peticiones iguales llegan al mismo tiempo las dos pasan la revisión previa de
 // existeCliente(), pero la base deja entrar solo a una — la otra cae acá y
 // se trata como "duplicado", no como una falla.
 export function esDuplicadoDeLaBase(error: { code?: string } | null): boolean {

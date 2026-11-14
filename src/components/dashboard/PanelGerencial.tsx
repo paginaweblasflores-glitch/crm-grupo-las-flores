@@ -483,7 +483,7 @@ export function PanelGerencial() {
         <Card>
           <CardHeader
             title="Clientes por sorteo"
-            subtitle={`Clientes nuevos que llegó a captar cada sorteo · ${negocio.nombre} — quien ya era cliente no se cuenta de nuevo`}
+            subtitle={`Clientes nuevos que llegó a captar cada sorteo · ${negocio.nombre} — quien ya era cliente de ese negocio no se cuenta de nuevo`}
           />
           <div className="space-y-4 mt-1">
             {porSorteo.map((s) => {

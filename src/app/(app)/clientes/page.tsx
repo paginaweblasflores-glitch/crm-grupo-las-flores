@@ -84,11 +84,14 @@ export default function ClientesPage() {
   // basta para tratarlos como "el mismo cliente" — los datos reales que se
   // subieron mostraron casos genuinos de dos personas distintas
   // compartiendo un teléfono familiar. Ahora hace falta que coincidan
-  // celular Y fecha de nacimiento a la vez (de los 3 negocios del grupo,
-  // igual que antes) para bloquear el registro como duplicado.
+  // celular Y fecha de nacimiento a la vez, DENTRO DEL MISMO NEGOCIO, para
+  // bloquear el registro como duplicado. Las Flores y Umaru son negocios
+  // separados: la misma persona puede ser cliente de los dos (cada uno la
+  // atiende y le escribe por su cuenta), lo que no puede pasar es tenerla dos
+  // veces en el mismo negocio. (Antes se buscaba en los 3 negocios del grupo.)
   const clienteIndividualDuplicado = (celular: string, fechaNacimiento: string, idExcluir?: string) =>
     clientesIndividuales.some(
-      (c) => c.id !== idExcluir && c.celular === celular && c.fechaNacimiento === fechaNacimiento
+      (c) => c.negocioId === negocio.id && c.id !== idExcluir && c.celular === celular && c.fechaNacimiento === fechaNacimiento
     );
 
   const listaActiva = tab === "individual" ? individualesFiltrados : corporativosFiltrados;

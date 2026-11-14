@@ -182,7 +182,7 @@ function FormIndividual({
     // nacimiento también coincida (puede ser un teléfono familiar
     // compartido por dos personas distintas, no la misma).
     if (!eCelular && !eFecha && individualDuplicado(celular, fechaNacimiento, editar?.id)) {
-      err.celular = "Ya existe un cliente registrado con este celular y esta fecha de nacimiento.";
+      err.celular = "Ya existe un cliente registrado en este negocio con este celular y esta fecha de nacimiento.";
     }
     Object.assign(err, validarUbicacion(ubicacion.departamento, ubicacion.provincia, ubicacion.distrito));
     return err;
