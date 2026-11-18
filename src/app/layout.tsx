@@ -9,9 +9,30 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+const TITULO = "CRM Consorcio Las Flores";
+const DESCRIPCION =
+  "Clientes y fidelización de Restaurante Las Flores, Hotel Umaru y Mamina Restobar.";
+
 export const metadata: Metadata = {
-  title: "CRM Consorcio Las Flores",
-  description: "Prototipo de CRM para Restaurante Las Flores, Hotel Umaru y Mamina Restobar",
+  metadataBase: new URL("https://crm-grupo-las-flores.vercel.app"),
+  title: TITULO,
+  description: DESCRIPCION,
+  // Vista previa al compartir el enlace (WhatsApp, Facebook, etc.): imagen 1200x630.
+  openGraph: {
+    title: TITULO,
+    description: DESCRIPCION,
+    url: "/",
+    siteName: TITULO,
+    locale: "es_PE",
+    type: "website",
+    images: [{ url: "/og-crm.jpg", width: 1200, height: 630, alt: TITULO }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITULO,
+    description: DESCRIPCION,
+    images: ["/og-crm.jpg"],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
