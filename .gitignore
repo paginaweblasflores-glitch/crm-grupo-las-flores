@@ -50,3 +50,6 @@ AGENTS.md
 # Supabase; nunca deben quedar en el historial de git (privado o no).
 Libro1.*
 base de datos/importar_*
+
+# material de capacitación interna del personal (PDFs de contexto): nunca al repositorio
+capacitacion/
